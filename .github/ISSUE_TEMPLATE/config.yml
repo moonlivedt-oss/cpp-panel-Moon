@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Вопрос или обсуждение
+    url: https://github.com/moonlivedt-oss/cpp-panel-Moon/discussions
+    about: Общие вопросы, помощь с установкой и идеи для обсуждения — сюда, а не в issue.
+  - name: FAQ / Решение проблем
+    url: https://github.com/moonlivedt-oss/cpp-panel-Moon#faq--решение-проблем
+    about: Частые проблемы (нет пилюли «C++», окно пропало, панель пустая) уже разобраны в README.

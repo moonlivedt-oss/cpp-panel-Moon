@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # Проверка модулей и смоук-тест. Зависимостей нет (npm ci не нужен) —
+  # node --check ловит синтаксис в каждом файле, смоук ловит рантайм после активации
+  # расширения в заглушке vscode. Оба прогоняются одной командой npm run check.
+  check:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [18, 20]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Синтаксис модулей + смоук
+        run: npm run check
+
+  # Упаковщик .vsix — свой ZIP-writer поверх zlib. Отдельным джобом проверяем, что пакет
+  # собирается и в dist/ появляется непустой .vsix (иначе установка бы сломалась молча).
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Собрать пакет
+        run: node scripts/package-extension.js
+      - name: Проверить, что .vsix собран
+        run: |
+          shopt -s nullglob
+          files=(dist/*.vsix)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::error::.vsix не собран — упаковщик ничего не положил в dist/"
+            exit 1
+          fi
+          ls -l "${files[@]}"

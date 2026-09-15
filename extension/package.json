@@ -1,0 +1,133 @@
+{
+  "name": "cpp-docs-panel",
+  "displayName": "Документация C++",
+  "description": "Панель со справочником, примерами и инструментами проекта C++",
+  "version": "3.0.0",
+  "publisher": "moonlivedt",
+  "author": "moonlivedt (MoonLightDeath) <moonlivedt@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/moonlivedt-oss/cpp-panel-Moon.git"
+  },
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "cppDocs",
+          "title": "Документация C++",
+          "icon": "icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "cppDocs": [
+        {
+          "id": "cppDocsPanel",
+          "name": "Документация C++",
+          "type": "webview"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Документация C++",
+      "properties": {
+        "cppDocs.path": {
+          "type": "string",
+          "default": "",
+          "description": "Папка с документацией, если проект открыт не из своей папки"
+        },
+        "cppDocs.openInPreview": {
+          "type": "boolean",
+          "default": true,
+          "description": "Открывать файлы в режиме чтения (превью Markdown)"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "cppDocs.refresh",
+        "title": "Документация C++: обновить",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "cppDocs.openIndex",
+        "title": "Документация C++: главная страница",
+        "icon": "$(book)"
+      },
+      {
+        "command": "cppDocs.clearRecent",
+        "title": "Документация C++: очистить недавние"
+      },
+      {
+        "command": "cppDocs.focusSearch",
+        "title": "Документация C++: искать в панели",
+        "icon": "$(search)"
+      },
+      {
+        "command": "cppDocs.openMenu",
+        "title": "Документация C++: открыть меню отдельной панелью",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "cppDocs.enableWindow",
+        "title": "Документация C++: подключить плавающее окно",
+        "icon": "$(window)"
+      },
+      {
+        "command": "cppDocs.disableWindow",
+        "title": "Документация C++: отключить плавающее окно"
+      },
+      {
+        "command": "cppDocs.windowHealth",
+        "title": "Документация C++: проверить плавающее окно"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "cppDocs.focusSearch",
+        "key": "ctrl+alt+d",
+        "mac": "cmd+alt+d"
+      },
+      {
+        "command": "cppDocs.openMenu",
+        "key": "ctrl+alt+m",
+        "mac": "cmd+alt+m"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "cppDocs.enableWindow",
+          "when": "view == cppDocsPanel",
+          "group": "navigation@0"
+        },
+        {
+          "command": "cppDocs.openMenu",
+          "when": "view == cppDocsPanel",
+          "group": "navigation@1"
+        },
+        {
+          "command": "cppDocs.openIndex",
+          "when": "view == cppDocsPanel",
+          "group": "navigation@2"
+        },
+        {
+          "command": "cppDocs.refresh",
+          "when": "view == cppDocsPanel",
+          "group": "navigation@3"
+        }
+      ]
+    }
+  }
+}

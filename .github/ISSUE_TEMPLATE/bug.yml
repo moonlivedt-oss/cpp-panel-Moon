@@ -1,0 +1,87 @@
+name: Баг
+description: Что-то работает не так, как ожидалось
+title: "[Баг] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Спасибо за отчёт! Сначала загляни в [FAQ / Решение проблем](https://github.com/moonlivedt-oss/cpp-panel-Moon#faq--решение-проблем) — частые случаи (нет пилюли «C++», окно пропало после обновления, панель пустая) уже разобраны.
+  - type: textarea
+    id: what
+    attributes:
+      label: Что произошло
+      description: Опиши проблему кратко и по делу.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Как воспроизвести
+      description: Пошагово — что нажимал(а), что открыл(а).
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Что ожидал(а)
+      description: Как должно было быть.
+    validations:
+      required: false
+  - type: input
+    id: ext-version
+    attributes:
+      label: Версия расширения
+      description: "Ctrl+Shift+X → «Документация C++» → номер версии."
+      placeholder: "3.0.0"
+    validations:
+      required: true
+  - type: input
+    id: vscode-version
+    attributes:
+      label: Версия VS Code (или форка)
+      placeholder: "1.95.0 · VS Code / Cursor / VSCodium / Windsurf"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: ОС
+      options:
+        - Windows
+        - macOS
+        - Linux
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Где проявляется
+      options:
+        - Плавающее окно
+        - Боковая панель
+        - Отдельная панель
+        - Везде
+    validations:
+      required: false
+  - type: dropdown
+    id: loader
+    attributes:
+      label: Загрузчик (для плавающего окна)
+      options:
+        - Custom UI Style (subframe7536)
+        - Custom CSS and JS (be5invis)
+        - Не использую окно
+    validations:
+      required: false
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Скриншот / GIF
+      description: По возможности приложи изображение — перетащи его прямо сюда.
+    validations:
+      required: false

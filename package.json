@@ -1,0 +1,15 @@
+{
+  "name": "cpp-docs-panel-project",
+  "private": true,
+  "version": "3.0.0",
+  "description": "Панель документации C++ для VS Code — сборка и тесты",
+  "scripts": {
+    "package": "node scripts/package-extension.js",
+    "install:vsix": "node scripts/package-extension.js --install",
+    "test": "node test/smoke.js",
+    "check": "node --check extension/extension.js && node --check extension/cpp-docs-runtime.js && node test/smoke.js",
+    "preview": "node scripts/preview.js",
+    "preview:window": "node scripts/preview-window.js"
+  },
+  "license": "MIT"
+}
