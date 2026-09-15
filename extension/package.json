@@ -4,6 +4,7 @@
   "description": "Панель со справочником, примерами и инструментами проекта C++",
   "version": "3.0.0",
   "publisher": "moonlivedt",
+  "icon": "icon-marketplace.png",
   "author": "moonlivedt (MoonLightDeath) <moonlivedt@gmail.com>",
   "license": "MIT",
   "repository": {
