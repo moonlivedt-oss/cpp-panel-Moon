@@ -980,7 +980,7 @@
     var start = null, map = fileMap();
     if (state.last && map[state.last]) start = map[state.last];
     if (!start) { var d = DATA(); start = d && d.files[0]; }
-    if (start) openFile(start.rel);
+    if (start) openFile(start.rel, null, true);   // тихая предзагрузка: не мечем «изучено»/«последний»
     // При открытии окна показываем главный экран (приветствие). Файл уже загружен под ним —
     // клик по «Продолжить»/карточке/навигатору просто скрывает оверлей и открывает материал.
     showHome();
@@ -1655,7 +1655,11 @@
   }
 
   // ------- открытие файла -------
-  function openFile(rel, hash) {
+  // silent=true — стартовая предзагрузка материала ПОД главным экраном: показать его
+  // в читалке, но не трогать «последний»/историю/прогресс. Иначе при самом первом
+  // запуске главный экран увидит уже помеченный файл и покажет «С возвращением» и
+  // ненулевой прогресс по тому, что пользователь ещё не открывал.
+  function openFile(rel, hash, silent) {
     hideHome();
     var map = fileMap();
     var f = map[String(rel).toLowerCase()];
@@ -1663,8 +1667,8 @@
     // запомнить позицию прокрутки в уходящем файле
     if (current && contentEl) state.scroll[current.rel] = contentEl.scrollTop;
     current = f;
-    state.last = f.rel.toLowerCase();
-    if (!navHist) pushHistory(f.rel, hash || "");
+    if (!silent) state.last = f.rel.toLowerCase();
+    if (!silent && !navHist) pushHistory(f.rel, hash || "");
     syncActiveTab(f.rel);
 
     if (rnameEl) rnameEl.textContent = f.title || f.name;
@@ -1679,8 +1683,8 @@
     buildRouteNav(f);
     syncReadBtn();
     highlightActive();
-    // отметить прочитанным при открытии
-    if (!state.read[f.rel]) { state.read[f.rel] = true; refreshItemRead(f.rel); updateProgress(); }
+    // отметить прочитанным при открытии (но не при тихой стартовой предзагрузке)
+    if (!silent && !state.read[f.rel]) { state.read[f.rel] = true; refreshItemRead(f.rel); updateProgress(); }
     saveState();
     // прокрутка к якорю, к сохранённой позиции или наверх
     if (hash) {
