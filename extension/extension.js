@@ -244,6 +244,7 @@ function collectGroups(root, recent, pins) {
 
   const sections = [
     ['ref', 'Справочник по темам', 'var(--vscode-charts-purple, #b180d7)'],
+    ['zadachnik', 'Задачник', 'var(--vscode-charts-red, #e06c75)'],
     ['examples', 'Примеры программ', 'var(--vscode-charts-green, #89d185)'],
     ['situacii', 'Один инструмент — разные задачи', 'var(--vscode-charts-orange, #d89a4a)'],
   ];
@@ -362,7 +363,14 @@ async function ensureWindowImport(context) {
     vscode.window.showErrorMessage('cpp-docs-runtime.js не найден рядом с расширением. Переустанови .vsix.');
     return;
   }
-  writeDocsData(context);
+  // Данные должны записаться ДО прописывания импорта: иначе окно подключится пустым и
+  // покажет «материалы не найдены». Не вышло — честно объясняем причину и не трогаем настройки.
+  if (!writeDocsData(context)) {
+    vscode.window.showWarningMessage(findDocsRoot()
+      ? 'Не удалось записать данные документации для окна (нет доступа к хранилищу расширения). Попробуй ещё раз или переустанови .vsix.'
+      : 'Папка docs не найдена — окну нечего показывать. Открой проект с папкой docs или укажи путь в настройке cppDocs.path.');
+    return;
+  }
   const conf = vscode.workspace.getConfiguration();
   const key = importsKey(loader);
   let arr = conf.get(key);
@@ -431,10 +439,22 @@ async function windowHealth(context) {
   const loader = activeLoader();
   const script = runtimeScriptPath(context);
   const root = findDocsRoot();
+  // Состояние файла данных — частая причина «пустого» окна: импорт прописан, а материалов нет.
+  let dataInfo = 'НЕ создан (окно будет пустым — нажми «Подключить окно»)';
+  try {
+    const df = dataFilePath(context);
+    if (fs.existsSync(df)) {
+      const st = fs.statSync(df);
+      const mins = Math.round((Date.now() - st.mtimeMs) / 60000);
+      dataInfo = 'есть (' + Math.max(1, Math.round(st.size / 1024)) + ' КБ, обновлён ' +
+        (mins < 1 ? 'только что' : mins + ' мин назад') + ')';
+    }
+  } catch (e) { dataInfo = 'ошибка чтения'; }
   const L = [
     'Загрузчик: ' + loaderTitle(loader),
     'Импорт окна в настройках: ' + (windowImportPresent(context) ? 'прописан' : 'НЕ прописан'),
     'Файл рантайма на месте: ' + (fs.existsSync(script) ? 'да' : 'НЕТ'),
+    'Файл данных окна: ' + dataInfo,
     'Папка документации: ' + (root ? root : 'НЕ найдена (см. cppDocs.path)'),
   ];
   const actions = [];
@@ -453,13 +473,24 @@ async function windowHealth(context) {
 }
 
 async function openDoc(filePath, forceText) {
+  // Файл могли удалить/переместить уже после того, как панель собрала список, —
+  // не даём showTextDocument упасть с непонятной ошибкой, говорим по-человечески.
+  if (!fs.existsSync(filePath)) {
+    vscode.window.showWarningMessage('Файл не найден (возможно, перемещён или удалён): ' + path.basename(filePath));
+    return;
+  }
   const uri = vscode.Uri.file(filePath);
   const preview = vscode.workspace.getConfiguration('cppDocs').get('openInPreview');
   if (preview && !forceText) {
-    await vscode.commands.executeCommand('markdown.showPreview', uri);
-  } else {
-    await vscode.window.showTextDocument(uri, { preview: false });
+    try {
+      await vscode.commands.executeCommand('markdown.showPreview', uri);
+      return;
+    } catch (e) {
+      // Встроенное превью Markdown недоступно (расширение Markdown отключено) —
+      // открываем как обычный текст, чтобы клик по материалу всегда что-то показал.
+    }
   }
+  await vscode.window.showTextDocument(uri, { preview: false });
 }
 
 function nonceString() {
@@ -574,6 +605,10 @@ class DocsViewProvider {
 
   /** Открыть файл как текст на конкретной строке (переход к разделу оглавления). */
   async openAt(filePath, line) {
+    if (!fs.existsSync(filePath)) {
+      vscode.window.showWarningMessage('Файл не найден (возможно, перемещён или удалён): ' + path.basename(filePath));
+      return;
+    }
     this.rememberOpened(filePath);
     const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(filePath));
     const editor = await vscode.window.showTextDocument(doc, { preview: false });

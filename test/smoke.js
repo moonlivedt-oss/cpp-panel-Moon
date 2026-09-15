@@ -368,7 +368,25 @@ if (fs.existsSync(runtimePath)) {
   check("рантайм: тема светлая/тёмная", rt.indexOf("function isLight") !== -1);
   check("рантайм: акцент под тему", rt.indexOf("function applyAccent") !== -1 && rt.indexOf("--cppdocs-ac") !== -1);
   check("рантайм: акцент из переменных оболочки", rt.indexOf("--mlbg-accent") !== -1 && rt.indexOf("--vscode-focusBorder") !== -1);
+
+  // --- надёжность рантайма: подпорченное состояние из localStorage не ломает окно ---
+  check("рантайм: словари состояния санируются (plainMap)", rt.indexOf("function plainMap") !== -1);
+  check("рантайм: масштаб шрифта клампится в [0.8..1.6]", rt.indexOf("isFinite(state.fs)") !== -1 && rt.indexOf("Math.min(1.6") !== -1);
+  check("рантайм: позиция/размер окна принимаются только числами", rt.indexOf('["x", "y", "w", "h"]') !== -1);
+
+  // --- наклейки-иллюстрации (пустые состояния, приветствие, «всё изучено») ---
+  check("рантайм: слоты наклеек и SVG-заглушки", rt.indexOf("function stickerMarkup") !== -1 && rt.indexOf("STICKER_SVG") !== -1);
+  check("рантайм: маркеры для встраивания наклеек", rt.indexOf("STICKERS:start") !== -1 && rt.indexOf("STICKERS:end") !== -1);
+  check("рантайм: наклейка в «ничего не найдено»", rt.indexOf('stickerMarkup("noresult"') !== -1);
+  check("рантайм: наклейка в пустом навигаторе", rt.indexOf('stickerMarkup("empty"') !== -1);
+  check("рантайм: поздравление наклейкой при 100%", rt.indexOf("cd-home-done") !== -1 && rt.indexOf("allDone") !== -1);
+  check("рантайм: наклейка прогресса у приветствия (смайл→огонёк→корона)", rt.indexOf('done > 0 ? "progress"') !== -1);
 }
+
+// наклейки, вырезанные из emo.jpg, — стартовый набор в extension/stickers/
+["welcome", "progress", "noresult", "empty", "done"].forEach(function (n) {
+  check("наклейка " + n + ".png на месте", fs.existsSync(path.join(EXT, "stickers", n + ".png")));
+});
 
 var srcAll = fs.readFileSync(path.join(EXT, "extension.js"), "utf8");
 check("окно: поддержан загрузчик custom-ui-style", srcAll.indexOf("custom-ui-style") !== -1);
@@ -378,6 +396,22 @@ check("окно: прописывание импорта", srcAll.indexOf("funct
 check("окно: удаление импорта", srcAll.indexOf("function removeWindowImport") !== -1);
 check("окно: команда в манифесте", pkg.contributes.commands.some(function (c) { return c.command === "cppDocs.enableWindow"; }));
 check("окно: кнопка в шапке панели", JSON.stringify(pkg.contributes.menus["view/title"]).indexOf("cppDocs.enableWindow") !== -1);
+
+// ------------------------------------------------------------
+//  7. Надёжность и защита от сбоев
+// ------------------------------------------------------------
+console.log("\nНадёжность");
+check("openDoc проверяет наличие файла", srcAll.indexOf("Файл не найден (возможно") !== -1);
+check("запасной путь, если превью Markdown недоступно", srcAll.indexOf("markdown.showPreview") !== -1 && srcAll.indexOf("расширение Markdown отключено") !== -1);
+check("openAt защищён от исчезнувшего файла", (srcAll.match(/Файл не найден \(возможно/g) || []).length >= 2);
+check("enableWindow предупреждает при провале записи данных", srcAll.indexOf("окну нечего показывать") !== -1);
+check("windowHealth показывает состояние файла данных", srcAll.indexOf("Файл данных окна:") !== -1);
+
+var pkgScript = fs.readFileSync(path.join(ROOT, "scripts", "package-extension.js"), "utf8");
+check("упаковщик: предполётная проверка перед сборкой", pkgScript.indexOf("function preflight") !== -1);
+check("упаковщик: проверяет синтаксис JS (node --check)", pkgScript.indexOf('"--check"') !== -1);
+check("упаковщик: проверяет обязательные файлы", pkgScript.indexOf("нет обязательного файла") !== -1);
+check("скрипт встраивания наклеек на месте", fs.existsSync(path.join(ROOT, "scripts", "embed-stickers.js")));
 
 // ------------------------------------------------------------
 console.log("\n" + (failures.length ? "ПРОВАЛОВ: " + failures.length : "Все проверки пройдены") +

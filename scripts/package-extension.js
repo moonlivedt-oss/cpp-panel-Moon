@@ -21,6 +21,7 @@ var fs = require("fs");
 var path = require("path");
 var zlib = require("zlib");
 var os = require("os");
+var cp = require("child_process");
 
 var ROOT = path.join(__dirname, "..");
 var EXT = path.join(ROOT, "extension");
@@ -205,8 +206,62 @@ function devInstallDir(pkg) {
   return path.join(os.homedir(), ".vscode", "extensions", "local.cpp-docs-panel-" + pkg.version);
 }
 
+function fail(msg) {
+  console.error("\n  ✗ Сборка остановлена: " + msg + "\n");
+  process.exit(1);
+}
+
+/**
+ * Предполётная проверка перед сборкой .vsix. Раньше упаковщик молча клал в архив что
+ * угодно: пропал рантайм или иконка — получался пакет, который VS Code ставит, но
+ * расширение не работает. Здесь ловим это заранее и с понятным сообщением, а не после
+ * установки. Ничего не собираем, пока проверка не пройдена.
+ */
+function preflight(pkg) {
+  // 1. Обязательные поля манифеста
+  ["name", "version", "publisher", "main", "engines"].forEach(function (k) {
+    if (!pkg[k]) fail("в extension/package.json нет поля «" + k + "»");
+  });
+
+  // 2. Обязательные файлы на диске (вход, рантайм, README из манифеста, иконки)
+  var required = [pkg.main.replace(/^\.\//, ""), "cpp-docs-runtime.js", "README.md", pkg.icon];
+  var ab = ((pkg.contributes || {}).viewsContainers || {}).activitybar;
+  if (ab && ab[0] && ab[0].icon) required.push(ab[0].icon);
+  required.forEach(function (rel) {
+    if (rel && !fs.existsSync(path.join(EXT, rel))) fail("нет обязательного файла extension/" + rel);
+  });
+
+  // 3. Синтаксис JS (node --check) — не пакуем заведомо сломанный код
+  ["extension.js", "cpp-docs-runtime.js"].forEach(function (name) {
+    var full = path.join(EXT, name);
+    if (!fs.existsSync(full)) return;
+    try {
+      cp.execFileSync(process.execPath, ["--check", full], { stdio: "pipe" });
+    } catch (e) {
+      fail("ошибка синтаксиса в extension/" + name + ":\n" + (e.stderr ? e.stderr.toString() : e.message));
+    }
+  });
+
+  // 4. Версия расширения совпала с версией проекта (частая рассинхронизация — только предупреждаем)
+  try {
+    var rootPkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+    if (rootPkg.version && rootPkg.version !== pkg.version) {
+      console.warn("  ! Версии разошлись: проект " + rootPkg.version + ", расширение " + pkg.version +
+                   " — проверь, что обновил обе.");
+    }
+  } catch (e) { /* корневого package.json может не быть — не критично */ }
+
+  // 5. Случайный файл данных окна (генерируется в globalStorage, в пакете ему не место)
+  if (fs.existsSync(path.join(EXT, "cpp-docs-data.js"))) {
+    console.warn("  ! В extension/ лежит cpp-docs-data.js — он генерируется автоматически, в пакет не нужен.");
+  }
+
+  console.log("  ✓ Предполётная проверка пройдена");
+}
+
 function main() {
   var pkg = JSON.parse(fs.readFileSync(path.join(EXT, "package.json"), "utf8"));
+  preflight(pkg);
 
   var entries = [
     { name: "extension.vsixmanifest", data: Buffer.from(buildManifest(pkg), "utf8") },
@@ -252,7 +307,11 @@ function main() {
         var full = path.join(EXT, name);
         if (fs.statSync(full).isFile()) fs.copyFileSync(full, path.join(dest, name));
       });
-    console.log("Готово. Дальше: «Developer: Reload Window» (или полный перезапуск VS Code).");
+    console.log("\nГотово. ВАЖНО: одного «Reload Window» мало — загрузчик вшивает рантайм в");
+    console.log("оболочку и держит старую копию. Переприменить загрузчик:");
+    console.log("  • Custom CSS and JS (be5invis): команда «Reload Custom CSS and JS» → перезапуск;");
+    console.log("  • Custom UI Style: команда «Custom UI Style: Reload».");
+    console.log("Либо: «Документация C++: подключить плавающее окно» и подтвердить применение.");
   }
 }
 

@@ -9,7 +9,9 @@
     "test": "node test/smoke.js",
     "check": "node --check extension/extension.js && node --check extension/cpp-docs-runtime.js && node test/smoke.js",
     "preview": "node scripts/preview.js",
-    "preview:window": "node scripts/preview-window.js"
+    "preview:window": "node scripts/preview-window.js",
+    "embed:logo": "node scripts/embed-logo.js",
+    "embed:stickers": "node scripts/embed-stickers.js"
   },
   "license": "MIT"
 }

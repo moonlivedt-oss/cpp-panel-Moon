@@ -105,6 +105,11 @@ def check_code():
     tmpdir = tempfile.mkdtemp(prefix="docs_check_")
     for path in md_files():
         rel = os.path.relpath(path, DOCS)
+        # Задачник — это учебные ЗАДАЧИ: код «найди ошибку» намеренно битый, а «перепиши»
+        # показывает старый стиль. Он не обязан собираться начисто, поэтому компиляцию тут
+        # пропускаем (ссылки в задачнике всё равно проверяются в check_links).
+        if os.path.basename(os.path.dirname(path)) == "zadachnik":
+            continue
         for i, block in enumerate(code_blocks(read(path)), start=1):
             if not is_full_program(block):
                 skipped += 1  # фрагмент или намеренно неправильный код
