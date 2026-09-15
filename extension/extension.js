@@ -16,6 +16,10 @@ const fs = require('fs');
 const path = require('path');
 
 const INDEX_FILE = '00-НАЧНИ-ОТСЮДА.md';
+// Путь к документации, вшитой прямо в расширение (extension/docs). Задаётся в activate.
+// Нужен, чтобы расширение работало «из коробки» после установки с Marketplace, даже когда
+// в проекте пользователя нет своей папки docs.
+let BUNDLED_DOCS = null;
 const RECENT_KEY = 'cppDocs.recent';
 const RECENT_LIMIT = 4;
 const PINS_KEY = 'cppDocs.pins';
@@ -46,7 +50,10 @@ function findDocsRoot() {
   const configured = vscode.workspace.getConfiguration('cppDocs').get('path');
   // Путь из настройки принимаем, только если это действительно папка с доками, —
   // иначе панель отрисовала бы пустые группы вместо понятной заглушки.
-  return configured && fs.existsSync(path.join(configured, INDEX_FILE)) ? configured : null;
+  if (configured && fs.existsSync(path.join(configured, INDEX_FILE))) return configured;
+  // Наконец — документация, вшитая в само расширение (работает без открытого проекта).
+  if (BUNDLED_DOCS && fs.existsSync(path.join(BUNDLED_DOCS, INDEX_FILE))) return BUNDLED_DOCS;
+  return null;
 }
 
 /** Первый заголовок «# ...» — человеческое имя файла. Работает с уже прочитанным текстом. */
@@ -1597,6 +1604,8 @@ class DocsViewProvider {
 }
 
 function activate(context) {
+  // Документация, вшитая в расширение (extension/docs) — fallback, если в проекте нет своей.
+  if (context && context.extensionPath) BUNDLED_DOCS = path.join(context.extensionPath, 'docs');
   const provider = new DocsViewProvider(context);
 
   context.subscriptions.push(

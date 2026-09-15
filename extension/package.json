@@ -11,11 +11,32 @@
     "type": "git",
     "url": "https://github.com/moonlivedt-oss/cpp-panel-Moon.git"
   },
+  "bugs": {
+    "url": "https://github.com/moonlivedt-oss/cpp-panel-Moon/issues"
+  },
+  "homepage": "https://github.com/moonlivedt-oss/cpp-panel-Moon#readme",
+  "galleryBanner": {
+    "color": "#1e1e2e",
+    "theme": "dark"
+  },
   "engines": {
     "vscode": "^1.75.0"
   },
   "categories": [
+    "Education",
     "Other"
+  ],
+  "keywords": [
+    "cpp",
+    "c++",
+    "документация",
+    "справочник",
+    "задачник",
+    "обучение",
+    "docs",
+    "reference",
+    "learning",
+    "русский"
   ],
   "main": "./extension.js",
   "activationEvents": [
@@ -46,7 +67,7 @@
         "cppDocs.path": {
           "type": "string",
           "default": "",
-          "description": "Папка с документацией, если проект открыт не из своей папки"
+          "description": "Папка с документацией. Пусто — используется встроенная документация расширения; либо укажите путь к своей папке docs."
         },
         "cppDocs.openInPreview": {
           "type": "boolean",

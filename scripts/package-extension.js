@@ -26,6 +26,7 @@ var cp = require("child_process");
 var ROOT = path.join(__dirname, "..");
 var EXT = path.join(ROOT, "extension");
 var DIST = path.join(ROOT, "dist");
+var INDEX_FILE_NAME = "00-НАЧНИ-ОТСЮДА.md"; // индексный файл документации (для вшивания/проверки)
 
 // ------------------------------------------------------------
 //  Минимальный ZIP-writer.
@@ -175,6 +176,8 @@ function buildManifest(pkg) {
     "  <Assets>\n" +
     '    <Asset Type="Microsoft.VisualStudio.Code.Manifest" Path="extension/package.json" Addressable="true" />\n' +
     '    <Asset Type="Microsoft.VisualStudio.Services.Content.Details" Path="extension/README.md" Addressable="true" />\n' +
+    '    <Asset Type="Microsoft.VisualStudio.Services.Content.License" Path="extension/LICENSE" Addressable="true" />\n' +
+    '    <Asset Type="Microsoft.VisualStudio.Services.Content.Changelog" Path="extension/CHANGELOG.md" Addressable="true" />\n' +
     "  </Assets>\n" +
     "</PackageManifest>\n"
   );
@@ -187,6 +190,9 @@ var CONTENT_TYPES =
   '  <Default Extension="js" ContentType="application/javascript" />\n' +
   '  <Default Extension="svg" ContentType="image/svg+xml" />\n' +
   '  <Default Extension="md" ContentType="text/markdown" />\n' +
+  '  <Default Extension="png" ContentType="image/png" />\n' +
+  '  <Default Extension="cpp" ContentType="text/plain" />\n' +
+  '  <Default Extension="txt" ContentType="text/plain" />\n' +
   '  <Default Extension="vsixmanifest" ContentType="text/xml" />\n' +
   '  <Default Extension="xml" ContentType="text/xml" />\n' +
   "</Types>\n";
@@ -256,7 +262,32 @@ function preflight(pkg) {
     console.warn("  ! В extension/ лежит cpp-docs-data.js — он генерируется автоматически, в пакет не нужен.");
   }
 
+  // 6. Документация для вшивания на месте — иначе окно будет пустым у поставивших с Marketplace
+  if (!fs.existsSync(path.join(ROOT, "docs", INDEX_FILE_NAME))) {
+    fail("нет docs/" + INDEX_FILE_NAME + " — нечего вшивать в пакет (окно будет пустым)");
+  }
+
   console.log("  ✓ Предполётная проверка пройдена");
+}
+
+/**
+ * Файлы документации для вшивания в пакет (в `extension/docs`). Пропускаем dot-папки
+ * (.git, .ruff_cache…), кэш Python и сам проверочный скрипт — в рантайме они не нужны.
+ * Благодаря им расширение показывает контент «из коробки» после установки с Marketplace.
+ */
+function bundledDocsFiles() {
+  var docsRoot = path.join(ROOT, "docs");
+  var out = [];
+  if (!fs.existsSync(docsRoot)) return out;
+  (function walk(dir) {
+    fs.readdirSync(dir).forEach(function (name) {
+      if (name[0] === "." || name === "__pycache__" || name === "proverka.py") return;
+      var full = path.join(dir, name);
+      if (fs.statSync(full).isDirectory()) walk(full);
+      else out.push({ full: full, rel: path.relative(docsRoot, full).replace(/\\/g, "/") });
+    });
+  })(docsRoot);
+  return out;
 }
 
 function main() {
@@ -280,15 +311,29 @@ function main() {
       }
     });
 
+  // Вшиваем документацию в пакет (extension/docs) — расширение работает без своей папки docs.
+  var docsFiles = bundledDocsFiles();
+  docsFiles.forEach(function (d) {
+    entries.push({ name: "extension/docs/" + d.rel, data: fs.readFileSync(d.full) });
+  });
+
+  // CHANGELOG из корня → в пакет (Marketplace показывает вкладку «Changelog»).
+  var chLog = path.join(ROOT, "CHANGELOG.md");
+  if (fs.existsSync(chLog)) entries.push({ name: "extension/CHANGELOG.md", data: fs.readFileSync(chLog) });
+
   if (!fs.existsSync(DIST)) fs.mkdirSync(DIST, { recursive: true });
   var outName = pkg.name + "-" + pkg.version + ".vsix";
   var outPath = path.join(DIST, outName);
   fs.writeFileSync(outPath, makeZip(entries));
 
   console.log("Собран пакет: dist/" + outName);
+  var docsBytes = 0;
   entries.forEach(function (e) {
+    if (e.name.indexOf("extension/docs/") === 0) { docsBytes += e.data.length; return; }
     console.log("   " + e.name + "  (" + e.data.length + " Б)");
   });
+  if (docsFiles.length) console.log("   extension/docs/  (" + docsFiles.length + " файлов, " + Math.round(docsBytes / 1024) + " КБ)");
+  console.log("   ИТОГО: " + entries.length + " файлов, vsix " + Math.round(fs.statSync(outPath).size / 1024) + " КБ");
 
   if (process.argv.indexOf("--install") !== -1) {
     // Ставим НЕ через `code --install-extension` (он кладёт в moonlivedt.*, которую загрузчик
@@ -307,6 +352,12 @@ function main() {
         var full = path.join(EXT, name);
         if (fs.statSync(full).isFile()) fs.copyFileSync(full, path.join(dest, name));
       });
+    // и вшитую документацию (dest/docs) — тем же фильтром
+    bundledDocsFiles().forEach(function (d) {
+      var target = path.join(dest, "docs", d.rel);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.copyFileSync(d.full, target);
+    });
     console.log("\nГотово. ВАЖНО: одного «Reload Window» мало — загрузчик вшивает рантайм в");
     console.log("оболочку и держит старую копию. Переприменить загрузчик:");
     console.log("  • Custom CSS and JS (be5invis): команда «Reload Custom CSS and JS» → перезапуск;");

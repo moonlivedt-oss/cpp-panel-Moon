@@ -1,0 +1,10 @@
+# Что НЕ включать в .vsix при сборке через @vscode/vsce.
+# (Наш собственный упаковщик scripts/package-extension.js и так кладёт только нужное,
+#  этот файл — на случай сборки стандартным vsce.)
+.vscodeignore
+**/*.bak
+**/*.bak-old
+stickers/**
+docs/.ruff_cache/**
+docs/proverka.py
+docs/**/__pycache__/**
