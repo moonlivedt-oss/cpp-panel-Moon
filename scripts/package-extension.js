@@ -195,6 +195,10 @@ var CONTENT_TYPES =
   '  <Default Extension="txt" ContentType="text/plain" />\n' +
   '  <Default Extension="vsixmanifest" ContentType="text/xml" />\n' +
   '  <Default Extension="xml" ContentType="text/xml" />\n' +
+  // LICENSE без расширения: в OPC у каждой части должен быть резолвимый content-type, а
+  // Default работает только по расширению. Без явного Override парсер Marketplace не видит
+  // часть и отклоняет ассет License («not found in the package»). Так же поступает vsce.
+  '  <Override PartName="/extension/LICENSE" ContentType="text/plain" />\n' +
   "</Types>\n";
 
 // ------------------------------------------------------------
