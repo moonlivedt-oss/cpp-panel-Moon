@@ -331,7 +331,12 @@ function writeDocsData(context) {
   let data;
   try { data = buildDocsData(root); } catch (e) { return false; }
   data.dataUrl = fileUrl(dataFilePath(context));  // чтобы окно могло перечитать себя по кнопке «Обновить»
-  const body = 'window.__CPPDOCS__ = ' + JSON.stringify(data) + ';\n';
+  // Загрузчик (be5invis/custom-ui-style) встраивает этот файл ИНЛАЙНОМ: <script>…</script>.
+  // Если в материалах попадётся литеральный </script> (например, пример с HTML), он досрочно
+  // закроет тег — данные вывалятся текстом, а window.__CPPDOCS__ не установится. Экранируем его
+  // так же, как это делает превью-харнесс (scripts/preview-window.js, функция safe).
+  const json = JSON.stringify(data).replace(/<\/script/gi, '<\\/script');
+  const body = 'window.__CPPDOCS__ = ' + json + ';\n';
   try {
     const p = dataFilePath(context);
     fs.mkdirSync(path.dirname(p), { recursive: true });
