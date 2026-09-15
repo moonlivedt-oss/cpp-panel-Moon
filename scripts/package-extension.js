@@ -20,7 +20,7 @@
 var fs = require("fs");
 var path = require("path");
 var zlib = require("zlib");
-var cp = require("child_process");
+var os = require("os");
 
 var ROOT = path.join(__dirname, "..");
 var EXT = path.join(ROOT, "extension");
@@ -194,21 +194,15 @@ var CONTENT_TYPES =
 //  Сборка
 // ------------------------------------------------------------
 
-/** Путь к консольной утилите VS Code. Ищем в PATH сами, чтобы обойтись без shell. */
-function findCodeCli() {
-  var names = process.platform === "win32" ? ["code.cmd", "code.exe"] : ["code"];
-  var dirs = (process.env.PATH || "").split(path.delimiter);
-  for (var i = 0; i < dirs.length; i++) {
-    for (var j = 0; j < names.length; j++) {
-      var candidate = path.join(dirs[i], names[j]);
-      try {
-        if (fs.existsSync(candidate)) return candidate;
-      } catch (e) {
-        /* недоступный каталог в PATH — просто идём дальше */
-      }
-    }
-  }
-  return names[0]; // не нашли — пусть система попробует сама
+/**
+ * Папка сайдлоад-установки, из которой загрузчик (be5invis/custom-ui-style) читает
+ * рантайм и куда прописана инъекция. ПЛОСКАЯ раскладка (файлы в корне), publisher='local'
+ * — чтобы id расширения (=> globalStorage с данными) и путь импорта совпадали с тем,
+ * что уже прописано в settings.json. Стандартный `code --install-extension` кладёт в
+ * <publisher>.<name>-<ver> (moonlivedt.*), которую загрузчик НЕ читает.
+ */
+function devInstallDir(pkg) {
+  return path.join(os.homedir(), ".vscode", "extensions", "local.cpp-docs-panel-" + pkg.version);
 }
 
 function main() {
@@ -242,24 +236,23 @@ function main() {
   });
 
   if (process.argv.indexOf("--install") !== -1) {
-    console.log("\nСтавлю в VS Code…");
-    // На Windows `code` — это .cmd, и spawnSync без shell по имени его не находит.
-    // Вариант с shell:true работает, но Node ругается предупреждением о безопасности,
-    // поэтому ищем настоящий путь в PATH и зовём файл напрямую.
-    var cli = findCodeCli();
-    var args = ["--install-extension", outPath, "--force"];
-    // .cmd — это батник, напрямую Node его не запустит. Зовём через cmd.exe явно:
-    // так аргументы остаются массивом и shell:true (с его предупреждением) не нужен.
-    var res =
-      process.platform === "win32"
-        ? cp.spawnSync("cmd.exe", ["/c", cli].concat(args), { stdio: "inherit" })
-        : cp.spawnSync(cli, args, { stdio: "inherit" });
-    if (res.status !== 0) {
-      console.error("Установка не удалась. Поставь вручную:");
-      console.error("  code --install-extension " + outPath + " --force");
-      process.exit(1);
-    }
-    console.log("\nГотово. Перезапусти VS Code, чтобы панель обновилась.");
+    // Ставим НЕ через `code --install-extension` (он кладёт в moonlivedt.*, которую загрузчик
+    // не читает), а плоской копией в папку сайдлоада local.cpp-docs-panel-<версия> — ту, что
+    // прописана в инъекции settings.json. Так правки рантайма/расширения реально применяются.
+    var dest = devInstallDir(pkg);
+    console.log("\nСтавлю в: " + dest);
+    fs.mkdirSync(dest, { recursive: true });
+    // package.json с publisher='local' (id => globalStorage с данными), остальное из манифеста
+    var localPkg = Object.assign({}, pkg, { publisher: "local" });
+    fs.writeFileSync(path.join(dest, "package.json"), JSON.stringify(localPkg, null, 2) + "\n", "utf8");
+    // остальные файлы расширения — плоско (рантайм и пр. должны лежать в КОРНЕ папки)
+    fs.readdirSync(EXT)
+      .filter(function (name) { return name !== "package.json" && name !== ".vscodeignore"; })
+      .forEach(function (name) {
+        var full = path.join(EXT, name);
+        if (fs.statSync(full).isFile()) fs.copyFileSync(full, path.join(dest, name));
+      });
+    console.log("Готово. Дальше: «Developer: Reload Window» (или полный перезапуск VS Code).");
   }
 }
 
