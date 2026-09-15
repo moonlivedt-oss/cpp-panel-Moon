@@ -34,8 +34,6 @@ var SLOTS = [
   "welcome", "progress", "noresult", "empty", "done",
   // Иконки пунктов меню (карточки «Быстрый доступ» на главном экране).
   "icon-start", "icon-route", "icon-ref", "icon-examples", "icon-cheat", "icon-tasks",
-  // Значки сложности задач: level-1→🟢, level-2→🟡, level-3→🔴.
-  "level-1", "level-2", "level-3",
 ];
 var MIME = {
   ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif",
