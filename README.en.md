@@ -14,7 +14,7 @@ full-text search · table of contents and internal-link jumps · study progress 
 [![CI](https://github.com/moonlivedt-oss/cpp-panel-Moon/actions/workflows/ci.yml/badge.svg)](https://github.com/moonlivedt-oss/cpp-panel-Moon/actions/workflows/ci.yml)
 ![version](https://img.shields.io/badge/version-3.0.0-cba6f7)
 ![vscode](https://img.shields.io/badge/VS%20Code-%5E1.75-007ACC?logo=visualstudiocode&logoColor=white)
-![tests](https://img.shields.io/badge/tests-131%20ok-a6e3a1)
+![tests](https://img.shields.io/badge/tests-154%20ok-a6e3a1)
 ![deps](https://img.shields.io/badge/dependencies-0-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
@@ -39,7 +39,7 @@ Separately:
 
 ```bash
 npm run package          # only build dist/cpp-docs-panel-<version>.vsix
-npm test                 # smoke test (131 checks, no VS Code needed)
+npm test                 # smoke test (154 checks, no VS Code needed)
 npm run check            # syntax + tests
 npm run preview:window   # build build/preview-window.html — see the window in a browser
 ```
@@ -223,7 +223,7 @@ cpp-docs-panel/
 │   ├── preview.js              sidebar preview → build/preview.html
 │   └── preview-window.js       floating-window preview → build/preview-window.html
 ├── test/
-│   └── smoke.js                131 checks without launching the editor
+│   └── smoke.js                154 checks without launching the editor
 ├── docs/                       hand-written C++ docs (what the panel shows)
 ├── build/                      generated previews (in .gitignore)
 └── dist/                       built packages
@@ -255,7 +255,7 @@ No dependencies, no `npm install` needed — the scripts just call `node`.
 ```bash
 npm run package          # build dist/cpp-docs-panel-<version>.vsix
 npm run install:vsix     # build and install into VS Code
-npm test                 # smoke test (131 checks, no VS Code needed)
+npm test                 # smoke test (154 checks, no VS Code needed)
 npm run check            # node --check + smoke test in one command
 npm run preview          # build/preview.html — sidebar in a browser
 npm run preview:window   # build/preview-window.html — floating window in a browser

@@ -14,7 +14,7 @@
 [![CI](https://github.com/moonlivedt-oss/cpp-panel-Moon/actions/workflows/ci.yml/badge.svg)](https://github.com/moonlivedt-oss/cpp-panel-Moon/actions/workflows/ci.yml)
 ![version](https://img.shields.io/badge/version-3.0.0-cba6f7)
 ![vscode](https://img.shields.io/badge/VS%20Code-%5E1.75-007ACC?logo=visualstudiocode&logoColor=white)
-![tests](https://img.shields.io/badge/тесты-131%20ok-a6e3a1)
+![tests](https://img.shields.io/badge/тесты-154%20ok-a6e3a1)
 ![deps](https://img.shields.io/badge/зависимостей-0-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
@@ -39,7 +39,7 @@ npm run install:vsix     # собрать пакет и сразу постав�
 
 ```bash
 npm run package          # только собрать dist/cpp-docs-panel-<версия>.vsix
-npm test                 # смоук-тест (131 проверка, VS Code не нужен)
+npm test                 # смоук-тест (154 проверки, VS Code не нужен)
 npm run check            # синтаксис + тесты
 npm run preview:window   # собрать build/preview-window.html — посмотреть окно в браузере
 ```
@@ -222,7 +222,7 @@ cpp-docs-panel/
 │   ├── preview.js              превью боковой панели → build/preview.html
 │   └── preview-window.js       превью плавающего окна → build/preview-window.html
 ├── test/
-│   └── smoke.js                131 проверка без запуска редактора
+│   └── smoke.js                154 проверки без запуска редактора
 ├── docs/                       рукописная документация C++ (её и показывает панель)
 ├── build/                      генерируемые превью (в .gitignore)
 └── dist/                       собранные пакеты
@@ -254,7 +254,7 @@ cpp-docs-panel/
 ```bash
 npm run package          # собрать dist/cpp-docs-panel-<версия>.vsix
 npm run install:vsix     # собрать и сразу поставить в VS Code
-npm test                 # смоук-тест (131 проверка, VS Code не нужен)
+npm test                 # смоук-тест (154 проверки, VS Code не нужен)
 npm run check            # node --check + смоук-тест одной командой
 npm run preview          # build/preview.html — боковая панель в браузере
 npm run preview:window   # build/preview-window.html — плавающее окно в браузере

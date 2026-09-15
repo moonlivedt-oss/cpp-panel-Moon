@@ -272,8 +272,9 @@ function preflight(pkg) {
 
 /**
  * Файлы документации для вшивания в пакет (в `extension/docs`). Пропускаем dot-папки
- * (.git, .ruff_cache…), кэш Python и сам проверочный скрипт — в рантайме они не нужны.
- * Благодаря им расширение показывает контент «из коробки» после установки с Marketplace.
+ * (.git, .ruff_cache…), кэш Python, сам проверочный скрипт и `screenshots/` — в рантайме они
+ * не нужны. Скриншоты нужны только README/витрине (~1.5 МБ), в .vsix им делать нечего.
+ * Благодаря этому расширение показывает контент «из коробки», не таща лишний вес в установку.
  */
 function bundledDocsFiles() {
   var docsRoot = path.join(ROOT, "docs");
@@ -281,7 +282,7 @@ function bundledDocsFiles() {
   if (!fs.existsSync(docsRoot)) return out;
   (function walk(dir) {
     fs.readdirSync(dir).forEach(function (name) {
-      if (name[0] === "." || name === "__pycache__" || name === "proverka.py") return;
+      if (name[0] === "." || name === "__pycache__" || name === "proverka.py" || name === "screenshots") return;
       var full = path.join(dir, name);
       if (fs.statSync(full).isDirectory()) walk(full);
       else out.push({ full: full, rel: path.relative(docsRoot, full).replace(/\\/g, "/") });
