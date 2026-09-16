@@ -18,7 +18,7 @@
 ![deps](https://img.shields.io/badge/зависимостей-0-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
-<img src="docs/screenshots/banner.jpg" alt="Документация C++ в VS Code — иллюстрация" width="880">
+<img src="docs/screenshots/hero.png" alt="Плавающее окно «Документация C++» поверх кода: слева навигатор, справа главный экран с прогрессом" width="880">
 
 <sub>Один файл расширения · собственный упаковщик .vsix · установка одной командой</sub>
 
@@ -117,7 +117,7 @@ npm run preview:window   # собрать build/preview-window.html — посм
 **«…проверить плавающее окно»**. Боковая панель при этом остаётся как запасной вариант.
 
 <div align="center">
-<img src="docs/screenshots/illustration.jpg" alt="Учёба C++ с документацией под рукой — иллюстрация" width="720">
+<img src="docs/screenshots/window.png" alt="Плавающее окно в режиме чтения: навигатор слева, текст с подсветкой C++ и кнопкой «копировать», оглавление справа" width="820">
 </div>
 
 ## Рекомендуемый компаньон: MoonLight custom-bg
@@ -149,6 +149,10 @@ npm run preview:window   # собрать build/preview-window.html — посм
 
 Все три показывают один и тот же список и синхронизированы: закладки, «недавнее» и подсветка
 открытого файла общие.
+
+<div align="center">
+<img src="docs/screenshots/panel-sidebar.png" alt="Боковая панель «Документация C++»: группы материалов, поиск, полоса прогресса" width="320">
+</div>
 
 ### Горячие клавиши
 

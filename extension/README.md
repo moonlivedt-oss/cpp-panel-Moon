@@ -10,7 +10,7 @@
 в удобном навигаторе с поиском, подсветкой синтаксиса и отметками «изучено».
 Документация **встроена в расширение** — работает сразу после установки, без настройки.
 
-<img src="https://raw.githubusercontent.com/moonlivedt-oss/cpp-panel-Moon/main/docs/screenshots/banner.jpg" alt="Документация C++ в VS Code — иллюстрация" width="880">
+<img src="https://raw.githubusercontent.com/moonlivedt-oss/cpp-panel-Moon/main/docs/screenshots/hero.png" alt="Плавающее окно «Документация C++» поверх кода: навигатор слева, главный экран с прогрессом справа" width="880">
 
 </div>
 
@@ -29,7 +29,12 @@
 Всё офлайн, без сети. Тема (светлая/тёмная) берётся из VS Code.
 
 <div align="center">
-<img src="https://raw.githubusercontent.com/moonlivedt-oss/cpp-panel-Moon/main/docs/screenshots/illustration.jpg" alt="Учёба C++ с документацией под рукой — иллюстрация" width="720">
+<table>
+<tr>
+<td align="center" width="66%"><img src="https://raw.githubusercontent.com/moonlivedt-oss/cpp-panel-Moon/main/docs/screenshots/window.png" alt="Плавающее окно в режиме чтения: навигатор слева, текст с подсветкой C++ и кнопкой «копировать», оглавление справа" width="620"><br><sub><b>Плавающее окно</b> · читалка поверх кода</sub></td>
+<td align="center" width="34%"><img src="https://raw.githubusercontent.com/moonlivedt-oss/cpp-panel-Moon/main/docs/screenshots/panel-sidebar.png" alt="Боковая панель: группы материалов, поиск, полоса прогресса" width="280"><br><sub><b>Боковая панель</b> · всегда под рукой</sub></td>
+</tr>
+</table>
 </div>
 
 ## Что внутри
