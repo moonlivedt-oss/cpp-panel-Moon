@@ -382,8 +382,8 @@ if (fs.existsSync(runtimePath)) {
   // --- наклейки-иллюстрации (пустые состояния, приветствие, «всё изучено») ---
   check("рантайм: слоты наклеек и SVG-заглушки", rt.indexOf("function stickerMarkup") !== -1 && rt.indexOf("STICKER_SVG") !== -1);
   check("рантайм: маркеры для встраивания наклеек", rt.indexOf("STICKERS:start") !== -1 && rt.indexOf("STICKERS:end") !== -1);
-  check("рантайм: наклейка в «ничего не найдено»", rt.indexOf('stickerMarkup("noresult"') !== -1);
-  check("рантайм: наклейка в пустом навигаторе", rt.indexOf('stickerMarkup("empty"') !== -1);
+  check("рантайм: маскот в «ничего не найдено»", rt.indexOf('stickerMarkup("mascot-search"') !== -1);
+  check("рантайм: маскот в пустом навигаторе", rt.indexOf('stickerMarkup("mascot-sleep"') !== -1);
   check("рантайм: поздравление наклейкой при 100%", rt.indexOf("cd-home-done") !== -1 && rt.indexOf("allDone") !== -1);
   check("рантайм: маскот у приветствия (машет→думает→празднует)", rt.indexOf('"mascot-done"') !== -1 && rt.indexOf('"mascot-think"') !== -1 && rt.indexOf('"mascot-hi"') !== -1);
 }

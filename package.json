@@ -1,7 +1,7 @@
 {
   "name": "cpp-docs-panel-project",
   "private": true,
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "Панель документации C++ для VS Code — сборка и тесты",
   "scripts": {
     "package": "node scripts/package-extension.js",

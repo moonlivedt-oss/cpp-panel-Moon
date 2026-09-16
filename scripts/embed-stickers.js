@@ -30,13 +30,13 @@ var DIR = path.join(ROOT, "extension", "stickers");
 var RUNTIME = path.join(ROOT, "extension", "cpp-docs-runtime.js");
 
 var SLOTS = [
-  // Состояния окна: welcome — иконка на пилюле запуска; noresult/empty — заглушки.
-  // (progress/done на главной заменены маскотом ниже — их не встраиваем.)
-  "welcome", "noresult", "empty",
+  // Состояние окна: welcome — иконка на пилюле запуска.
+  // (progress/done/noresult/empty заменены маскотом ниже — их не встраиваем.)
+  "welcome",
   // Иконки пунктов меню (карточки «Быстрый доступ» на главном экране).
   "icon-start", "icon-route", "icon-ref", "icon-examples", "icon-cheat", "icon-tasks",
-  // Маскот-человечек на главном экране (машет / думает / празднует).
-  "mascot-hi", "mascot-think", "mascot-done",
+  // Маскот-человечек: главная (машет/думает/празднует) + заглушки (ищет/спит).
+  "mascot-hi", "mascot-think", "mascot-done", "mascot-search", "mascot-sleep",
 ];
 var MIME = {
   ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif",

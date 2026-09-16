@@ -12,13 +12,13 @@ Floating window (drag & resize) · read with C++ highlighting right in the windo
 full-text search · table of contents and internal-link jumps · study progress · zero dependencies
 
 [![CI](https://github.com/moonlivedt-oss/cpp-panel-Moon/actions/workflows/ci.yml/badge.svg)](https://github.com/moonlivedt-oss/cpp-panel-Moon/actions/workflows/ci.yml)
-![version](https://img.shields.io/badge/version-3.0.0-cba6f7)
+![version](https://img.shields.io/badge/version-3.1.0-cba6f7)
 ![vscode](https://img.shields.io/badge/VS%20Code-%5E1.75-007ACC?logo=visualstudiocode&logoColor=white)
-![tests](https://img.shields.io/badge/tests-154%20ok-a6e3a1)
+![tests](https://img.shields.io/badge/tests-180%20ok-a6e3a1)
 ![deps](https://img.shields.io/badge/dependencies-0-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
-<img src="docs/screenshots/hero.png" alt="Floating C++ docs window over code: navigator on the left, highlighted text on the right" width="880">
+<img src="docs/screenshots/banner.jpg" alt="C++ documentation in VS Code — illustration" width="880">
 
 <sub>One extension file · custom .vsix packer · install with one command</sub>
 
@@ -117,7 +117,7 @@ To disable — the **"Документация C++: отключить плав�
 **"…проверить плавающее окно"**. The sidebar panel remains available as a fallback.
 
 <div align="center">
-<img src="docs/screenshots/window.png" alt="Floating window: navigator on the left, C++-highlighted text with a copy-code button on the right" width="720">
+<img src="docs/screenshots/illustration.jpg" alt="Learning C++ with docs at hand — illustration" width="720">
 </div>
 
 ## Recommended companion: MoonLight custom-bg
@@ -150,10 +150,6 @@ A document opens three ways — pick one to fit the moment:
 
 All three show the same list and stay in sync: bookmarks, "recent" and the open-file highlight are
 shared.
-
-<div align="center">
-<img src="docs/screenshots/panel-sidebar.png" alt="Sidebar panel: document groups, search, progress bar" width="320">
-</div>
 
 ### Keyboard shortcuts
 

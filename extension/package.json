@@ -2,7 +2,7 @@
   "name": "cpp-docs-panel",
   "displayName": "Документация C++",
   "description": "Панель со справочником, примерами и инструментами проекта C++",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "publisher": "moonlivedt",
   "icon": "icon-marketplace.png",
   "author": "moonlivedt (MoonLightDeath) <moonlivedt@gmail.com>",
