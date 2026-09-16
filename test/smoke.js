@@ -270,7 +270,10 @@ if (!fs.existsSync(path.join(docsPath, "00-НАЧНИ-ОТСЮДА.md"))) {
   check("подсчёт числа разделов", src.indexOf("function countSections") !== -1);
   check("обработка «открепить всё»", src.indexOf("msg.type === 'clearPins'") !== -1);
   check("обработка ручной отметки «изучено»", src.indexOf("msg.type === 'toggleRead'") !== -1 && src.indexOf("toggleRead(filePath)") !== -1);
-  check("единственное чтение файла в describe", (src.match(/readFileSync/g) || []).length <= 3);
+  // Считаем только парсер доков (до блока инъекции окна): у окна свои законные
+  // чтения workbench.html/рантайма, они к кэшу парсинга отношения не имеют.
+  check("единственное чтение файла в парсере доков",
+    (src.slice(0, src.indexOf("const WB_START")).match(/readFileSync/g) || []).length <= 3);
 
   // --- регрессии на исправленные баги ---
   // Свёрнутость групп привязана к имени, а не к порядковому индексу
@@ -394,6 +397,8 @@ check("окно: поддержан загрузчик be5invis", srcAll.indexOf
 check("окно: генерация файла данных", srcAll.indexOf("function writeDocsData") !== -1);
 check("окно: прописывание импорта", srcAll.indexOf("function ensureWindowImport") !== -1);
 check("окно: удаление импорта", srcAll.indexOf("function removeWindowImport") !== -1);
+check("окно: прямой патч оболочки без загрузчика", srcAll.indexOf("function enableWindow") !== -1 && srcAll.indexOf("function findWorkbenchFiles") !== -1);
+check("окно: команда подключения ведёт на прямой патч", srcAll.indexOf("() => enableWindow(context)") !== -1);
 check("окно: команда в манифесте", pkg.contributes.commands.some(function (c) { return c.command === "cppDocs.enableWindow"; }));
 check("окно: кнопка в шапке панели", JSON.stringify(pkg.contributes.menus["view/title"]).indexOf("cppDocs.enableWindow") !== -1);
 

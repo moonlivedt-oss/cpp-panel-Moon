@@ -431,6 +431,143 @@ async function removeWindowImport(context) {
     : 'Импорт окна не найден — нечего убирать.');
 }
 
+// ============================================================
+//  Плавающее окно БЕЗ стороннего загрузчика: расширение само патчит оболочку
+//  VS Code (workbench.html) — как это делает vscode-bg. Не нужны ни be5invis,
+//  ни custom-ui-style, ни внешний батник. Вставка помечается маркерами, делается
+//  резервная копия, повторный вызов идемпотентен (перезаписывает свой же блок).
+// ============================================================
+const WB_START = '<!-- CPPDOCS-WINDOW-START -->';
+const WB_END = '<!-- CPPDOCS-WINDOW-END -->';
+
+/** Экранировать </script, чтобы инлайн-<script> не закрылся на содержимом. */
+function escapeScript(s) { return String(s).replace(/<\/script/gi, '<\\/script'); }
+
+/** Регэксп нашего блока между маркерами. */
+function windowBlockRe() {
+  const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(esc(WB_START) + '[\\s\\S]*?' + esc(WB_END));
+}
+
+/** Тело data-скрипта: window.__CPPDOCS__ = {…}; (для инлайна в оболочку). */
+function windowDataBody() {
+  const root = findDocsRoot();
+  if (!root) return null;
+  let data;
+  try { data = buildDocsData(root); } catch (e) { return null; }
+  return 'window.__CPPDOCS__ = ' + escapeScript(JSON.stringify(data)) + ';\n';
+}
+
+/** Готовый блок для вставки в <head>: маркеры + данные + рантайм (оба экранированы). */
+function buildWindowBlock(dataBody, runtimeJs) {
+  return WB_START + '\n<script>\n' + escapeScript(dataBody) + '\n</script>\n<script>\n' +
+         escapeScript(runtimeJs) + '\n</script>\n' + WB_END + '\n';
+}
+
+/** Вставить/обновить блок в HTML оболочки (идемпотентно). Вернёт null, если нет </head>. */
+function applyWindowInjection(html, block) {
+  html = html.replace(windowBlockRe(), '');
+  const idx = html.indexOf('</head>');
+  if (idx < 0) return null;
+  return html.slice(0, idx) + block + html.slice(idx);
+}
+
+/** Убрать наш блок из HTML оболочки. */
+function stripWindowInjection(html) { return html.replace(windowBlockRe(), ''); }
+
+/** Найти файл(ы) workbench.html в установке VS Code (через vscode.env.appRoot). */
+function findWorkbenchFiles() {
+  const out = [];
+  try {
+    const appRoot = vscode.env && vscode.env.appRoot;
+    if (!appRoot) return out;
+    const walk = (dir, depth) => {
+      if (depth > 6) return;
+      let items;
+      try { items = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return; }
+      for (const it of items) {
+        const p = path.join(dir, it.name);
+        if (it.isDirectory()) walk(p, depth + 1);
+        else if (it.name === 'workbench.html') out.push(p);
+      }
+    };
+    walk(path.join(appRoot, 'out'), 0);
+  } catch (e) {}
+  return out;
+}
+
+/** Пропатчена ли оболочка нашим блоком (для health). */
+function windowInjected() {
+  return findWorkbenchFiles().some((f) => {
+    try { return fs.readFileSync(f, 'utf8').indexOf(WB_START) !== -1; } catch (e) { return false; }
+  });
+}
+
+/** Подключить плавающее окно: прямой патч оболочки, без стороннего загрузчика. */
+async function enableWindow(context) {
+  const dataBody = windowDataBody();
+  if (!dataBody) {
+    vscode.window.showWarningMessage('Папка docs не найдена — окну нечего показывать. Укажите путь в настройке cppDocs.path.');
+    return;
+  }
+  try { writeDocsData(context); } catch (e) {}  // держим и файл данных свежим (кнопка «Обновить»)
+  const scriptPath = runtimeScriptPath(context);
+  if (!fs.existsSync(scriptPath)) {
+    vscode.window.showErrorMessage('cpp-docs-runtime.js не найден рядом с расширением. Переустановите расширение.');
+    return;
+  }
+  const files = findWorkbenchFiles();
+  if (!files.length) {
+    vscode.window.showErrorMessage('Не удалось найти workbench.html в установке VS Code — прямой патч невозможен.');
+    return;
+  }
+  let runtimeJs;
+  try { runtimeJs = fs.readFileSync(scriptPath, 'utf8'); }
+  catch (e) { vscode.window.showErrorMessage('Не удалось прочитать рантайм окна.'); return; }
+  const block = buildWindowBlock(dataBody, runtimeJs);
+  let done = 0, denied = false;
+  for (const f of files) {
+    try {
+      const bak = f + '.cppdocs-backup';
+      if (!fs.existsSync(bak)) { try { fs.copyFileSync(f, bak); } catch (e) {} }
+      const next = applyWindowInjection(fs.readFileSync(f, 'utf8'), block);
+      if (next == null) continue;
+      fs.writeFileSync(f, next, 'utf8');
+      done++;
+    } catch (e) { if (e && (e.code === 'EACCES' || e.code === 'EPERM')) denied = true; }
+  }
+  if (!done) {
+    vscode.window.showErrorMessage(denied
+      ? 'Нет доступа на запись к оболочке VS Code. Запустите VS Code от имени администратора и повторите.'
+      : 'Не удалось впечатать окно в оболочку VS Code.');
+    return;
+  }
+  const pick = await vscode.window.showInformationMessage(
+    'Плавающее окно подключено. Перезапустить редактор? (Баннер «…appears to be corrupt» можно закрыть — это ожидаемо.)',
+    'Перезапустить', 'Позже');
+  if (pick === 'Перезапустить') {
+    try { await vscode.commands.executeCommand('workbench.action.reloadWindow'); } catch (e) {}
+  }
+}
+
+/** Отключить плавающее окно: снять наш патч + удалить файл данных + почистить наследие загрузчиков. */
+async function disableWindow(context) {
+  let done = 0, denied = false;
+  for (const f of findWorkbenchFiles()) {
+    try {
+      const html = fs.readFileSync(f, 'utf8');
+      if (html.indexOf(WB_START) === -1) continue;
+      fs.writeFileSync(f, stripWindowInjection(html), 'utf8');
+      done++;
+    } catch (e) { if (e && (e.code === 'EACCES' || e.code === 'EPERM')) denied = true; }
+  }
+  try { const p = dataFilePath(context); if (fs.existsSync(p)) fs.unlinkSync(p); } catch (e) {}
+  vscode.window.showInformationMessage(done
+    ? 'Плавающее окно отключено. Перезапустите редактор (Developer: Reload Window).'
+    : (denied ? 'Нет доступа на запись к оболочке VS Code (нужен администратор).'
+              : 'Инъекция окна не найдена — оболочка уже чистая.'));
+}
+
 /** Прописан ли уже наш импорт (для health и первого запуска). */
 function windowImportPresent(context) {
   const loader = activeLoader();
@@ -443,11 +580,12 @@ function windowImportPresent(context) {
 
 /** Отчёт о состоянии окна с кнопками-действиями. */
 async function windowHealth(context) {
-  const loader = activeLoader();
   const script = runtimeScriptPath(context);
   const root = findDocsRoot();
-  // Состояние файла данных — частая причина «пустого» окна: импорт прописан, а материалов нет.
-  let dataInfo = 'НЕ создан (окно будет пустым — нажми «Подключить окно»)';
+  const wbFiles = findWorkbenchFiles();
+  const patched = windowInjected();
+  // Состояние файла данных — частая причина «пустого» окна.
+  let dataInfo = 'НЕ создан (пересоздастся при подключении окна)';
   try {
     const df = dataFilePath(context);
     if (fs.existsSync(df)) {
@@ -458,24 +596,19 @@ async function windowHealth(context) {
     }
   } catch (e) { dataInfo = 'ошибка чтения'; }
   const L = [
-    'Загрузчик: ' + loaderTitle(loader),
-    'Импорт окна в настройках: ' + (windowImportPresent(context) ? 'прописан' : 'НЕ прописан'),
+    'Оболочка VS Code (workbench.html): ' + (patched ? 'пропатчена' : 'НЕ пропатчена'),
+    'Файл workbench.html найден: ' + (wbFiles.length ? 'да (' + wbFiles.length + ')' : 'НЕТ'),
     'Файл рантайма на месте: ' + (fs.existsSync(script) ? 'да' : 'НЕТ'),
     'Файл данных окна: ' + dataInfo,
     'Папка документации: ' + (root ? root : 'НЕ найдена (см. cppDocs.path)'),
   ];
-  const actions = [];
-  if (!loader) actions.push('Поставить загрузчик');
-  else actions.push('Подключить окно');
-  actions.push('Отключить окно');
+  const actions = patched ? ['Отключить окно', 'Переподключить'] : ['Подключить окно'];
   const pick = await vscode.window.showInformationMessage(
     'Плавающее окно — состояние:\n\n• ' + L.join('\n• '), { modal: false }, ...actions);
-  if (pick === 'Поставить загрузчик') {
-    try { await vscode.commands.executeCommand('workbench.extensions.search', CUS_ID); } catch (e) {}
-  } else if (pick === 'Подключить окно') {
-    await ensureWindowImport(context);
+  if (pick === 'Подключить окно' || pick === 'Переподключить') {
+    await enableWindow(context);
   } else if (pick === 'Отключить окно') {
-    await removeWindowImport(context);
+    await disableWindow(context);
   }
 }
 
@@ -1626,25 +1759,29 @@ function activate(context) {
     }),
     vscode.commands.registerCommand('cppDocs.focusSearch', () => provider.focusSearch()),
     // Плавающее окно: подключить / отключить / проверить.
-    vscode.commands.registerCommand('cppDocs.enableWindow', () => ensureWindowImport(context)),
-    vscode.commands.registerCommand('cppDocs.disableWindow', () => removeWindowImport(context)),
+    // Прямой патч оболочки, без стороннего загрузчика (ensureWindowImport/
+    // removeWindowImport оставлены как совместимость со старым способом).
+    vscode.commands.registerCommand('cppDocs.enableWindow', () => enableWindow(context)),
+    vscode.commands.registerCommand('cppDocs.disableWindow', () => disableWindow(context)),
     vscode.commands.registerCommand('cppDocs.windowHealth', () => windowHealth(context))
   );
 
-  // Держим файл данных окна свежим, если окно уже подключено (файл существует).
-  try { if (fs.existsSync(dataFilePath(context))) writeDocsData(context); } catch (e) {}
+  // Всегда держим файл данных окна свежим при запуске: он нужен и окну, подключённому
+  // через загрузчик, и авто-инъектору workbench.html (батник «Плавающее-окно.bat»),
+  // который сам впечатывает данные + рантайм без стороннего загрузчика.
+  try { writeDocsData(context); } catch (e) {}
 
-  // Первый запуск: если загрузчик уже стоит (у автора vscode-bg он есть), один раз
-  // предложим включить плавающее окно — это новый основной способ читать доки.
+  // Первый запуск: один раз предложим включить плавающее окно (прямой патч оболочки,
+  // без стороннего загрузчика) — это основной способ читать доки поверх редактора.
   try {
     if (!context.globalState.get(WINDOW_SETUP_KEY)) {
       context.globalState.update(WINDOW_SETUP_KEY, true);
-      if (activeLoader() && !windowImportPresent(context) && findDocsRoot()) {
+      if (findDocsRoot() && findWorkbenchFiles().length && !windowInjected()) {
         setTimeout(() => {
           vscode.window.showInformationMessage(
-            'Документация C++: доступно плавающее окно — читать все материалы в перетаскиваемом окне поверх редактора. Включить?',
+            'Документация C++: можно открыть плавающее окно поверх редактора. Это разово изменит оболочку VS Code (появится баннер «…corrupt», его можно закрыть). Включить?',
             'Включить окно', 'Позже'
-          ).then((pick) => { if (pick === 'Включить окно') ensureWindowImport(context); });
+          ).then((pick) => { if (pick === 'Включить окно') enableWindow(context); });
         }, 3500);
       }
     }
@@ -1670,4 +1807,8 @@ function activate(context) {
 
 function deactivate() {}
 
-module.exports = { activate, deactivate, buildDocsData, findDocsRoot };
+module.exports = {
+  activate, deactivate, buildDocsData, findDocsRoot,
+  // чистые хелперы инъекции — покрыты test/inject.js
+  escapeScript, buildWindowBlock, applyWindowInjection, stripWindowInjection,
+};
