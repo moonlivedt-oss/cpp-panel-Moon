@@ -30,10 +30,13 @@ var DIR = path.join(ROOT, "extension", "stickers");
 var RUNTIME = path.join(ROOT, "extension", "cpp-docs-runtime.js");
 
 var SLOTS = [
-  // Состояния окна (приветствие/поиск/прогресс) — пять исходных наклеек.
-  "welcome", "progress", "noresult", "empty", "done",
+  // Состояния окна: welcome — иконка на пилюле запуска; noresult/empty — заглушки.
+  // (progress/done на главной заменены маскотом ниже — их не встраиваем.)
+  "welcome", "noresult", "empty",
   // Иконки пунктов меню (карточки «Быстрый доступ» на главном экране).
   "icon-start", "icon-route", "icon-ref", "icon-examples", "icon-cheat", "icon-tasks",
+  // Маскот-человечек на главном экране (машет / думает / празднует).
+  "mascot-hi", "mascot-think", "mascot-done",
 ];
 var MIME = {
   ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif",

@@ -385,7 +385,7 @@ if (fs.existsSync(runtimePath)) {
   check("рантайм: наклейка в «ничего не найдено»", rt.indexOf('stickerMarkup("noresult"') !== -1);
   check("рантайм: наклейка в пустом навигаторе", rt.indexOf('stickerMarkup("empty"') !== -1);
   check("рантайм: поздравление наклейкой при 100%", rt.indexOf("cd-home-done") !== -1 && rt.indexOf("allDone") !== -1);
-  check("рантайм: наклейка прогресса у приветствия (смайл→огонёк→корона)", rt.indexOf('done > 0 ? "progress"') !== -1);
+  check("рантайм: маскот у приветствия (машет→думает→празднует)", rt.indexOf('"mascot-done"') !== -1 && rt.indexOf('"mascot-think"') !== -1 && rt.indexOf('"mascot-hi"') !== -1);
 }
 
 // наклейки, вырезанные из emo.jpg, — стартовый набор в extension/stickers/
