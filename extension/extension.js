@@ -38,6 +38,7 @@ const BE5_IMPORTS_KEY = 'vscode_custom_css.imports';        // формат: м�
 const CUS_ID = 'subframe7536.custom-ui-style';
 const CUS_IMPORTS_KEY = 'custom-ui-style.external.imports'; // формат: массив { type, url }
 const WINDOW_SETUP_KEY = 'cppDocs.windowSetupOffered';      // первый запуск: предложили окно один раз
+const WINDOW_ON_KEY = 'cppDocs.windowEnabled';              // окно было включено (для авто-восстановления после апдейта VS Code)
 
 /** Ищет папку docs: сначала в открытом проекте, потом путь из настроек. */
 function findDocsRoot() {
@@ -510,45 +511,50 @@ function windowInjected() {
 }
 
 /** Подключить плавающее окно: прямой патч оболочки, без стороннего загрузчика. */
-async function enableWindow(context) {
+/** Ядро инъекции без UI: патчит все workbench.html. Возвращает {ok,done,denied,reason}. */
+function injectWindowFiles(context) {
   const dataBody = windowDataBody();
-  if (!dataBody) {
-    vscode.window.showWarningMessage('Папка docs не найдена — окну нечего показывать. Укажите путь в настройке cppDocs.path.');
-    return;
-  }
-  try { writeDocsData(context); } catch (e) {}  // держим и файл данных свежим (кнопка «Обновить»)
+  if (!dataBody) return { ok: false, done: 0, denied: false, reason: 'no-docs' };
+  try { writeDocsData(context); } catch (e) {}  // держим файл данных свежим (кнопка «Обновить»)
   const scriptPath = runtimeScriptPath(context);
-  if (!fs.existsSync(scriptPath)) {
-    vscode.window.showErrorMessage('cpp-docs-runtime.js не найден рядом с расширением. Переустановите расширение.');
-    return;
-  }
+  if (!fs.existsSync(scriptPath)) return { ok: false, done: 0, denied: false, reason: 'no-runtime' };
   const files = findWorkbenchFiles();
-  if (!files.length) {
-    vscode.window.showErrorMessage('Не удалось найти workbench.html в установке VS Code — прямой патч невозможен.');
-    return;
-  }
+  if (!files.length) return { ok: false, done: 0, denied: false, reason: 'no-workbench' };
   let runtimeJs;
   try { runtimeJs = fs.readFileSync(scriptPath, 'utf8'); }
-  catch (e) { vscode.window.showErrorMessage('Не удалось прочитать рантайм окна.'); return; }
+  catch (e) { return { ok: false, done: 0, denied: false, reason: 'read-runtime' }; }
   const block = buildWindowBlock(dataBody, runtimeJs);
   let done = 0, denied = false;
   for (const f of files) {
     try {
       const bak = f + '.cppdocs-backup';
       if (!fs.existsSync(bak)) { try { fs.copyFileSync(f, bak); } catch (e) {} }
-      let html = neutralizeCsp(fs.readFileSync(f, 'utf8'));  // снять CSP, иначе инлайн-скрипты не выполнятся
+      const html = neutralizeCsp(fs.readFileSync(f, 'utf8'));  // снять CSP, иначе инлайн-скрипты не выполнятся
       const next = applyWindowInjection(html, block);
       if (next == null) continue;
       fs.writeFileSync(f, next, 'utf8');
       done++;
     } catch (e) { if (e && (e.code === 'EACCES' || e.code === 'EPERM')) denied = true; }
   }
-  if (!done) {
-    vscode.window.showErrorMessage(denied
-      ? 'Нет доступа на запись к оболочке VS Code. Запустите VS Code от имени администратора и повторите.'
-      : 'Не удалось впечатать окно в оболочку VS Code.');
+  return { ok: done > 0, done: done, denied: denied, reason: done > 0 ? 'ok' : (denied ? 'denied' : 'no-head') };
+}
+
+/** Подключить плавающее окно: прямой патч оболочки, без стороннего загрузчика. */
+async function enableWindow(context) {
+  const r = injectWindowFiles(context);
+  if (!r.ok) {
+    const msg = {
+      'no-docs': 'Папка docs не найдена — окну нечего показывать. Укажите путь в настройке cppDocs.path.',
+      'no-runtime': 'cpp-docs-runtime.js не найден рядом с расширением. Переустановите расширение.',
+      'read-runtime': 'Не удалось прочитать рантайм окна.',
+      'no-workbench': 'Не удалось найти workbench.html в установке VS Code — прямой патч невозможен.',
+      'denied': 'Нет доступа на запись к оболочке VS Code. Запустите VS Code от имени администратора и повторите.',
+      'no-head': 'Не удалось впечатать окно в оболочку VS Code.',
+    }[r.reason] || 'Не удалось подключить окно.';
+    vscode.window.showErrorMessage(msg);
     return;
   }
+  try { context.globalState.update(WINDOW_ON_KEY, true); } catch (e) {}
   const pick = await vscode.window.showInformationMessage(
     'Плавающее окно подключено. Перезапустить редактор? (Баннер «…appears to be corrupt» можно закрыть — это ожидаемо.)',
     'Перезапустить', 'Позже');
@@ -573,6 +579,7 @@ async function disableWindow(context) {
     } catch (e) { if (e && (e.code === 'EACCES' || e.code === 'EPERM')) denied = true; }
   }
   try { const p = dataFilePath(context); if (fs.existsSync(p)) fs.unlinkSync(p); } catch (e) {}
+  try { context.globalState.update(WINDOW_ON_KEY, false); } catch (e) {}
   vscode.window.showInformationMessage(done
     ? 'Плавающее окно отключено. Перезапустите редактор (Developer: Reload Window).'
     : (denied ? 'Нет доступа на запись к оболочке VS Code (нужен администратор).'
@@ -1781,6 +1788,28 @@ function activate(context) {
   // через загрузчик, и авто-инъектору workbench.html (батник «Плавающее-окно.bat»),
   // который сам впечатывает данные + рантайм без стороннего загрузчика.
   try { writeDocsData(context); } catch (e) {}
+
+  // Авто-восстановление: если окно было включено, но патч пропал (обновление VS Code
+  // заменило workbench.html) — тихо впечатываем заново и предлагаем перезагрузку.
+  try {
+    if (context.globalState.get(WINDOW_ON_KEY) && findDocsRoot() &&
+        findWorkbenchFiles().length && !windowInjected()) {
+      const r = injectWindowFiles(context);
+      if (r.ok) {
+        setTimeout(() => {
+          vscode.window.showInformationMessage(
+            'Документация C++: плавающее окно восстановлено после обновления VS Code. Перезагрузить окно?',
+            'Перезагрузить', 'Позже'
+          ).then((pick) => { if (pick === 'Перезагрузить') { try { vscode.commands.executeCommand('workbench.action.reloadWindow'); } catch (e) {} } });
+        }, 2500);
+      } else if (r.denied) {
+        setTimeout(() => {
+          vscode.window.showWarningMessage(
+            'Документация C++: не удалось восстановить окно (нет доступа на запись к оболочке). Запустите VS Code от имени администратора и выполните «подключить плавающее окно».');
+        }, 2500);
+      }
+    }
+  } catch (e) {}
 
   // Первый запуск: один раз предложим включить плавающее окно (прямой патч оболочки,
   // без стороннего загрузчика) — это основной способ читать доки поверх редактора.

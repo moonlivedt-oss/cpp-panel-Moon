@@ -68,6 +68,7 @@
   function plainMap(v) { return v && typeof v === "object" && !Array.isArray(v) ? v : {}; }
   var state = loadState();
   state.read = plainMap(state.read);          // { rel: true } — отмечено «изучено»
+  state.solved = plainMap(state.solved);      // { "rel#slug": true } — задача задачника отмечена «решено»
   state.pins = plainMap(state.pins);          // { rel: true } — закреплено
   state.collapsed = plainMap(state.collapsed); // { group: true } — свёрнутая группа в навигаторе
   state.scroll = plainMap(state.scroll);      // { rel: scrollTop } — где остановился в каждом файле
@@ -748,6 +749,15 @@
   "#" + WIN_ID + " .cd-article details.cd-spoiler .cd-spoiler-body>:first-child{margin-top:6px;}" +
   // Мелкая подпись-легенда (<sub> из задачника → <small class="cd-cap">)
   "#" + WIN_ID + " .cd-article .cd-cap{font-size:.85em;color:var(--faint);}" +
+  // Прогресс по задачнику: счётчик темы + отметка «решено» у задач
+  "#" + WIN_ID + " .cd-article .cd-taskbar{margin:2px 0 16px;padding:8px 12px;border:1px solid var(--bd);border-radius:9px;background:var(--hl);font-size:13px;color:var(--muted);}" +
+  "#" + WIN_ID + " .cd-article .cd-taskbar b{color:var(--ac2);}" +
+  "#" + WIN_ID + " .cd-article h2.cd-task{display:flex;align-items:center;flex-wrap:wrap;gap:10px;}" +
+  "#" + WIN_ID + " .cd-article h2.cd-task.cd-task-done{opacity:.72;}" +
+  "#" + WIN_ID + " .cd-article .cd-solve{cursor:pointer;font:inherit;font-size:11px;font-weight:600;line-height:1;padding:5px 10px;border-radius:999px;border:1px solid var(--bd);background:var(--panel);color:var(--muted);white-space:nowrap;transition:all .12s;}" +
+  "#" + WIN_ID + " .cd-article .cd-solve:hover{border-color:var(--ac);color:var(--ac);}" +
+  "#" + WIN_ID + " .cd-article .cd-solve.on{background:var(--ac);border-color:var(--ac);color:#11111b;}" +
+  "#" + WIN_ID + " .cd-article h2.cd-task.cd-task-done>a.cd-anchor,#" + WIN_ID + " .cd-article h2.cd-task.cd-task-done{text-decoration:none;}" +
   "#" + WIN_ID + " .cd-article img{max-width:100%;border-radius:8px;}" +
 
   // Таблицы
@@ -1823,6 +1833,7 @@
     buildOutline(headings);
     collectHeadings();
     buildRouteNav(f);
+    decorateTasks(f);
     syncReadBtn();
     highlightActive();
     // отметить прочитанным при открытии (но не при тихой стартовой предзагрузке)
@@ -1836,6 +1847,54 @@
     contentEl.scrollTop = state.scroll[f.rel] || 0;
     onContentScroll();
   }
+  // ---- Прогресс по задачнику: отметки «решено» у задач ## N.M. ----
+  function isTaskFile(rel) { return /(^|\/)zadachnik\//i.test(String(rel || "")); }
+  function isTaskHeading(t) { return /^\s*\d+\.\d+\./.test(t || ""); }
+  // Всего задач в теме и сколько решено (по DOM после рендера).
+  function decorateTasks(f) {
+    if (!f || !isTaskFile(f.rel) || !articleEl) return;
+    var total = 0, solved = 0;
+    articleEl.querySelectorAll("h2[id]").forEach(function (h) {
+      if (!isTaskHeading(h.textContent)) return;
+      total++;
+      var key = f.rel + "#" + h.id;
+      var on = !!state.solved[key];
+      if (on) solved++;
+      var b = el("button");                 // NB: el(tag, css, text) — 2-й аргумент это СТИЛЬ, класс ставим сами
+      b.type = "button";
+      b.className = "cd-solve" + (on ? " on" : "");
+      b.setAttribute("data-key", key);
+      b.textContent = on ? "✓ решено" : "отметить решённой";
+      h.classList.add("cd-task");
+      h.classList.toggle("cd-task-done", on);
+      h.appendChild(b);
+    });
+    if (total) {
+      var bar = el("div");
+      bar.className = "cd-taskbar";
+      bar.setAttribute("data-taskbar", "1");
+      bar.innerHTML = 'Решено <b class="cd-tb-s">' + solved + "</b> из <b>" + total + "</b> задач в теме";
+      articleEl.insertBefore(bar, articleEl.firstChild);
+    }
+  }
+  function toggleSolved(btn) {
+    var key = btn.getAttribute("data-key");
+    if (!key) return;
+    var on = !state.solved[key];
+    if (on) state.solved[key] = true; else delete state.solved[key];
+    btn.classList.toggle("on", on);
+    btn.textContent = on ? "✓ решено" : "отметить решённой";
+    var h = btn.closest ? btn.closest("h2") : null;
+    if (h) h.classList.toggle("cd-task-done", on);
+    var bar = articleEl.querySelector("[data-taskbar]");
+    if (bar) {
+      var s = 0;
+      articleEl.querySelectorAll("h2.cd-task").forEach(function (x) { if (x.classList.contains("cd-task-done")) s++; });
+      var sEl = bar.querySelector(".cd-tb-s"); if (sEl) sEl.textContent = s;
+    }
+    saveState();
+  }
+
   function refreshItemRead(rel) {
     var it = itemEls.filter(function (x) { return x.getAttribute("data-rel") === rel; })[0];
     if (it) {
@@ -1882,6 +1941,8 @@
     } catch (err) { legacyCopy(text); flashCopy(btn); }
   }
   function onArticleClick(e) {
+    var solve = e.target.closest && e.target.closest(".cd-solve");
+    if (solve) { e.preventDefault(); e.stopPropagation(); toggleSolved(solve); return; }
     var copy = e.target.closest && e.target.closest(".copybtn");
     if (copy) { doCopy(copy); return; }
     var a = e.target.closest && e.target.closest("a[href]");

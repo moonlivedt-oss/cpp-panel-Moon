@@ -367,6 +367,8 @@ if (fs.existsSync(runtimePath)) {
   check("рантайм: кнопка «копировать код»", rt.indexOf("copybtn") !== -1);
   check("рантайм: переходы по внутренним ссылкам", rt.indexOf("resolveRel") !== -1);
   check("рантайм: защита от повторной инъекции", rt.indexOf("__CPPDOCS_RUNTIME__") !== -1);
+  check("рантайм: прогресс по задачнику (отметки «решено»)", rt.indexOf("function decorateTasks") !== -1 && rt.indexOf("function toggleSolved") !== -1 && rt.indexOf("state.solved") !== -1);
+  check("рантайм: кнопка «решено» с классом cd-solve", rt.indexOf("cd-solve") !== -1 && rt.indexOf("cd-taskbar") !== -1);
   check("рантайм: читает данные из window.__CPPDOCS__", rt.indexOf("window.__CPPDOCS__") !== -1);
   check("рантайм: тема светлая/тёмная", rt.indexOf("function isLight") !== -1);
   check("рантайм: акцент под тему", rt.indexOf("function applyAccent") !== -1 && rt.indexOf("--cppdocs-ac") !== -1);
@@ -399,6 +401,7 @@ check("окно: прописывание импорта", srcAll.indexOf("funct
 check("окно: удаление импорта", srcAll.indexOf("function removeWindowImport") !== -1);
 check("окно: прямой патч оболочки без загрузчика", srcAll.indexOf("function enableWindow") !== -1 && srcAll.indexOf("function findWorkbenchFiles") !== -1);
 check("окно: команда подключения ведёт на прямой патч", srcAll.indexOf("() => enableWindow(context)") !== -1);
+check("окно: авто-восстановление после апдейта VS Code", srcAll.indexOf("WINDOW_ON_KEY") !== -1 && srcAll.indexOf("function injectWindowFiles") !== -1 && srcAll.indexOf("восстановлено после обновления VS Code") !== -1);
 check("окно: команда в манифесте", pkg.contributes.commands.some(function (c) { return c.command === "cppDocs.enableWindow"; }));
 check("окно: кнопка в шапке панели", JSON.stringify(pkg.contributes.menus["view/title"]).indexOf("cppDocs.enableWindow") !== -1);
 
