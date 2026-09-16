@@ -98,9 +98,18 @@ console.log("\nИнъекция в оболочку");
 var START = "<!-- CPPDOCS-WINDOW-START -->";
 var END = "<!-- CPPDOCS-WINDOW-END -->";
 
+// «Чистый» workbench с CSP-метой — как на свежем VS Code без загрузчиков.
+var csp = "<meta http-equiv=\"Content-Security-Policy\" content=\"script-src 'self' 'unsafe-eval';\">";
+var fakeWorkbench = "<!DOCTYPE html><html><head><meta charset=\"utf-8\">" + csp + "</head><body><div id=\"app\"></div></body></html>";
+
+// CSP обязателен к снятию: иначе инлайн-<script> не выполнится (не будет ни окна, ни пилюли).
+check("исходный workbench содержит CSP-мету", fakeWorkbench.indexOf("Content-Security-Policy") !== -1);
+check("neutralizeCsp убирает CSP-мету",
+      typeof ext.neutralizeCsp === "function" && ext.neutralizeCsp(fakeWorkbench).indexOf("Content-Security-Policy") === -1);
+
 var block = ext.buildWindowBlock(dataBody, runtimeRaw);
-var fakeWorkbench = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"></head><body><div id=\"app\"></div></body></html>";
-var out = ext.applyWindowInjection(fakeWorkbench, block);
+var out = ext.applyWindowInjection(ext.neutralizeCsp(fakeWorkbench), block);
+check("после подключения в оболочке НЕТ CSP-меты", out.indexOf("Content-Security-Policy") === -1);
 
 function count(s, sub) { return s.split(sub).length - 1; }
 

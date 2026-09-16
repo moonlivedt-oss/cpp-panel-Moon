@@ -443,6 +443,12 @@ const WB_END = '<!-- CPPDOCS-WINDOW-END -->';
 /** Экранировать </script, чтобы инлайн-<script> не закрылся на содержимом. */
 function escapeScript(s) { return String(s).replace(/<\/script/gi, '<\\/script'); }
 
+/** Снять CSP-мету из оболочки: на чистом VS Code она блокирует инлайн-<script>,
+ *  поэтому без окна и без пилюли. Загрузчики (be5invis) делают ровно это же. */
+function neutralizeCsp(html) {
+  return html.replace(/<meta\s+[^>]*Content-Security-Policy[^>]*>/gi, '');
+}
+
 /** Регэксп нашего блока между маркерами. */
 function windowBlockRe() {
   const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -530,7 +536,8 @@ async function enableWindow(context) {
     try {
       const bak = f + '.cppdocs-backup';
       if (!fs.existsSync(bak)) { try { fs.copyFileSync(f, bak); } catch (e) {} }
-      const next = applyWindowInjection(fs.readFileSync(f, 'utf8'), block);
+      let html = neutralizeCsp(fs.readFileSync(f, 'utf8'));  // снять CSP, иначе инлайн-скрипты не выполнятся
+      const next = applyWindowInjection(html, block);
       if (next == null) continue;
       fs.writeFileSync(f, next, 'utf8');
       done++;
@@ -557,7 +564,11 @@ async function disableWindow(context) {
     try {
       const html = fs.readFileSync(f, 'utf8');
       if (html.indexOf(WB_START) === -1) continue;
-      fs.writeFileSync(f, stripWindowInjection(html), 'utf8');
+      // Есть маркеры => патч не затёрт апдейтом, бэкап ему соответствует —
+      // безопасно восстановить оболочку целиком (вернёт и CSP-мету).
+      const bak = f + '.cppdocs-backup';
+      if (fs.existsSync(bak)) fs.copyFileSync(bak, f);
+      else fs.writeFileSync(f, stripWindowInjection(html), 'utf8');
       done++;
     } catch (e) { if (e && (e.code === 'EACCES' || e.code === 'EPERM')) denied = true; }
   }
@@ -1810,5 +1821,5 @@ function deactivate() {}
 module.exports = {
   activate, deactivate, buildDocsData, findDocsRoot,
   // чистые хелперы инъекции — покрыты test/inject.js
-  escapeScript, buildWindowBlock, applyWindowInjection, stripWindowInjection,
+  escapeScript, neutralizeCsp, buildWindowBlock, applyWindowInjection, stripWindowInjection,
 };
