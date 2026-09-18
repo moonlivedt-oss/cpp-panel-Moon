@@ -22,6 +22,12 @@ var path = require("path");
 var zlib = require("zlib");
 var os = require("os");
 var cp = require("child_process");
+var crypto = require("crypto");
+
+// Фиксированная метка времени для записей ZIP → .vsix воспроизводим байт-в-байт
+// (иначе каждая сборка отличалась бы штампом времени). Можно переопределить через
+// SOURCE_DATE_EPOCH (секунды) — стандарт воспроизводимых сборок.
+var SOURCE_EPOCH = process.env.SOURCE_DATE_EPOCH ? parseInt(process.env.SOURCE_DATE_EPOCH, 10) * 1000 : Date.UTC(2020, 0, 1);
 
 var ROOT = path.join(__dirname, "..");
 var EXT = path.join(ROOT, "extension");
@@ -63,7 +69,7 @@ function makeZip(entries) {
   var chunks = [];
   var central = [];
   var offset = 0;
-  var stamp = dosDateTime(new Date());
+  var stamp = dosDateTime(new Date(SOURCE_EPOCH));
 
   entries.forEach(function (entry) {
     var nameBuf = Buffer.from(entry.name, "utf8");
@@ -140,45 +146,64 @@ function xmlEscape(s) {
 }
 
 function buildManifest(pkg) {
+  // Метаданные витрины берём из package.json (а не хардкодим), чтобы Marketplace
+  // показал иконку, теги для поиска, категории, баннер и ссылки на репозиторий.
+  var tags = (pkg.keywords && pkg.keywords.length ? pkg.keywords : ["cpp", "docs"]).join(",");
+  var cats = (pkg.categories && pkg.categories.length ? pkg.categories : ["Other"]).join(",");
+  var repoUrl = ((pkg.repository && pkg.repository.url) || "").replace(/^git\+/, "").replace(/\.git$/, "");
+  var bugsUrl = (pkg.bugs && pkg.bugs.url) || repoUrl;
+  var homeUrl = pkg.homepage || repoUrl;
+  var banner = pkg.galleryBanner || {};
+  var props = [
+    ['Microsoft.VisualStudio.Code.Engine', pkg.engines.vscode],
+    ['Microsoft.VisualStudio.Code.ExtensionDependencies', ''],
+    ['Microsoft.VisualStudio.Code.ExtensionPack', ''],
+    ['Microsoft.VisualStudio.Code.ExtensionKind', 'ui,workspace'],
+    ['Microsoft.VisualStudio.Services.GitHubFlavoredMarkdown', 'true'],
+  ];
+  if (repoUrl) {
+    props.push(['Microsoft.VisualStudio.Code.Repository', repoUrl]);
+    props.push(['Microsoft.VisualStudio.Services.Links.Source', repoUrl]);
+    props.push(['Microsoft.VisualStudio.Services.Links.Getstarted', repoUrl]);
+    props.push(['Microsoft.VisualStudio.Services.Links.GitHub', repoUrl]);
+  }
+  if (bugsUrl) props.push(['Microsoft.VisualStudio.Services.Links.Support', bugsUrl]);
+  if (homeUrl) props.push(['Microsoft.VisualStudio.Services.Links.Learn', homeUrl]);
+  if (banner.color) props.push(['Microsoft.VisualStudio.Services.Branding.Color', banner.color]);
+  if (banner.theme) props.push(['Microsoft.VisualStudio.Services.Branding.Theme', banner.theme]);
+  var propsXml = props
+    .map(function (p) { return '      <Property Id="' + p[0] + '" Value="' + xmlEscape(p[1]) + '" />\n'; })
+    .join("");
+
+  var assets = [
+    ['Microsoft.VisualStudio.Code.Manifest', 'extension/package.json'],
+    ['Microsoft.VisualStudio.Services.Content.Details', 'extension/README.md'],
+    ['Microsoft.VisualStudio.Services.Content.License', 'extension/LICENSE'],
+    ['Microsoft.VisualStudio.Services.Content.Changelog', 'extension/CHANGELOG.md'],
+  ];
+  if (pkg.icon) assets.push(['Microsoft.VisualStudio.Services.Icons.Default', 'extension/' + pkg.icon]);
+  var assetsXml = assets
+    .map(function (a) { return '    <Asset Type="' + a[0] + '" Path="' + xmlEscape(a[1]) + '" Addressable="true" />\n'; })
+    .join("");
+
   return (
     '<?xml version="1.0" encoding="utf-8"?>\n' +
     '<PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011">\n' +
     "  <Metadata>\n" +
-    '    <Identity Language="en-US" Id="' +
-    xmlEscape(pkg.name) +
-    '" Version="' +
-    xmlEscape(pkg.version) +
-    '" Publisher="' +
-    xmlEscape(pkg.publisher) +
-    '" />\n' +
-    "    <DisplayName>" +
-    xmlEscape(pkg.displayName) +
-    "</DisplayName>\n" +
-    '    <Description xml:space="preserve">' +
-    xmlEscape(pkg.description) +
-    "</Description>\n" +
-    "    <Tags>cpp,docs,panel</Tags>\n" +
-    "    <Categories>Other</Categories>\n" +
+    '    <Identity Language="en-US" Id="' + xmlEscape(pkg.name) + '" Version="' + xmlEscape(pkg.version) +
+    '" Publisher="' + xmlEscape(pkg.publisher) + '" />\n' +
+    "    <DisplayName>" + xmlEscape(pkg.displayName) + "</DisplayName>\n" +
+    '    <Description xml:space="preserve">' + xmlEscape(pkg.description) + "</Description>\n" +
+    "    <Tags>" + xmlEscape(tags) + "</Tags>\n" +
+    "    <Categories>" + xmlEscape(cats) + "</Categories>\n" +
     "    <GalleryFlags>Public</GalleryFlags>\n" +
-    "    <Properties>\n" +
-    '      <Property Id="Microsoft.VisualStudio.Code.Engine" Value="' +
-    xmlEscape(pkg.engines.vscode) +
-    '" />\n' +
-    '      <Property Id="Microsoft.VisualStudio.Code.ExtensionDependencies" Value="" />\n' +
-    '      <Property Id="Microsoft.VisualStudio.Code.ExtensionPack" Value="" />\n' +
-    '      <Property Id="Microsoft.VisualStudio.Code.ExtensionKind" Value="ui,workspace" />\n' +
-    "    </Properties>\n" +
+    "    <Properties>\n" + propsXml + "    </Properties>\n" +
     "  </Metadata>\n" +
     "  <Installation>\n" +
     '    <InstallationTarget Id="Microsoft.VisualStudio.Code" />\n' +
     "  </Installation>\n" +
     "  <Dependencies />\n" +
-    "  <Assets>\n" +
-    '    <Asset Type="Microsoft.VisualStudio.Code.Manifest" Path="extension/package.json" Addressable="true" />\n' +
-    '    <Asset Type="Microsoft.VisualStudio.Services.Content.Details" Path="extension/README.md" Addressable="true" />\n' +
-    '    <Asset Type="Microsoft.VisualStudio.Services.Content.License" Path="extension/LICENSE" Addressable="true" />\n' +
-    '    <Asset Type="Microsoft.VisualStudio.Services.Content.Changelog" Path="extension/CHANGELOG.md" Addressable="true" />\n' +
-    "  </Assets>\n" +
+    "  <Assets>\n" + assetsXml + "  </Assets>\n" +
     "</PackageManifest>\n"
   );
 }
@@ -252,14 +277,23 @@ function preflight(pkg) {
     }
   });
 
-  // 4. Версия расширения совпала с версией проекта (частая рассинхронизация — только предупреждаем)
+  // 4. Версия расширения ДОЛЖНА совпадать с версией проекта (единый источник — не даём собрать
+  //    пакет с рассинхроном; бампить обе разом удобно через `npm run version:set X.Y.Z`).
   try {
     var rootPkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
     if (rootPkg.version && rootPkg.version !== pkg.version) {
-      console.warn("  ! Версии разошлись: проект " + rootPkg.version + ", расширение " + pkg.version +
-                   " — проверь, что обновил обе.");
+      fail("версии разошлись: проект " + rootPkg.version + ", расширение " + pkg.version +
+           " — синхронизируйте (npm run version:set " + pkg.version + ").");
     }
-  } catch (e) { /* корневого package.json может не быть — не критично */ }
+  } catch (e) { if (e && e.__cppdocsFail) throw e; /* корневого package.json нет — не критично */ }
+
+  // 4b. В CHANGELOG есть запись под эту версию — иначе релиз без истории изменений.
+  try {
+    var ch = fs.readFileSync(path.join(ROOT, "CHANGELOG.md"), "utf8");
+    if (ch.indexOf("[" + pkg.version + "]") === -1) {
+      fail("в CHANGELOG.md нет записи для версии " + pkg.version + " (ожидается заголовок «## [" + pkg.version + "]»).");
+    }
+  } catch (e) { if (e && e.__cppdocsFail) throw e; }
 
   // 5. Случайный файл данных окна (генерируется в globalStorage, в пакете ему не место)
   if (fs.existsSync(path.join(EXT, "cpp-docs-data.js"))) {
@@ -329,9 +363,12 @@ function main() {
   if (!fs.existsSync(DIST)) fs.mkdirSync(DIST, { recursive: true });
   var outName = pkg.name + "-" + pkg.version + ".vsix";
   var outPath = path.join(DIST, outName);
-  fs.writeFileSync(outPath, makeZip(entries));
+  var zipBuf = makeZip(entries);
+  fs.writeFileSync(outPath, zipBuf);
+  var sha = crypto.createHash("sha256").update(zipBuf).digest("hex");
 
   console.log("Собран пакет: dist/" + outName);
+  console.log("   SHA-256: " + sha);
   var docsBytes = 0;
   entries.forEach(function (e) {
     if (e.name.indexOf("extension/docs/") === 0) { docsBytes += e.data.length; return; }

@@ -72,6 +72,47 @@
 
 > **Как подступиться.** `std::sort(v.begin(), v.end());` — и печатайте.
 
+<details>
+<summary>Полное решение с разбором — открывай, только если застрял</summary>
+
+Ход мысли по шагам:
+
+1. Читаю числа в `std::vector`.
+2. Сортирую готовым `std::sort(v.begin(), v.end())` — вручную сортировку писать не нужно.
+3. Печатаю через пробел; флаг `first` — чтобы не было пробела в начале.
+
+```cpp
+#include <iostream>
+#include <vector>
+#include <algorithm>
+
+int main() {
+    int n = 0;
+    std::cin >> n;
+
+    std::vector<int> v;
+    for (int i = 0; i < n; ++i) {
+        int x = 0;
+        std::cin >> x;
+        v.push_back(x);
+    }
+
+    std::sort(v.begin(), v.end());
+
+    bool first = true;
+    for (int x : v) {
+        if (!first) std::cout << " ";
+        std::cout << x;
+        first = false;
+    }
+    std::cout << "\n";
+    return 0;
+}
+```
+
+Открывай это, только когда правда застрял — весь смысл в том, чтобы пройти путь «затык → идея → код» самому.
+</details>
+
 ---
 
 ## 7.2. По убыванию 🟡

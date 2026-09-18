@@ -217,6 +217,38 @@
 
 > **Как подступиться.** Метод `area()` возвращает `π · r · r`; π заведите как `const double`.
 
+<details>
+<summary>Полное решение с разбором — открывай, только если застрял</summary>
+
+Ход мысли по шагам:
+
+1. Завожу `struct Circle` с полем-радиусом и **методом** `area()` — объект сам считает свою площадь.
+2. `area()` помечаю `const`: он только читает поле. Число π держу как `const double`.
+3. Читаю радиус в `c.r` и печатаю `c.area()` с двумя знаками через `std::fixed` + `setprecision(2)`.
+
+```cpp
+#include <iostream>
+#include <iomanip>
+
+struct Circle {
+    double r = 0.0;
+    double area() const {
+        const double PI = 3.14159265358979;
+        return PI * r * r;
+    }
+};
+
+int main() {
+    Circle c;
+    std::cin >> c.r;
+    std::cout << std::fixed << std::setprecision(2) << c.area() << "\n";
+    return 0;
+}
+```
+
+Открывай это, только когда правда застрял — весь смысл в том, чтобы пройти путь «затык → идея → код» самому.
+</details>
+
 ---
 
 ## 8.7. Записать студентов в файл 🟡

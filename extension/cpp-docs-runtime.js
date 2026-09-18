@@ -44,10 +44,26 @@
   // ---------------------------------------------------------------------------
   //  Данные: материалы приходят из cpp-docs-data.js (window.__CPPDOCS__).
   // ---------------------------------------------------------------------------
+  // Строгая проверка формы данных + защита от загрязнения прототипа. Данные могут прийти
+  // из чужого воркспейса и исполняются в привилегированной оболочке, поэтому берём объект,
+  // только если он ровно той формы, что мы ждём, и без опасных ключей.
+  var BAD_KEYS = { "__proto__": 1, "constructor": 1, "prototype": 1 };
+  function looksSafe(d) {
+    if (!d || typeof d !== "object" || Array.isArray(d)) return false;
+    for (var k in BAD_KEYS) if (Object.prototype.hasOwnProperty.call(d, k)) return false;
+    if (!Array.isArray(d.files)) return false;
+    return true;
+  }
   function DATA() {
     var d = window.__CPPDOCS__;
-    return d && typeof d === "object" && Array.isArray(d.files) ? d : null;
+    return looksSafe(d) ? d : null;
   }
+
+  // nonce для CSP: кешируем из первого (инлайн) снимка данных и вешаем на динамически
+  // создаваемые <script>/<style>, чтобы они проходили CSP, когда она есть. Внешний
+  // data-файл nonce не несёт — помним его отсюда.
+  var CD_NONCE = "";
+  function applyNonce(elm) { if (CD_NONCE) { try { elm.setAttribute("nonce", CD_NONCE); } catch (e) {} } return elm; }
 
   // Карта rel-путь → файл (в нижнем регистре, ФС Windows нечувствительна к регистру).
   // Нужна для перехода по внутренним ссылкам вида (07-algoritmy.md#18-алгоритмы).
@@ -80,6 +96,7 @@
   state.days = plainMap(state.days);          // { "ГГГГ-ММ-ДД": true } — дни активности (для «серии»)
   state.pins = plainMap(state.pins);          // { rel: true } — закреплено
   state.collapsed = plainMap(state.collapsed); // { group: true } — свёрнутая группа в навигаторе
+  state.cards = plainMap(state.cards);        // { cardId: {due,ivl,ease} } — интервальное повторение флеш-карт
   state.scroll = plainMap(state.scroll);      // { rel: scrollTop } — где остановился в каждом файле
   // Масштаб шрифта читалки — только конечное число в [0.8..1.6]. NaN/Infinity/строку/
   // подпорченное большое значение из хранилища приводим к 1, иначе zoom «взорвёт» текст.
@@ -110,6 +127,18 @@
     return String(s)
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+  // Allowlist схем для href/src. Окно живёт в привилегированной оболочке, поэтому чужие
+  // схемы (javascript:, data:, vbscript:, file: …) обезвреживаем: у ссылки → "#", у картинки → "".
+  // Относительные пути, якоря и .md-ссылки — без схемы — пропускаем как есть.
+  function safeUrl(u, forImg) {
+    var s = String(u).trim();
+    var m = s.match(/^([a-z][a-z0-9+.\-]*):/i);
+    if (!m) return s;                                   // нет схемы — относительная/якорь
+    var sch = m[1].toLowerCase();
+    if (sch === "http" || sch === "https") return s;
+    if (!forImg && sch === "mailto") return s;
+    return forImg ? "" : "#";
   }
   // Русское окончание: 1 файл, 2 файла, 5 файлов.
   function plural(n, forms) {
@@ -266,13 +295,13 @@
       codes.push(c); return "\u0000" + (codes.length - 1) + "\u0000";
     });
     text = escapeHtml(text);
-    // Картинки ![alt](src) — до ссылок.
+    // Картинки ![alt](src) — до ссылок. Схему src фильтруем (см. safeUrl).
     text = text.replace(/!\[([^\]]*)\]\(([^)\s]+)[^)]*\)/g, function (_, alt, src) {
-      return '<img alt="' + alt + '" data-src="' + src + '">';
+      return '<img alt="' + alt + '" data-src="' + safeUrl(src, true) + '">';
     });
-    // Ссылки [текст](url "title")
+    // Ссылки [текст](url "title") — только безопасные схемы, иначе ссылка обезврежена.
     text = text.replace(/\[([^\]]+)\]\(([^)\s]+)(?:\s+&quot;[^)]*&quot;)?\)/g, function (_, label, href) {
-      return '<a href="' + href + '">' + label + "</a>";
+      return '<a href="' + safeUrl(href, false) + '">' + label + "</a>";
     });
     text = text.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
     text = text.replace(/\*([^*\n]+)\*/g, "<em>$1</em>");
@@ -317,6 +346,149 @@
     if (LIVE.indexOf(s) >= 0) return ["#74c7ec", "rgba(116,199,236,.12)", "play"];               // небесный — живые программы
     if (REF.indexOf(s) >= 0) return ["#89b4fa", "rgba(137,180,250,.12)", "book"];                 // синий — теория
     return ["#b4befe", "rgba(180,190,254,.10)", "magnifier"];                                     // лаванда — разбор/прочее
+  }
+
+  // Интерактивный опросник ```quiz — вопросы с выбором ответа.
+  // Формат: «В: текст» (или Q:) → вопрос; «+ вариант» (верный) / «- вариант»;
+  // «= пояснение» (показывается после ответа / по кнопке «Показать ответ»).
+  function renderQuiz(src) {
+    var lines = String(src).replace(/\r\n?/g, "\n").split("\n");
+    var qs = [], cur = null;
+    function flush() { if (cur && (cur.text.length || cur.opts.length)) qs.push(cur); cur = null; }
+    for (var i = 0; i < lines.length; i++) {
+      var t = lines[i].trim();
+      var mq = t.match(/^(?:В|Q|Вопрос)\s*[:.)]\s*(.*)$/i);
+      if (mq) { flush(); cur = { text: [mq[1]], opts: [], expl: [] }; continue; }
+      if (!cur) { if (t) cur = { text: [t], opts: [], expl: [] }; continue; }
+      var mo = t.match(/^([+\-])\s+(.*)$/);
+      if (mo) { cur.opts.push({ ok: mo[1] === "+", text: mo[2] }); continue; }
+      var me = t.match(/^[=>]\s+(.*)$/);
+      if (me) { cur.expl.push(me[1]); continue; }
+      if (!t) continue;
+      if (cur.opts.length) cur.expl.push(t); else cur.text.push(t);
+    }
+    flush();
+    var html = '<div class="cd-quiz"><div class="cd-quiz-head">Проверь себя</div>';
+    qs.forEach(function (q, qi) {
+      html += '<div class="cd-quiz-q">';
+      html += '<div class="cd-quiz-qt"><span class="cd-quiz-n">' + (qi + 1) + '.</span> ' + inline(q.text.join(" ")) + "</div>";
+      html += '<div class="cd-quiz-opts">';
+      q.opts.forEach(function (o) {
+        html += '<button class="cd-quiz-opt" type="button" data-ok="' + (o.ok ? "1" : "0") +
+          '"><span class="cd-quiz-mark"></span><span class="cd-quiz-ot">' + inline(o.text) + "</span></button>";
+      });
+      html += "</div>";
+      if (q.expl.length) html += '<div class="cd-quiz-expl" hidden>' + inline(q.expl.join(" ")) + "</div>";
+      html += '<button class="cd-quiz-reveal" type="button">Показать ответ</button>';
+      html += "</div>";
+    });
+    return html + "</div>";
+  }
+
+  // Задание «найди ошибку» ```findbug — код (сверху) + ответ (после строки ---), скрытый до клика.
+  function renderFindbug(src) {
+    var s = String(src).replace(/\r\n?/g, "\n").split("\n");
+    var code = [], ans = [], inAns = false;
+    for (var i = 0; i < s.length; i++) {
+      if (!inAns && /^\s*(---|===)\s*$/.test(s[i])) { inAns = true; continue; }
+      if (inAns) ans.push(s[i]); else code.push(s[i]);
+    }
+    var codeStr = code.join("\n").replace(/^\n+|\n+$/g, "");
+    var ansStr = ans.join("\n").trim();
+    var html = '<div class="cd-fb"><div class="cd-fb-head">Найди ошибку</div>' +
+      '<pre class="code cd-fb-code"><code>' + highlight(codeStr, "cpp") + "</code></pre>";
+    if (ansStr) {
+      html += '<button class="cd-fb-reveal" type="button">Показать ответ</button>' +
+        '<div class="cd-fb-ans" hidden>' + renderMarkdown(ansStr, null) + "</div>";
+    }
+    return html + "</div>";
+  }
+
+  // ---- Флеш-карточки ```cards с интервальным повторением ----
+  function cdHash(s) { var h = 5381, i = String(s).length; while (i) h = (h * 33) ^ String(s).charCodeAt(--i); return "c" + (h >>> 0).toString(36); }
+  function cdDate(offset) { var d = new Date(); if (offset) d.setDate(d.getDate() + offset); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+  function cdCardState(id) {
+    var rec = state.cards[id];
+    if (!rec || !rec.due) return { status: "new" };
+    var t = cdDate(0);
+    if (rec.due <= t) return { status: "due" };
+    var dd = Math.round((new Date(rec.due) - new Date(t)) / 86400000);
+    return { status: "later", days: dd };
+  }
+  function cdSchedule(id, grade) {
+    var rec = state.cards[id] || { ivl: 0, ease: 2.3 };
+    if (grade === 0) { rec.ivl = 1; rec.ease = Math.max(1.6, (rec.ease || 2.3) - 0.2); }
+    else if (grade === 1) { rec.ivl = Math.max(1, Math.round((rec.ivl || 1) * 1.3)); }
+    else { rec.ivl = rec.ivl ? Math.round(rec.ivl * (rec.ease || 2.3)) : 2; rec.ease = Math.min(3.0, (rec.ease || 2.3) + 0.05); }
+    rec.due = cdDate(rec.ivl);
+    state.cards[id] = rec; saveState();
+    return rec.ivl;
+  }
+  function renderCards(src) {
+    var lines = String(src).replace(/\r\n?/g, "\n").split("\n");
+    var cards = [], cur = null;
+    function flush() { if (cur && (cur.q.length || cur.a.length)) cards.push(cur); cur = null; }
+    for (var i = 0; i < lines.length; i++) {
+      var t = lines[i];
+      var mq = t.match(/^\s*(?:Q|В|Вопрос)\s*[:.]\s*(.*)$/i);
+      var ma = t.match(/^\s*(?:A|О|Ответ)\s*[:.]\s*(.*)$/i);
+      if (mq) { if (cur && cur.a.length) flush(); if (!cur) cur = { q: [], a: [], m: "q" }; cur.q.push(mq[1]); cur.m = "q"; continue; }
+      if (ma) { if (!cur) cur = { q: [], a: [], m: "a" }; cur.a.push(ma[1]); cur.m = "a"; continue; }
+      if (!t.trim()) { if (cur && cur.a.length) flush(); continue; }
+      if (cur) (cur.m === "a" ? cur.a : cur.q).push(t.trim());
+    }
+    flush();
+    var html = '<div class="cd-cards"><div class="cd-cards-head">Карточки — вспомни ответ, потом проверь</div>';
+    cards.forEach(function (c) {
+      var qtext = c.q.join(" "), id = cdHash(qtext), st = cdCardState(id);
+      var badge = st.status === "due" ? '<span class="cd-card-due due">пора повторить</span>'
+        : st.status === "new" ? '<span class="cd-card-due neu">новая</span>'
+        : '<span class="cd-card-due lat">повтор через ' + st.days + " " + plural(st.days, ["день", "дня", "дней"]) + "</span>";
+      html += '<div class="cd-card" data-id="' + id + '">' + badge +
+        '<div class="cd-card-q">' + inline(qtext) + "</div>" +
+        '<div class="cd-card-a" hidden>' + inline(c.a.join(" ")) + "</div>" +
+        '<div class="cd-card-ctl"><button class="cd-card-show" type="button">Показать ответ</button>' +
+        '<span class="cd-card-rate" hidden>' +
+        '<button class="cd-card-btn" type="button" data-g="0">Не помню</button>' +
+        '<button class="cd-card-btn" type="button" data-g="1">Трудно</button>' +
+        '<button class="cd-card-btn" type="button" data-g="2">Помню</button></span>' +
+        '<span class="cd-card-done" hidden></span></div></div>';
+    });
+    return html + "</div>";
+  }
+
+  // ---- «Заполни пропуск» ```fillcode : код с [[ответами]] ----
+  function renderFillcode(src) {
+    var code = String(src).replace(/\r\n?/g, "\n").replace(/^\n+|\n+$/g, "");
+    var parts = code.split(/\[\[(.*?)\]\]/);   // чёт — текст, нечёт — ответ
+    var body = "";
+    for (var i = 0; i < parts.length; i++) {
+      if (i % 2 === 0) body += escapeHtml(parts[i]);
+      else body += '<input class="cd-fc-in" type="text" spellcheck="false" data-a="' + escapeHtml(parts[i]) + '" size="' + Math.max(3, parts[i].length + 1) + '">';
+    }
+    return '<div class="cd-fc"><div class="cd-fc-head">Заполни пропуск</div>' +
+      '<pre class="code cd-fc-code"><code>' + body + "</code></pre>" +
+      '<div class="cd-fc-ctl"><button class="cd-fc-check" type="button">Проверить</button>' +
+      '<button class="cd-fc-reveal" type="button">Показать ответ</button><span class="cd-fc-msg"></span></div></div>';
+  }
+
+  // ---- «Тесты к задаче» ```tests : строки «вход => ожидаемый вывод», #строка — подпись ----
+  function renderTests(src) {
+    var lines = String(src).replace(/\r\n?/g, "\n").split("\n");
+    var rows = "", note = "";
+    for (var i = 0; i < lines.length; i++) {
+      var t = lines[i].trim();
+      if (!t) continue;
+      if (t.charAt(0) === "#") { note += (note ? " " : "") + t.slice(1).trim(); continue; }
+      var idx = t.indexOf("=>");
+      if (idx < 0) continue;
+      var inp = t.slice(0, idx).trim(), exp = t.slice(idx + 2).trim();
+      rows += "<tr><td><code>" + escapeHtml(inp) + '</code> <button class="cd-tests-copy" type="button" data-in="' + escapeHtml(inp) + '">копировать</button></td>' +
+        "<td><code>" + escapeHtml(exp) + "</code></td></tr>";
+    }
+    return '<div class="cd-tests"><div class="cd-tests-head">Прогони свою программу на этих входах</div>' +
+      '<div class="tablewrap"><table><thead><tr><th>Ввод</th><th>Ожидается</th></tr></thead><tbody>' + rows + "</tbody></table></div>" +
+      (note ? '<div class="cd-tests-note">' + inline(note) + "</div>" : "") + "</div>";
   }
 
   function renderMarkdown(md, headings) {
@@ -371,6 +543,12 @@
         while (i < lines.length && !/^\s*```+\s*$/.test(lines[i])) { buf.push(lines[i]); i++; }
         i++; // закрывающая ```
         var code = buf.join("\n");
+        var lc = (lang || "").toLowerCase();
+        if (lc === "quiz") { out.push(renderQuiz(code)); continue; }       // интерактивный опросник
+        if (lc === "findbug") { out.push(renderFindbug(code)); continue; } // «найди ошибку» + ответ
+        if (lc === "cards") { out.push(renderCards(code)); continue; }      // флеш-карточки
+        if (lc === "fillcode") { out.push(renderFillcode(code)); continue; } // заполни пропуск
+        if (lc === "tests") { out.push(renderTests(code)); continue; }      // тесты к задаче
         var LANG_LABEL = { cpp: "C++", "c++": "C++", cc: "C++", cxx: "C++", c: "C", bash: "Bash", sh: "Bash", shell: "Bash", txt: "текст", text: "текст", py: "Python" };
         var langLabel = escapeHtml(LANG_LABEL[(lang || "").toLowerCase()] || lang || "код");
         out.push(
@@ -564,7 +742,7 @@
   // ---------------------------------------------------------------------------
   function ensureStyle() {
     if (document.getElementById(STYLE_ID)) return;
-    var st = el("style"); st.id = STYLE_ID;
+    var st = applyNonce(el("style")); st.id = STYLE_ID;
     st.textContent = CSS;
     (document.head || document.documentElement).appendChild(st);
   }
@@ -908,6 +1086,58 @@
   // Рисованная иконка-наклейка в начале врезки (роль callout'а)
   "#" + WIN_ID + " .cd-article blockquote.note.has-ic{position:relative;padding-left:46px;}" +
   "#" + WIN_ID + " .cd-article blockquote.note .cd-note-ic{position:absolute;left:12px;top:9px;width:24px;height:24px;object-fit:contain;pointer-events:none;filter:drop-shadow(0 1px 1px rgba(0,0,0,.18));}" +
+  // Опросник (```quiz) и «найди ошибку» (```findbug)
+  "#" + WIN_ID + " .cd-article .cd-quiz-head,#" + WIN_ID + " .cd-article .cd-fb-head{font-weight:700;color:var(--ac2);font-size:13.5px;margin:0 0 10px;}" +
+  "#" + WIN_ID + " .cd-article .cd-quiz-q{margin:0 0 12px;padding:12px 14px;border:1px solid var(--bd);border-radius:11px;background:color-mix(in srgb,var(--fg) 4%,var(--panel));}" +
+  "#" + WIN_ID + " .cd-article .cd-quiz-qt{font-weight:600;margin-bottom:9px;}" +
+  "#" + WIN_ID + " .cd-article .cd-quiz-n{color:var(--ac2);margin-right:2px;}" +
+  "#" + WIN_ID + " .cd-article .cd-quiz-opts{display:flex;flex-direction:column;gap:6px;}" +
+  "#" + WIN_ID + " .cd-article .cd-quiz-opt{display:flex;align-items:center;gap:10px;text-align:left;font:inherit;font-size:13px;color:var(--fg);cursor:pointer;padding:8px 12px;border:1px solid var(--bd);border-radius:9px;background:var(--bg);transition:border-color .12s,background .12s;}" +
+  "#" + WIN_ID + " .cd-article .cd-quiz-opt:hover{border-color:var(--ac);}" +
+  "#" + WIN_ID + " .cd-article .cd-quiz-mark{flex:0 0 auto;display:flex;align-items:center;justify-content:center;width:16px;height:16px;border:2px solid var(--faint);border-radius:50%;font-size:11px;line-height:1;color:#11111b;}" +
+  "#" + WIN_ID + " .cd-article .cd-quiz-opt.right{border-color:#a6e3a1;background:rgba(166,227,161,.13);}" +
+  "#" + WIN_ID + " .cd-article .cd-quiz-opt.right .cd-quiz-mark{border-color:#a6e3a1;background:#a6e3a1;}" +
+  "#" + WIN_ID + " .cd-article .cd-quiz-opt.right .cd-quiz-mark::after{content:'\\2713';}" +
+  "#" + WIN_ID + " .cd-article .cd-quiz-opt.wrong{border-color:#f38ba8;background:rgba(243,139,168,.13);}" +
+  "#" + WIN_ID + " .cd-article .cd-quiz-opt.wrong .cd-quiz-mark{border-color:#f38ba8;background:#f38ba8;}" +
+  "#" + WIN_ID + " .cd-article .cd-quiz-opt.wrong.picked .cd-quiz-mark::after{content:'\\2715';}" +
+  "#" + WIN_ID + " .cd-article .cd-quiz-expl{margin-top:10px;padding:9px 12px;border-left:3px solid var(--ac);border-radius:0 8px 8px 0;background:var(--hl);font-size:12.5px;color:var(--muted);}" +
+  "#" + WIN_ID + " .cd-article .cd-quiz-reveal,#" + WIN_ID + " .cd-article .cd-fb-reveal{margin-top:10px;font:inherit;font-size:11.5px;font-weight:600;color:var(--muted);background:none;border:1px solid var(--bd);border-radius:999px;padding:5px 12px;cursor:pointer;transition:all .12s;}" +
+  "#" + WIN_ID + " .cd-article .cd-quiz-reveal:hover,#" + WIN_ID + " .cd-article .cd-fb-reveal:hover{border-color:var(--ac);color:var(--ac);}" +
+  "#" + WIN_ID + " .cd-article .cd-fb{margin:14px 0;padding:12px 14px 14px;border:1px solid var(--bd);border-radius:11px;background:color-mix(in srgb,var(--fg) 4%,var(--panel));}" +
+  "#" + WIN_ID + " .cd-article .cd-fb-code{margin:0;border:1px solid var(--bd);border-radius:9px;}" +
+  "#" + WIN_ID + " .cd-article .cd-fb-ans{margin-top:10px;padding:2px 13px;border-left:3px solid #f9b47a;border-radius:0 8px 8px 0;background:rgba(249,180,122,.11);}" +
+  "#" + WIN_ID + " .cd-article .cd-fb-ans>:first-child{margin-top:8px;}" +
+  // Флеш-карточки / «заполни пропуск» / тесты к задаче
+  "#" + WIN_ID + " .cd-article .cd-cards-head,#" + WIN_ID + " .cd-article .cd-fc-head,#" + WIN_ID + " .cd-article .cd-tests-head{font-weight:700;color:var(--ac2);font-size:13.5px;margin:0 0 10px;}" +
+  "#" + WIN_ID + " .cd-article .cd-cards,#" + WIN_ID + " .cd-article .cd-fc,#" + WIN_ID + " .cd-article .cd-tests{margin:14px 0;}" +
+  "#" + WIN_ID + " .cd-article .cd-card{position:relative;margin:0 0 10px;padding:13px 14px;border:1px solid var(--bd);border-radius:11px;background:color-mix(in srgb,var(--fg) 4%,var(--panel));}" +
+  "#" + WIN_ID + " .cd-article .cd-card-due{position:absolute;right:12px;top:11px;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;}" +
+  "#" + WIN_ID + " .cd-article .cd-card-due.due{color:#11111b;background:#f9b47a;}" +
+  "#" + WIN_ID + " .cd-article .cd-card-due.neu{color:var(--muted);background:var(--hl);}" +
+  "#" + WIN_ID + " .cd-article .cd-card-due.lat{color:var(--faint);border:1px solid var(--bd);}" +
+  "#" + WIN_ID + " .cd-article .cd-card-q{font-weight:600;padding-right:120px;}" +
+  "#" + WIN_ID + " .cd-article .cd-card-a{margin-top:9px;padding:9px 12px;border-left:3px solid #a6e3a1;border-radius:0 8px 8px 0;background:rgba(166,227,161,.12);}" +
+  "#" + WIN_ID + " .cd-article .cd-card-ctl{margin-top:10px;display:flex;align-items:center;gap:7px;flex-wrap:wrap;}" +
+  "#" + WIN_ID + " .cd-article .cd-card-show,#" + WIN_ID + " .cd-article .cd-fc-check,#" + WIN_ID + " .cd-article .cd-fc-reveal{font:inherit;font-size:11.5px;font-weight:600;color:var(--muted);background:none;border:1px solid var(--bd);border-radius:999px;padding:5px 12px;cursor:pointer;transition:all .12s;}" +
+  "#" + WIN_ID + " .cd-article .cd-card-show:hover,#" + WIN_ID + " .cd-article .cd-fc-check:hover,#" + WIN_ID + " .cd-article .cd-fc-reveal:hover{border-color:var(--ac);color:var(--ac);}" +
+  "#" + WIN_ID + " .cd-article .cd-card-rate{display:inline-flex;gap:6px;flex-wrap:wrap;}" +
+  "#" + WIN_ID + " .cd-article .cd-card-btn{font:inherit;font-size:11.5px;font-weight:600;cursor:pointer;border-radius:999px;padding:5px 11px;border:1px solid var(--bd);background:var(--bg);color:var(--fg);transition:all .12s;}" +
+  "#" + WIN_ID + " .cd-article .cd-card-btn[data-g='0']:hover{border-color:#f38ba8;color:#f38ba8;}" +
+  "#" + WIN_ID + " .cd-article .cd-card-btn[data-g='1']:hover{border-color:#f9b47a;color:#f9b47a;}" +
+  "#" + WIN_ID + " .cd-article .cd-card-btn[data-g='2']:hover{border-color:#a6e3a1;color:#a6e3a1;}" +
+  "#" + WIN_ID + " .cd-article .cd-card-done{font-size:12px;color:var(--muted);}" +
+  "#" + WIN_ID + " .cd-article .cd-card-rated{opacity:.72;}" +
+  "#" + WIN_ID + " .cd-article .cd-fc-code{margin:0 0 10px;border:1px solid var(--bd);border-radius:9px;}" +
+  "#" + WIN_ID + " .cd-article .cd-fc-in{font-family:inherit;font-size:inherit;background:var(--bg);border:1px solid var(--ac);border-radius:5px;color:var(--fg);padding:0 4px;margin:0 1px;}" +
+  "#" + WIN_ID + " .cd-article .cd-fc-in.right{border-color:#a6e3a1;background:rgba(166,227,161,.15);}" +
+  "#" + WIN_ID + " .cd-article .cd-fc-in.wrong{border-color:#f38ba8;background:rgba(243,139,168,.15);}" +
+  "#" + WIN_ID + " .cd-article .cd-fc-ctl{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}" +
+  "#" + WIN_ID + " .cd-article .cd-fc-msg,#" + WIN_ID + " .cd-article .cd-tests-note{font-size:12px;color:var(--muted);}" +
+  "#" + WIN_ID + " .cd-article .cd-tests-note{margin-top:8px;}" +
+  "#" + WIN_ID + " .cd-article .cd-tests-copy{font:inherit;font-size:10px;padding:2px 7px;border-radius:6px;border:1px solid var(--bd);background:var(--bg);color:var(--muted);cursor:pointer;margin-left:6px;}" +
+  "#" + WIN_ID + " .cd-article .cd-tests-copy:hover{border-color:var(--ac);color:var(--ac);}" +
+  "#" + WIN_ID + " .cd-article .cd-tests-copy.done{color:var(--ts);border-color:var(--ts);}" +
 
   // Вспышка при переходе к разделу (по ссылке/оглавлению)
   "@keyframes cd-flash{0%{background:rgba(var(--ac-rgb),.32);}100%{background:transparent;}}" +
@@ -1777,10 +2007,11 @@
   function onSplitClick(e) {
     var copy = e.target.closest && e.target.closest(".copybtn");
     if (copy) { doCopy(copy); return; }
+    if (quizClick(e)) return;
     var a = e.target.closest && e.target.closest("a[href]");
     if (a && splitCurrent) {
       var href = a.getAttribute("href");
-      if (/^https?:/i.test(href)) return;
+      if (/^(https?|mailto):/i.test(href)) { e.preventDefault(); openExternalLink(href); return; }
       e.preventDefault();
       if (href.charAt(0) === "#") { openInSplit(splitCurrent.rel, href); return; }
       var res = resolveRel(splitCurrent.rel, href);
@@ -2155,15 +2386,98 @@
       navigator.clipboard.writeText(text).then(function () { flashCopy(btn); }, function () { legacyCopy(text); flashCopy(btn); });
     } catch (err) { legacyCopy(text); flashCopy(btn); }
   }
+  // ------- опросник / «найди ошибку» (общая обработка для читалки и сплита) -------
+  function quizMarkAnswered(q) {
+    q.setAttribute("data-answered", "1");
+    var opts = q.querySelectorAll(".cd-quiz-opt");
+    for (var i = 0; i < opts.length; i++)
+      if (opts[i].getAttribute("data-ok") === "1") opts[i].classList.add("right");
+    var ex = q.querySelector(".cd-quiz-expl"); if (ex) ex.hidden = false;
+    var rv = q.querySelector(".cd-quiz-reveal"); if (rv) rv.style.display = "none";
+  }
+  function quizPick(opt) {
+    var q = opt.closest && opt.closest(".cd-quiz-q"); if (!q) return;
+    opt.classList.add(opt.getAttribute("data-ok") === "1" ? "right" : "wrong", "picked");
+    quizMarkAnswered(q);
+  }
+  function fbReveal(btn) {
+    var box = btn.closest && btn.closest(".cd-fb"); if (!box) return;
+    var ans = box.querySelector(".cd-fb-ans"); if (ans) ans.hidden = false;
+    btn.style.display = "none";
+  }
+  function cardShow(btn) {
+    var card = btn.closest(".cd-card"); if (!card) return;
+    var a = card.querySelector(".cd-card-a"); if (a) a.hidden = false;
+    btn.style.display = "none";
+    var rate = card.querySelector(".cd-card-rate"); if (rate) rate.hidden = false;
+  }
+  function cardRate(btn) {
+    var card = btn.closest(".cd-card"); if (!card) return;
+    var ivl = cdSchedule(card.getAttribute("data-id"), parseInt(btn.getAttribute("data-g"), 10) || 0);
+    var word = ivl + " " + plural(ivl, ["день", "дня", "дней"]);
+    var rate = card.querySelector(".cd-card-rate"); if (rate) rate.hidden = true;
+    var done = card.querySelector(".cd-card-done");
+    if (done) { done.hidden = false; done.textContent = "Отмечено. Снова через " + word + "."; }
+    var badge = card.querySelector(".cd-card-due");
+    if (badge) { badge.className = "cd-card-due lat"; badge.textContent = "повтор через " + word; }
+    card.classList.add("cd-card-rated");
+    try { recordActivity(); } catch (e) {}
+  }
+  function fcCheck(btn) {
+    var box = btn.closest(".cd-fc"); if (!box) return;
+    var ins = box.querySelectorAll(".cd-fc-in"), ok = 0;
+    for (var i = 0; i < ins.length; i++) {
+      var good = ins[i].value.trim() === (ins[i].getAttribute("data-a") || "").trim();
+      ins[i].classList.remove("right", "wrong"); ins[i].classList.add(good ? "right" : "wrong");
+      if (good) ok++;
+    }
+    var msg = box.querySelector(".cd-fc-msg");
+    if (msg) msg.textContent = ok === ins.length ? ("Верно, все " + ins.length + "!") : (ok + " из " + ins.length + " — красное поправь");
+  }
+  function fcReveal(btn) {
+    var box = btn.closest(".cd-fc"); if (!box) return;
+    var ins = box.querySelectorAll(".cd-fc-in");
+    for (var i = 0; i < ins.length; i++) { ins[i].value = ins[i].getAttribute("data-a") || ""; ins[i].classList.remove("wrong"); ins[i].classList.add("right"); }
+    var msg = box.querySelector(".cd-fc-msg"); if (msg) msg.textContent = "Ответ показан.";
+  }
+  function testsCopy(btn) {
+    var text = btn.getAttribute("data-in") || "";
+    function ok() { var p = btn.textContent; btn.textContent = "скопировано"; btn.classList.add("done"); setTimeout(function () { btn.textContent = p; btn.classList.remove("done"); }, 1200); }
+    try { navigator.clipboard.writeText(text).then(ok, function () { legacyCopy(text); ok(); }); }
+    catch (e) { legacyCopy(text); ok(); }
+  }
+  function quizClick(e) {
+    var t = e.target;
+    if (!t || !t.closest) return false;
+    var qopt = t.closest(".cd-quiz-opt");
+    if (qopt) { e.preventDefault(); quizPick(qopt); return true; }
+    var qrev = t.closest(".cd-quiz-reveal");
+    if (qrev) { e.preventDefault(); var q = qrev.closest(".cd-quiz-q"); if (q) quizMarkAnswered(q); return true; }
+    var fbrev = t.closest(".cd-fb-reveal");
+    if (fbrev) { e.preventDefault(); fbReveal(fbrev); return true; }
+    var cshow = t.closest(".cd-card-show");
+    if (cshow) { e.preventDefault(); cardShow(cshow); return true; }
+    var crate = t.closest(".cd-card-btn");
+    if (crate) { e.preventDefault(); cardRate(crate); return true; }
+    var fchk = t.closest(".cd-fc-check");
+    if (fchk) { e.preventDefault(); fcCheck(fchk); return true; }
+    var frev = t.closest(".cd-fc-reveal");
+    if (frev) { e.preventDefault(); fcReveal(frev); return true; }
+    var tcopy = t.closest(".cd-tests-copy");
+    if (tcopy) { e.preventDefault(); testsCopy(tcopy); return true; }
+    return false;
+  }
+
   function onArticleClick(e) {
     var solve = e.target.closest && e.target.closest(".cd-solve");
     if (solve) { e.preventDefault(); e.stopPropagation(); toggleSolved(solve); return; }
     var copy = e.target.closest && e.target.closest(".copybtn");
     if (copy) { doCopy(copy); return; }
+    if (quizClick(e)) return;
     var a = e.target.closest && e.target.closest("a[href]");
     if (a) {
       var href = a.getAttribute("href");
-      if (/^https?:/i.test(href)) return; // внешняя — пусть откроется как есть
+      if (/^(https?|mailto):/i.test(href)) { e.preventDefault(); openExternalLink(href); return; } // внешняя — во внешний браузер, не в фрейм
       e.preventDefault();
       if (href.charAt(0) === "#") { openFile(current.rel, href); return; }  // якорь той же страницы — та же вкладка
       var res = resolveRel(current.rel, href);
@@ -2181,6 +2495,13 @@
       var ta = el("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
       document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove();
     } catch (e) {}
+  }
+  // Внешняя ссылка: default-навигация увела бы ВЕСЬ workbench-фрейм на URL и сломала бы
+  // редактор до перезагрузки. Поэтому гасим default и открываем через window.open — VS Code
+  // перехватывает это и открывает во внешнем браузере. Если открыть не удалось — просто тихо
+  // ничего, но редактор цел.
+  function openExternalLink(href) {
+    try { window.open(href, "_blank", "noopener"); } catch (e) {}
   }
 
   // ------- клавиатура -------
@@ -2211,11 +2532,41 @@
 
   // Перечитать данные: расширение перезаписало cpp-docs-data.js — подтягиваем свежую
   // версию тем же трюком, что и live-данные vscode-bg (тег <script> с меткой времени).
+  function bootVal(key) { try { var b = window.__CPPDOCS_BOOT__; return b && b[key]; } catch (e) { return null; } }
+  // file:///…/x.js → путь на диске (VS Code блокирует file://-скрипты, поэтому читаем через Node fs).
+  function fileUrlToPath(u) {
+    if (!u) return null;
+    var s = String(u).replace(/^file:\/\/\//, "").replace(/[?#].*$/, "");
+    try { s = decodeURIComponent(s); } catch (e) {}
+    return s;
+  }
+  // Node fs, если доступен (electron-browser workbench): читаем файл напрямую — надёжнее <script src>.
+  function nodeRead(u) {
+    try {
+      var req = null;
+      try { if (typeof require === "function") req = require; } catch (e) {}
+      if (!req && typeof window !== "undefined" && window.require) req = window.require;
+      if (!req) return null;
+      var p = fileUrlToPath(u);
+      return p ? req("fs").readFileSync(p, "utf8") : null;
+    } catch (e) { return null; }
+  }
   function refreshData() {
     var d = DATA();
-    var url = d && d.dataUrl;
+    var url = (d && d.dataUrl) || bootVal("dataUrl");
     if (!url) { rebuildFromData(); return; }
-    var s = document.createElement("script");
+    // Основной путь — Node fs (file://-скрипт в оболочке заблокирован схемой vscode-file://).
+    var txt = nodeRead(url);
+    if (txt != null) {
+      try {
+        var jm = txt.replace(/^[\s\S]*?window\.__CPPDOCS__\s*=\s*/, "").replace(/;\s*$/, "");
+        var obj = JSON.parse(jm);
+        if (obj && Array.isArray(obj.files)) window.__CPPDOCS__ = obj;
+      } catch (e) {}
+      rebuildFromData();
+      return;
+    }
+    var s = applyNonce(document.createElement("script"));
     s.src = url + (url.indexOf("?") >= 0 ? "&" : "?") + "r=" + Date.now();
     s.async = true;
     // Всегда пересобираем: при успехе — со свежими данными, при ошибке загрузки
@@ -2231,6 +2582,50 @@
     var map = fileMap();
     if (keepRel && map[keepRel.toLowerCase()]) openFile(keepRel);
     else { var d = DATA(); if (d && d.files[0]) openFile(d.files[0].rel); }
+  }
+
+  // Автообновление: расширение при правке доков/кнопке «Обновить» переписывает крошечный
+  // файл-метку (cpp-docs-stamp.js → window.__CPPDOCS_STAMP__). Опрашиваем ЕГО, а не тяжёлый
+  // data-файл; полный refreshData() дёргаем только когда метка реально сменилась.
+  var lastStamp = null, stampInit = false, stampBusy = false;
+  function pollStamp() {
+    if (stampBusy) return;
+    var d = DATA();
+    var url = (d && d.stampUrl) || bootVal("stampUrl");
+    if (!url) return;
+    // Основной путь — Node fs: читаем крошечную метку напрямую.
+    var txt = nodeRead(url);
+    if (txt != null) {
+      var mm = txt.match(/=\s*(\d+)/);
+      var st = mm ? parseInt(mm[1], 10) : null;
+      if (st != null) {
+        if (!stampInit) { stampInit = true; lastStamp = st; }
+        else if (st !== lastStamp) { lastStamp = st; refreshData(); }
+      }
+      return;
+    }
+    stampBusy = true;
+    var s = applyNonce(document.createElement("script"));
+    s.src = url + (url.indexOf("?") >= 0 ? "&" : "?") + "r=" + Date.now();
+    s.async = true;
+    // Страховка: если скрипт-метки завис (ни onload, ни onerror), через 8 с всё равно
+    // снимаем флаг — иначе автообновление молча встанет навсегда.
+    var guard = setTimeout(function () { stampBusy = false; try { s.remove(); } catch (e) {} }, 8000);
+    var done = function () { clearTimeout(guard); stampBusy = false; try { s.remove(); } catch (e) {} };
+    s.onload = function () {
+      try {
+        var st = window.__CPPDOCS_STAMP__;
+        if (st != null) {
+          // Первое успешное чтение — базовая метка (инлайн-снимок и файл собраны с зазором в
+          // пару мс, поэтому первый прогон не считаем изменением). Дальше — только реальные правки.
+          if (!stampInit) { stampInit = true; lastStamp = st; }
+          else if (st !== lastStamp) { lastStamp = st; refreshData(); }
+        }
+      } catch (e) {}
+      done();
+    };
+    s.onerror = done;
+    document.head.appendChild(s);
   }
 
   // ---------------------------------------------------------------------------
@@ -2259,10 +2654,25 @@
     if (winEl) b.style.display = "none";
   }
 
+  // Держим счётчик на кнопке в согласии с данными: после автообновления (окно даже закрыто)
+  // число материалов могло измениться — ensureButton его не трогает, обновляем здесь.
+  function syncBadge() {
+    var b = document.getElementById(BTN_ID);
+    if (!b) return;
+    var d = DATA();
+    var n = d ? d.files.length : 0;
+    var badge = b.querySelector(".cd-badge");
+    if (n > 0) {
+      if (!badge) { b.appendChild(document.createTextNode(" ")); badge = el("span"); badge.className = "cd-badge"; b.appendChild(badge); }
+      if (badge.textContent !== String(n)) badge.textContent = String(n);
+    } else if (badge) { try { badge.remove(); } catch (e) {} }
+  }
+
   function heal() {
     try { applyAccent(); } catch (e) {}   // акцент под тему/обои — до отрисовки стиля и кнопки
     try { ensureStyle(); } catch (e) {}
     try { ensureButton(); } catch (e) {}
+    try { syncBadge(); } catch (e) {}
     // Тема окна могла смениться.
     try { if (winEl) winEl.classList.toggle("light", isLight()); } catch (e) {}
   }
@@ -2271,9 +2681,22 @@
   //  Старт.
   // ---------------------------------------------------------------------------
   function boot() {
+    // nonce теперь приходит из инлайн-загрузчика __CPPDOCS_BOOT__ (данные грузятся внешним
+    // файлом и nonce не несут). Fallback на старый путь — на случай инлайн-данных.
+    try {
+      var b0 = window.__CPPDOCS_BOOT__, d0 = DATA();
+      CD_NONCE = (b0 && typeof b0.scriptNonce === "string" && b0.scriptNonce) ||
+                 (d0 && typeof d0.scriptNonce === "string" && d0.scriptNonce) || "";
+    } catch (e) {}
     heal();
-    // Возврат кнопки после перестройки DOM редактором — тем же лёгким тикером, что у vscode-bg.
-    setInterval(function () { if (!document.hidden) heal(); }, 3000);
+    try { pollStamp(); } catch (e) {}
+    // Один тикер на всё: возврат кнопки после перестройки DOM редактором (как у vscode-bg) плюс
+    // опрос метки свежести для автообновления. Оба дела спят, пока вкладка скрыта, — не жжём CPU.
+    setInterval(function () {
+      if (document.hidden) return;
+      heal();
+      try { pollStamp(); } catch (e) {}
+    }, 3000);
     try {
       new MutationObserver(function () { heal(); }).observe(document.body || document.documentElement, { childList: true });
     } catch (e) {}

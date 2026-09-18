@@ -1,8 +1,8 @@
 {
   "name": "cpp-docs-panel",
   "displayName": "Документация C++",
-  "description": "Панель со справочником, примерами и инструментами проекта C++",
-  "version": "3.1.0",
+  "description": "Справочник, примеры и задачник по C++ на русском — читалка поверх кода и боковая панель. Офлайн, ноль зависимостей.",
+  "version": "3.4.1",
   "publisher": "moonlivedt",
   "icon": "icon-marketplace.png",
   "author": "moonlivedt (MoonLightDeath) <moonlivedt@gmail.com>",
@@ -21,6 +21,12 @@
   },
   "engines": {
     "vscode": "^1.75.0"
+  },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "В недоверенной папке показывается только встроенная документация; папка docs проекта и настройка cppDocs.path игнорируются, чтобы чужой контент не попал в плавающее окно."
+    }
   },
   "categories": [
     "Education",
@@ -113,6 +119,10 @@
       {
         "command": "cppDocs.windowHealth",
         "title": "Документация C++: проверить плавающее окно"
+      },
+      {
+        "command": "cppDocs.showLog",
+        "title": "Документация C++: показать журнал"
       }
     ],
     "keybindings": [

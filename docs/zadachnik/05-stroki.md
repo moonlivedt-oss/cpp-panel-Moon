@@ -72,6 +72,38 @@ Programming
 
 > **Как подступиться.** Пройдите по каждому символу; приведите к нижнему регистру; сравните с набором гласных.
 
+<details>
+<summary>Полное решение с разбором — открывай, только если застрял</summary>
+
+Ход мысли по шагам:
+
+1. Иду по каждому символу слова через `for (char c : word)`.
+2. Привожу символ к нижнему регистру, чтобы `A` и `a` считались одинаково. `std::tolower` кормлю через `unsigned char` — так безопаснее.
+3. Сравниваю с набором гласных и считаю совпадения.
+
+```cpp
+#include <iostream>
+#include <string>
+#include <cctype>
+
+int main() {
+    std::string word;
+    std::cin >> word;
+
+    int count = 0;
+    for (char c : word) {
+        char lc = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        if (lc == 'a' || lc == 'e' || lc == 'i' || lc == 'o' || lc == 'u')
+            ++count;
+    }
+    std::cout << count << "\n";
+    return 0;
+}
+```
+
+Открывай это, только когда правда застрял — весь смысл в том, чтобы пройти путь «затык → идея → код» самому.
+</details>
+
 ---
 
 ## 5.2. Переворот строки 🟢

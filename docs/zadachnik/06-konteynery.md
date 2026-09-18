@@ -73,6 +73,47 @@
 
 > **Как подступиться.** Считайте в `vector`, затем печатайте от последнего индекса к нулевому.
 
+<details>
+<summary>Полное решение с разбором — открывай, только если застрял</summary>
+
+Ход мысли по шагам:
+
+1. Читаю числа в `std::vector` через `push_back`.
+2. Переворачиваю вектор готовым `std::reverse` из `<algorithm>`.
+3. Печатаю через пробел; флаг `first` убирает лишний пробел перед первым числом.
+
+```cpp
+#include <iostream>
+#include <vector>
+#include <algorithm>
+
+int main() {
+    int n = 0;
+    std::cin >> n;
+
+    std::vector<int> v;
+    for (int i = 0; i < n; ++i) {
+        int x = 0;
+        std::cin >> x;
+        v.push_back(x);
+    }
+
+    std::reverse(v.begin(), v.end());
+
+    bool first = true;
+    for (int x : v) {
+        if (!first) std::cout << " ";
+        std::cout << x;
+        first = false;
+    }
+    std::cout << "\n";
+    return 0;
+}
+```
+
+Открывай это, только когда правда застрял — весь смысл в том, чтобы пройти путь «затык → идея → код» самому.
+</details>
+
 ---
 
 ## 6.2. Сколько различных 🟢

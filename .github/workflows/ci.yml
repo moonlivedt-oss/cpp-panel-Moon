@@ -24,6 +24,20 @@ jobs:
       - name: Синтаксис модулей + смоук
         run: npm run check
 
+  # Линт: eslint — dev-зависимость (рантайм по-прежнему ноль зависимостей). Ставим и гоняем.
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Установить eslint
+        run: npm install --no-audit --no-fund
+      - name: ESLint
+        run: npm run lint
+
   # Упаковщик .vsix — свой ZIP-writer поверх zlib. Отдельным джобом проверяем, что пакет
   # собирается и в dist/ появляется непустой .vsix (иначе установка бы сломалась молча).
   package:
