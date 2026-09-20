@@ -37,6 +37,8 @@
     round:  { label: "Округлый",  stack: "'Comic Sans MS', 'Segoe Print', 'Chalkboard SE', 'Comic Neue', cursive" },
   };
   var VERSION = "3.0.0";
+  // Идентификатор баннера «Что нового»: пока state.whatsnew !== этого значения — показываем баннер.
+  var WHATSNEW = "home-2026-09";
   // Логотип как data-URI. В оболочке VS Code рантайм не может грузить файл с диска, поэтому
   // картинка встроена. Значение подставляет `node scripts/embed-logo.js` из docs/screenshots/logo-embed.png.
   var LOGO_URI = "data:image/png;base64,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";
@@ -44,9 +46,8 @@
   // ---------------------------------------------------------------------------
   //  Данные: материалы приходят из cpp-docs-data.js (window.__CPPDOCS__).
   // ---------------------------------------------------------------------------
-  // Строгая проверка формы данных + защита от загрязнения прототипа. Данные могут прийти
-  // из чужого воркспейса и исполняются в привилегированной оболочке, поэтому берём объект,
-  // только если он ровно той формы, что мы ждём, и без опасных ключей.
+  // Проверка формы + защита от prototype-pollution: контент из чужого воркспейса исполняется
+  // в привилегированной оболочке, поэтому берём объект только ожидаемой формы и без опасных ключей.
   var BAD_KEYS = { "__proto__": 1, "constructor": 1, "prototype": 1 };
   function looksSafe(d) {
     if (!d || typeof d !== "object" || Array.isArray(d)) return false;
@@ -57,6 +58,40 @@
   function DATA() {
     var d = window.__CPPDOCS__;
     return looksSafe(d) ? d : null;
+  }
+
+  // Данные, перечитанные из файла, приводим к строгой форме и режем переразмеренное: копируем
+  // только ожидаемые поля нужного типа (лишние/опасные ключи отбрасываются). Инлайн-снимок при
+  // старте — от расширения (доверенный), его не санируем.
+  var CD_MAX_MD = 512 * 1024, CD_MAX_TOTAL_MD = 8 * 1024 * 1024, CD_MAX_FILES = 4000;
+  function cdStr(v) { return typeof v === "string" ? v : (v == null ? "" : String(v)); }
+  function cdNum(v) { return typeof v === "number" && isFinite(v) ? v : 0; }
+  function sanitizeData(d) {
+    if (!looksSafe(d)) return null;
+    var out = {
+      root: cdStr(d.root), indexFile: cdStr(d.indexFile),
+      generatedAt: typeof d.generatedAt === "number" ? d.generatedAt : Date.now(),
+      files: []
+    };
+    if (typeof d.dataUrl === "string") out.dataUrl = d.dataUrl;
+    if (typeof d.stampUrl === "string") out.stampUrl = d.stampUrl;
+    if (typeof d.runtimeUrl === "string") out.runtimeUrl = d.runtimeUrl;
+    if (typeof d.scriptNonce === "string") out.scriptNonce = d.scriptNonce;
+    var total = 0;
+    for (var i = 0; i < d.files.length && out.files.length < CD_MAX_FILES; i++) {
+      var f = d.files[i];
+      if (!f || typeof f !== "object" || Array.isArray(f)) continue;
+      var md = cdStr(f.md);
+      if (md.length > CD_MAX_MD) md = md.slice(0, CD_MAX_MD);
+      if (total + md.length > CD_MAX_TOTAL_MD) md = "";
+      total += md.length;
+      out.files.push({
+        rel: cdStr(f.rel), name: cdStr(f.name), title: cdStr(f.title), subtitle: cdStr(f.subtitle),
+        group: cdStr(f.group), groupColor: cdStr(f.groupColor),
+        minutes: cdNum(f.minutes), sections: cdNum(f.sections), md: md
+      });
+    }
+    return out;
   }
 
   // nonce для CSP: кешируем из первого (инлайн) снимка данных и вешаем на динамически
@@ -98,6 +133,9 @@
   state.collapsed = plainMap(state.collapsed); // { group: true } — свёрнутая группа в навигаторе
   state.cards = plainMap(state.cards);        // { cardId: {due,ivl,ease} } — интервальное повторение флеш-карт
   state.scroll = plainMap(state.scroll);      // { rel: scrollTop } — где остановился в каждом файле
+  state.checks = plainMap(state.checks);      // { itemId: true } — отмеченные пункты чек-листов
+  if (!Array.isArray(state.recent)) state.recent = [];  // [rel, …] — недавно открытые (для главного экрана)
+  state.marks = plainMap(state.marks);        // { "rel#slug": "текст заголовка" } — закладки на разделы
   // Масштаб шрифта читалки — только конечное число в [0.8..1.6]. NaN/Infinity/строку/
   // подпорченное большое значение из хранилища приводим к 1, иначе zoom «взорвёт» текст.
   state.fs = (typeof state.fs === "number" && isFinite(state.fs)) ? Math.max(0.8, Math.min(1.6, state.fs)) : 1;
@@ -305,6 +343,9 @@
     });
     text = text.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
     text = text.replace(/\*([^*\n]+)\*/g, "<em>$1</em>");
+    // Зачёркивание ~~текст~~ → <del>. Двойная тильда в C++ не встречается (одиночная ~ —
+    // побитовое НЕ — сюда не попадает: инлайн-код уже вынут в плейсхолдеры выше).
+    text = text.replace(/~~([^~\n]+)~~/g, "<del>$1</del>");
     // Вернуть код на место.
     text = text.replace(/\u0000(\d+)\u0000/g, function (_, i) {
       return "<code>" + escapeHtml(codes[+i]) + "</code>";
@@ -406,6 +447,19 @@
 
   // ---- Флеш-карточки ```cards с интервальным повторением ----
   function cdHash(s) { var h = 5381, i = String(s).length; while (i) h = (h * 33) ^ String(s).charCodeAt(--i); return "c" + (h >>> 0).toString(36); }
+  // «{3,5-7}» из инфостроки ограждения → { 3:true, 5:true, 6:true, 7:true }. Нет фигурных скобок — null.
+  function parseHlLines(spec) {
+    if (!spec) return null;
+    var body = spec.replace(/[{}\s]/g, ""); if (!body) return null;
+    var set = {};
+    body.split(",").forEach(function (part) {
+      if (!part) return;
+      var r = part.split("-");
+      if (r.length === 2) { var a = +r[0], b = +r[1]; if (a && b) for (var n = a; n <= b; n++) set[n] = true; }
+      else { var v = +part; if (v) set[v] = true; }
+    });
+    return Object.keys(set).length ? set : null;
+  }
   function cdDate(offset) { var d = new Date(); if (offset) d.setDate(d.getDate() + offset); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
   function cdCardState(id) {
     var rec = state.cards[id];
@@ -491,6 +545,78 @@
       (note ? '<div class="cd-tests-note">' + inline(note) + "</div>" : "") + "</div>";
   }
 
+  // ---- «Было / стало» ```badgood : две колонки кода через строку --- ----
+  // Первая строка вида «Метка слева | Метка справа» задаёт заголовки (необязательна).
+  function renderBadgood(src) {
+    var lines = String(src).replace(/\r\n?/g, "\n").replace(/^\n+|\n+$/g, "").split("\n");
+    var labBad = "Так неверно", labGood = "Так правильно";
+    if (lines.length && lines[0].indexOf("|") >= 0 && !/[{};]/.test(lines[0])) {
+      var lp = lines[0].split("|");
+      labBad = lp[0].trim() || labBad; labGood = (lp[1] || "").trim() || labGood;
+      lines.shift();
+    }
+    var sep = -1;
+    for (var i = 0; i < lines.length; i++) { if (lines[i].trim() === "---") { sep = i; break; } }
+    var badCode, goodCode;
+    if (sep < 0) { badCode = lines.join("\n"); goodCode = ""; }
+    else { badCode = lines.slice(0, sep).join("\n").replace(/^\n+|\n+$/g, ""); goodCode = lines.slice(sep + 1).join("\n").replace(/^\n+|\n+$/g, ""); }
+    function col(cls, lab, code) {
+      return '<div class="cd-bg-col ' + cls + '">' +
+        '<div class="cd-bg-lab">' + escapeHtml(lab) + "</div>" +
+        '<pre class="code"><code>' + highlight(code, "cpp") + "</code></pre></div>";
+    }
+    return '<div class="cd-badgood">' + col("bad", labBad, badCode) +
+      (goodCode ? col("good", labGood, goodCode) : "") + "</div>";
+  }
+
+  // ---- Транскрипт консоли ```console : `<<` на строке отделяет ввод пользователя ----
+  function renderConsole(src) {
+    var lines = String(src).replace(/\r\n?/g, "\n").replace(/^\n+|\n+$/g, "").split("\n");
+    var body = lines.map(function (ln) {
+      var idx = ln.indexOf("<<");
+      if (idx < 0) return '<span class="cd-con-line">' + (escapeHtml(ln) || "​") + "</span>";
+      var pre = ln.slice(0, idx), typed = ln.slice(idx + 2).replace(/^\s/, "");
+      return '<span class="cd-con-line">' + escapeHtml(pre) +
+        '<span class="cd-con-in">' + escapeHtml(typed) + "</span></span>";
+    }).join("");
+    return '<div class="cd-console"><div class="cd-console-bar"><span class="cd-console-dot"></span>' +
+      '<span class="cd-console-dot"></span><span class="cd-console-dot"></span>' +
+      '<span class="cd-console-ttl">консоль</span></div>' +
+      '<pre class="cd-console-body"><code>' + body + "</code></pre></div>";
+  }
+
+  // ---- Диаграмма ```diagram / ```svg : сырой SVG/HTML как есть, в подписанной рамке ----
+  // Первая строка `# подпись` (необязательна) становится подписью под рисунком.
+  function renderDiagram(src) {
+    var raw = String(src).replace(/\r\n?/g, "\n").replace(/^\n+|\n+$/g, "");
+    var cap = "";
+    var m = raw.match(/^#\s+(.*)\n?/);
+    if (m) { cap = m[1].trim(); raw = raw.slice(m[0].length); }
+    return '<figure class="cd-figure"><div class="cd-figure-art">' + raw + "</div>" +
+      (cap ? "<figcaption>" + inline(cap) + "</figcaption>" : "") + "</figure>";
+  }
+
+  // ---- Чек-лист ```checklist : пункты «- текст», состояние помнится (state.checks) ----
+  function renderChecklist(src) {
+    var lines = String(src).replace(/\r\n?/g, "\n").split("\n");
+    var title = "", items = [];
+    lines.forEach(function (ln) {
+      var t = ln.replace(/\s+$/, "");
+      if (!t.trim()) return;
+      var mi = t.match(/^\s*[-*]\s+(.*)$/);
+      if (mi) items.push(mi[1]);
+      else if (!items.length) title += (title ? " " : "") + t.trim();
+    });
+    var html = '<div class="cd-check">' +
+      '<div class="cd-check-head">' + inline(title || "Проверь себя: могу сам, не подсматривая") + "</div>";
+    items.forEach(function (it) {
+      var id = cdHash(it), on = !!state.checks[id];
+      html += '<button class="cd-check-item' + (on ? " on" : "") + '" type="button" data-id="' + id + '">' +
+        '<span class="cd-check-box"></span><span class="cd-check-txt">' + inline(it) + "</span></button>";
+    });
+    return html + "</div>";
+  }
+
   function renderMarkdown(md, headings) {
     var lines = String(md).replace(/\r\n?/g, "\n").split("\n");
     var out = [];
@@ -523,8 +649,23 @@
         i++;
         items.push({ text: m[3], sub: "" });
       }
-      html += "<" + (type || "ul") + ">";
-      items.forEach(function (it) { html += "<li>" + inline(it.text) + it.sub + "</li>"; });
+      // Есть ли среди пунктов чек-бокс «- [ ] …» — тогда весь список рисуем как список задач.
+      var hasTask = items.some(function (it) { return /^\[[ xX]\]\s+/.test(it.text); });
+      html += "<" + (type || "ul") + (hasTask ? ' class="cd-tasklist"' : "") + ">";
+      items.forEach(function (it) {
+        var tm = it.text.match(/^\[([ xX])\]\s+([\s\S]*)$/);
+        if (tm) {
+          // Состояние берём только из localStorage (как у ```checklist), чтобы отметки жили
+          // между перезапусками; исходное [x] служит лишь визуальной подсказкой автора.
+          var id = cdHash(tm[2]), on = !!state.checks[id];
+          html += '<li class="cd-tl"><button class="cd-tl-box' + (on ? " on" : "") +
+            '" type="button" data-id="' + id + '" role="checkbox" aria-checked="' + (on ? "true" : "false") +
+            '" aria-label="Отметить пункт"></button><span class="cd-tl-txt' + (on ? " done" : "") + '">' +
+            inline(tm[2]) + "</span>" + it.sub + "</li>";
+        } else {
+          html += "<li>" + inline(it.text) + it.sub + "</li>";
+        }
+      });
       html += "</" + (type || "ul") + ">";
       return html;
     }
@@ -534,10 +675,11 @@
 
       if (!line.trim()) { i++; continue; } // пустые строки между блоками
 
-      // Код в ограждении ```lang … ```
-      var fence = line.match(/^\s*```+\s*([\w+#-]*)\s*$/);
+      // Код в ограждении ```lang … ``` (после языка можно указать подсветку строк: ```cpp {3,5-7})
+      var fence = line.match(/^\s*```+\s*([\w+#-]*)\s*(\{[\d,\s-]*\})?\s*$/);
       if (fence) {
         var lang = fence[1] || "";
+        var hlSet = parseHlLines(fence[2]);
         i++;
         var buf = [];
         while (i < lines.length && !/^\s*```+\s*$/.test(lines[i])) { buf.push(lines[i]); i++; }
@@ -549,13 +691,26 @@
         if (lc === "cards") { out.push(renderCards(code)); continue; }      // флеш-карточки
         if (lc === "fillcode") { out.push(renderFillcode(code)); continue; } // заполни пропуск
         if (lc === "tests") { out.push(renderTests(code)); continue; }      // тесты к задаче
+        if (lc === "badgood") { out.push(renderBadgood(code)); continue; }  // было/стало в две колонки
+        if (lc === "console") { out.push(renderConsole(code)); continue; }  // транскрипт консоли
+        if (lc === "diagram" || lc === "svg") { out.push(renderDiagram(code)); continue; } // схема
+        if (lc === "checklist") { out.push(renderChecklist(code)); continue; } // чек-лист «усвоено»
         var LANG_LABEL = { cpp: "C++", "c++": "C++", cc: "C++", cxx: "C++", c: "C", bash: "Bash", sh: "Bash", shell: "Bash", txt: "текст", text: "текст", py: "Python" };
         var langLabel = escapeHtml(LANG_LABEL[(lang || "").toLowerCase()] || lang || "код");
+        var codeHtml;
+        if (hlSet) {                                    // построчная подсветка нужных строк
+          codeHtml = code.split("\n").map(function (ln, idx) {
+            return '<span class="cd-ln' + (hlSet[idx + 1] ? " cd-hl" : "") + '">' +
+              (highlight(ln, lang) || "​") + "</span>";
+          }).join("");
+        } else {
+          codeHtml = highlight(code, lang);
+        }
         out.push(
           '<div class="codewrap">' +
           '<div class="codehead"><span class="codelang">' + langLabel + "</span>" +
-          '<button class="copybtn" type="button" title="Копировать код"><span class="cb-ic">⧉</span> копировать</button></div>' +
-          '<pre class="code"><code>' + highlight(code, lang) + "</code></pre></div>"
+          '<button class="copybtn" type="button" title="Копировать код" data-code="' + escapeHtml(code) + '"><span class="cb-ic">⧉</span> копировать</button></div>' +
+          '<pre class="code' + (hlSet ? " cd-lined" : "") + '"><code>' + codeHtml + "</code></pre></div>"
         );
         continue;
       }
@@ -587,7 +742,15 @@
         var slug = slugify(htext);
         if (level === 1 && !sawTitle) { sawTitle = true; i++; continue; } // первый # — это имя файла, оно в шапке читалки
         if (headings && level >= 2 && level <= 3) headings.push({ level: level, text: htext.replace(/`/g, ""), slug: slug });
-        out.push("<h" + level + ' id="' + slug + '">' + inline(htext) + "</h" + level + ">");
+        // data-title держит «чистый» текст заголовка (без кнопки «#»), чтобы хлебные крошки
+        // и активный раздел читались из него, а не из textContent, куда попадает «#».
+        var hclean = escapeHtml(htext.replace(/`/g, ""));
+        out.push("<h" + level + ' id="' + slug + '" data-title="' + hclean + '">' + inline(htext) +
+          '<button class="cd-hmark" type="button" tabindex="-1" title="Добавить раздел в закладки"' +
+          ' aria-label="Добавить в закладки" aria-pressed="false" data-slug="' + slug + '">☆</button>' +
+          '<button class="cd-hlink" type="button" tabindex="-1" title="Копировать ссылку на раздел"' +
+          ' aria-label="Копировать ссылку на раздел" data-slug="' + slug + '">#</button>' +
+          "</h" + level + ">");
         i++;
         continue;
       }
@@ -625,17 +788,23 @@
       // Таблица
       if (line.indexOf("|") >= 0 && i + 1 < lines.length && isTableSep(lines[i + 1])) {
         var header = tableCells(line);
+        // Выравнивание колонок из строки-разделителя: :--- слева, :--: по центру, ---: справа.
+        var aligns = tableCells(lines[i + 1]).map(function (s) {
+          var t = s.trim(), l = t.charAt(0) === ":", r = t.charAt(t.length - 1) === ":";
+          return r && l ? "center" : r ? "right" : l ? "left" : "";
+        });
+        var alignAttr = function (idx) { return aligns[idx] ? ' style="text-align:' + aligns[idx] + '"' : ""; };
         i += 2; // шапка + разделитель
         var rows = [];
         while (i < lines.length && lines[i].trim() && lines[i].indexOf("|") >= 0) {
           rows.push(tableCells(lines[i])); i++;
         }
         var thtml = '<div class="tablewrap"><table><thead><tr>';
-        header.forEach(function (c) { thtml += "<th>" + inline(c) + "</th>"; });
+        header.forEach(function (c, ci) { thtml += "<th" + alignAttr(ci) + ">" + inline(c) + "</th>"; });
         thtml += "</tr></thead><tbody>";
         rows.forEach(function (r) {
           thtml += "<tr>";
-          for (var c = 0; c < header.length; c++) thtml += "<td>" + inline(r[c] || "") + "</td>";
+          for (var c = 0; c < header.length; c++) thtml += "<td" + alignAttr(c) + ">" + inline(r[c] || "") + "</td>";
           thtml += "</tr>";
         });
         thtml += "</tbody></table></div>";
@@ -862,11 +1031,22 @@
   // --- Главный экран (приветствие / возвращение) — оверлей поверх области чтения ---
   "#" + WIN_ID + " .cd-home{position:absolute;inset:0;z-index:7;overflow-y:auto;" +
   "background:radial-gradient(120% 68% at 50% -12%,rgba(var(--ac-rgb),.15),transparent 60%),radial-gradient(85% 55% at 108% 112%,rgba(var(--ac-rgb),.08),transparent 55%),var(--bg);}" +
-  "#" + WIN_ID + " .cd-home-inner{max-width:768px;margin:0 auto;padding:36px 30px 64px;}" +
+  "#" + WIN_ID + " .cd-home-inner{max-width:880px;margin:0 auto;padding:32px 30px 64px;}" +
   // Герой — градиентная панель с мягким свечением
-  "#" + WIN_ID + " .cd-home-hero{position:relative;display:flex;align-items:center;gap:18px;margin-bottom:22px;padding:20px 24px;border-radius:18px;overflow:hidden;flex-wrap:wrap;" +
+  "#" + WIN_ID + " .cd-home-hero{position:relative;display:flex;align-items:center;justify-content:space-between;gap:20px 24px;margin-bottom:18px;padding:18px 24px;border-radius:18px;overflow:hidden;flex-wrap:wrap;" +
   "background:linear-gradient(135deg,color-mix(in srgb,var(--ac) 15%,var(--panel)),var(--panel));border:1px solid color-mix(in srgb,var(--ac) 24%,var(--bd));}" +
   "#" + WIN_ID + " .cd-home-hero::before{content:'';position:absolute;top:-45%;right:-8%;width:280px;height:280px;border-radius:50%;background:radial-gradient(circle,rgba(var(--ac-rgb),.20),transparent 70%);pointer-events:none;}" +
+  "#" + WIN_ID + " .cd-home-hero::after{content:'';position:absolute;left:-6%;bottom:-60%;width:230px;height:230px;border-radius:50%;background:radial-gradient(circle,rgba(var(--ac-rgb),.10),transparent 70%);pointer-events:none;}" +
+  "#" + WIN_ID + " .cd-home-hero{box-shadow:inset 0 1px 0 rgba(255,255,255,.05);}" +
+  // Лид героя (маскот + приветствие) слева, статистика — справа; на узком окне статистика переносится вниз.
+  "#" + WIN_ID + " .cd-hero-lead{position:relative;z-index:1;display:flex;align-items:center;gap:18px;flex:1 1 260px;min-width:0;}" +
+  "#" + WIN_ID + " .cd-hero-stats{position:relative;z-index:1;flex:1 1 300px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}" +
+  "#" + WIN_ID + " .cd-hero-stats .cd-dtile{padding:9px 11px;border-radius:12px;gap:2px;}" +
+  "#" + WIN_ID + " .cd-hero-stats .cd-dtile:hover{transform:none;box-shadow:none;}" +
+  "#" + WIN_ID + " .cd-hero-stats .cd-dt-ic{width:24px;height:24px;font-size:12px;border-radius:7px;}" +
+  "#" + WIN_ID + " .cd-hero-stats .cd-dt-v{font-size:15px;margin-top:3px;}" +
+  "#" + WIN_ID + " .cd-hero-stats .cd-dt-l{font-size:10px;line-height:1.25;}" +
+  "#" + WIN_ID + " .cd-hero-stats .cd-dt-bar{margin-top:7px;height:4px;}" +
   // маскот героя — наклейка-настроение на мягком радиальном свечении
   "#" + WIN_ID + " .cd-home-mascot{position:relative;flex:0 0 auto;width:96px;height:96px;display:flex;align-items:center;justify-content:center;}" +
   "#" + WIN_ID + " .cd-home-mascot::before{content:'';position:absolute;inset:-4px;border-radius:50%;background:radial-gradient(circle,rgba(var(--ac-rgb),.28),transparent 66%);z-index:0;}" +
@@ -885,7 +1065,7 @@
   "#" + WIN_ID + " .cd-ring-pct{font-size:17px;font-weight:800;color:var(--fg);line-height:1;font-variant-numeric:tabular-nums;}" +
   "#" + WIN_ID + " .cd-ring-sub{font-size:8px;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin-top:2px;}" +
   "#" + WIN_ID + " .cd-home-cont{display:flex;align-items:center;gap:14px;width:100%;text-align:left;font-family:inherit;cursor:pointer;border:1px solid rgba(var(--ac-rgb),.30);" +
-  "background:linear-gradient(135deg,rgba(var(--ac-rgb),.17),rgba(var(--ac-rgb),.05));border-radius:14px;padding:15px 18px;margin-bottom:26px;transition:transform .13s,box-shadow .13s,border-color .13s;}" +
+  "background:linear-gradient(135deg,rgba(var(--ac-rgb),.17),rgba(var(--ac-rgb),.05));border-radius:16px;padding:16px 20px;margin-bottom:14px;transition:transform .14s,box-shadow .14s,border-color .14s;}" +
   "#" + WIN_ID + " .cd-home-cont:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(0,0,0,.28);border-color:var(--ac);}" +
   "#" + WIN_ID + " .cd-hc-main{flex:1 1 auto;min-width:0;}" +
   "#" + WIN_ID + " .cd-hc-arrow{flex:0 0 auto;font-size:22px;color:var(--ac);opacity:.7;transition:transform .16s,opacity .16s;}" +
@@ -910,21 +1090,25 @@
   "#" + WIN_ID + " .cd-dt-bar i{display:block;height:100%;border-radius:999px;transition:width .6s cubic-bezier(.2,.8,.2,1);}" +
   "#" + WIN_ID + " .cd-dt-read .cd-dt-bar i{background:linear-gradient(90deg,#89b4fa,#b4befe);}" +
   "#" + WIN_ID + " .cd-dt-solve .cd-dt-bar i{background:linear-gradient(90deg,#a6e3a1,#94e2d5);}" +
-  "#" + WIN_ID + " .cd-home-sec{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--faint);margin:0 2px 11px;}" +
-  "#" + WIN_ID + " .cd-home-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(198px,1fr));gap:10px;margin-bottom:28px;}" +
-  "#" + WIN_ID + " .cd-home-card{position:relative;text-align:left;font-family:inherit;cursor:pointer;border:1px solid var(--bd);background:var(--panel);border-radius:12px;padding:13px 15px 13px 18px;overflow:hidden;transition:transform .13s,box-shadow .13s,border-color .13s,background .13s;}" +
+  "#" + WIN_ID + " .cd-home-sec{display:flex;align-items:center;gap:9px;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.9px;color:var(--muted);margin:26px 0 13px;padding-bottom:8px;border-bottom:1px solid var(--bd2);}" +
+  "#" + WIN_ID + " .cd-sec-dot{width:7px;height:7px;border-radius:2px;flex:0 0 auto;background:var(--sc,var(--ac));box-shadow:0 0 8px color-mix(in srgb,var(--sc,var(--ac)) 55%,transparent);}" +
+  "#" + WIN_ID + " .cd-sec-count{margin-left:auto;font-size:10px;letter-spacing:0;color:var(--faint);opacity:.85;padding:1px 8px;border-radius:8px;background:var(--hl);}" +
+  "#" + WIN_ID + " .cd-hcard-go{position:absolute;right:12px;bottom:11px;font-size:15px;color:var(--gcolor,var(--ac));opacity:0;transform:translateX(-4px);transition:opacity .15s,transform .15s;}" +
+  "#" + WIN_ID + " .cd-home-card:hover .cd-hcard-go{opacity:.9;transform:none;}" +
+  "#" + WIN_ID + " .cd-home-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-bottom:4px;}" +
+  "#" + WIN_ID + " .cd-home-card{position:relative;text-align:left;font-family:inherit;cursor:pointer;border:1px solid var(--bd);background:linear-gradient(180deg,color-mix(in srgb,var(--fg) 2%,var(--panel)),var(--panel));border-radius:14px;padding:14px 32px 14px 18px;overflow:hidden;transition:transform .14s,box-shadow .14s,border-color .14s,background .14s;}" +
   "#" + WIN_ID + " .cd-home-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--gcolor,var(--ac));opacity:.85;}" +
   "#" + WIN_ID + " .cd-home-card:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(0,0,0,.24);border-color:color-mix(in srgb,var(--gcolor,var(--ac)) 45%,var(--bd));background:color-mix(in srgb,var(--gcolor,var(--ac)) 7%,var(--panel));}" +
   "#" + WIN_ID + " .cd-hcard-head{display:flex;align-items:center;gap:9px;}" +
-  "#" + WIN_ID + " .cd-hcard-ic{flex:0 0 auto;display:inline-flex;}" +
+  "#" + WIN_ID + " .cd-hcard-ic{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;padding:3px;border-radius:9px;background:color-mix(in srgb,var(--gcolor,var(--ac)) 13%,transparent);}" +
   "#" + WIN_ID + " .cd-hcard-ic .cd-sticker{transition:transform .16s cubic-bezier(.2,.8,.2,1);}" +
   "#" + WIN_ID + " .cd-home-card:hover .cd-hcard-ic .cd-sticker{transform:scale(1.12) rotate(-4deg);}" +
   "#" + WIN_ID + " .cd-hcard-t{font-size:13.5px;font-weight:700;color:var(--fg);}" +
   "#" + WIN_ID + " .cd-hcard-s{font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}" +
-  "#" + WIN_ID + " .cd-home-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px;}" +
+  "#" + WIN_ID + " .cd-home-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:4px;}" +
   "#" + WIN_ID + " .cd-home-chip{font-family:inherit;cursor:pointer;font-size:12px;color:var(--fg);border:1px solid var(--bd);background:var(--panel);border-radius:999px;padding:6px 13px;display:inline-flex;align-items:center;gap:7px;transition:border-color .12s,background .12s,transform .12s;}" +
   "#" + WIN_ID + " .cd-home-chip::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--gcolor,var(--ac));flex:0 0 auto;}" +
-  "#" + WIN_ID + " .cd-home-chip:hover{border-color:var(--ac);transform:translateY(-1px);}" +
+  "#" + WIN_ID + " .cd-home-chip:hover{border-color:var(--gcolor,var(--ac));background:color-mix(in srgb,var(--gcolor,var(--ac)) 9%,var(--panel));transform:translateY(-1px);}" +
   "#" + WIN_ID + ".home .cd-file-only{display:none;}" +
   "#" + WIN_ID + ".home .cd-rprog{visibility:hidden;}" +
   "@keyframes cd-home-in{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}" +
@@ -1139,6 +1323,47 @@
   "#" + WIN_ID + " .cd-article .cd-tests-copy:hover{border-color:var(--ac);color:var(--ac);}" +
   "#" + WIN_ID + " .cd-article .cd-tests-copy.done{color:var(--ts);border-color:var(--ts);}" +
 
+  // Подсветка отдельных строк кода (```cpp {3,5-7})
+  "#" + WIN_ID + " pre.code.cd-lined code{display:block;}" +
+  "#" + WIN_ID + " pre.code.cd-lined .cd-ln{display:block;}" +
+  "#" + WIN_ID + " pre.code.cd-lined .cd-hl{background:rgba(var(--ac-rgb),.14);border-left:2px solid var(--ac);margin:0 -16px;padding:0 16px 0 14px;}" +
+
+  // Диаграмма/схема (```diagram, ```svg)
+  "#" + WIN_ID + " .cd-article .cd-figure{margin:16px 0;padding:16px 14px 12px;border:1px solid var(--bd);border-radius:12px;background:color-mix(in srgb,var(--fg) 3%,var(--panel));text-align:center;}" +
+  "#" + WIN_ID + " .cd-article .cd-figure-art{overflow-x:auto;}" +
+  "#" + WIN_ID + " .cd-article .cd-figure svg{max-width:100%;height:auto;color:var(--fg);}" +
+  "#" + WIN_ID + " .cd-article .cd-figure figcaption{margin-top:10px;font-size:12px;color:var(--muted);}" +
+
+  // Было/стало в две колонки (```badgood)
+  "#" + WIN_ID + " .cd-article .cd-badgood{display:flex;gap:12px;margin:14px 0;flex-wrap:wrap;}" +
+  "#" + WIN_ID + " .cd-article .cd-bg-col{flex:1 1 260px;min-width:0;border:1px solid var(--bd);border-radius:10px;overflow:hidden;}" +
+  "#" + WIN_ID + " .cd-article .cd-bg-lab{font-size:12px;font-weight:700;padding:6px 12px;border-bottom:1px solid var(--bd);}" +
+  "#" + WIN_ID + " .cd-article .cd-bg-col.bad .cd-bg-lab{color:#f38ba8;background:rgba(243,139,168,.12);}" +
+  "#" + WIN_ID + " .cd-article .cd-bg-col.good .cd-bg-lab{color:#a6e3a1;background:rgba(166,227,161,.12);}" +
+  "#" + WIN_ID + " .cd-article .cd-bg-col pre.code{border-radius:0;}" +
+
+  // Транскрипт консоли (```console)
+  "#" + WIN_ID + " .cd-article .cd-console{margin:14px 0;border:1px solid var(--bd);border-radius:10px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.10);}" +
+  "#" + WIN_ID + " .cd-article .cd-console-bar{display:flex;align-items:center;gap:6px;padding:7px 12px;background:#1e1e2e;border-bottom:1px solid rgba(255,255,255,.08);}" +
+  "#" + WIN_ID + " .cd-article .cd-console-dot{width:9px;height:9px;border-radius:50%;background:#585b70;}" +
+  "#" + WIN_ID + " .cd-article .cd-console-dot:nth-child(1){background:#f38ba8;}" +
+  "#" + WIN_ID + " .cd-article .cd-console-dot:nth-child(2){background:#f9e2af;}" +
+  "#" + WIN_ID + " .cd-article .cd-console-dot:nth-child(3){background:#a6e3a1;}" +
+  "#" + WIN_ID + " .cd-article .cd-console-ttl{margin-left:6px;font-size:11px;color:#a6adc8;}" +
+  "#" + WIN_ID + " .cd-article .cd-console-body{margin:0;padding:12px 16px;background:#11111b;color:#cdd6f4;overflow-x:auto;font-family:'Cascadia Code',Consolas,'Courier New',monospace;font-size:12.5px;line-height:1.55;}" +
+  "#" + WIN_ID + " .cd-article .cd-con-line{display:block;white-space:pre-wrap;}" +
+  "#" + WIN_ID + " .cd-article .cd-con-in{color:#a6e3a1;font-weight:700;}" +
+
+  // Чек-лист «усвоено» (```checklist)
+  "#" + WIN_ID + " .cd-article .cd-check{margin:16px 0;padding:14px;border:1px solid var(--bd);border-radius:12px;background:color-mix(in srgb,var(--fg) 4%,var(--panel));}" +
+  "#" + WIN_ID + " .cd-article .cd-check-head{font-weight:700;color:var(--ac2);font-size:13.5px;margin:0 0 10px;}" +
+  "#" + WIN_ID + " .cd-article .cd-check-item{display:flex;align-items:flex-start;gap:10px;width:100%;text-align:left;font:inherit;font-size:13px;color:var(--fg);cursor:pointer;padding:8px 10px;border:1px solid transparent;border-radius:9px;background:none;transition:background .12s;}" +
+  "#" + WIN_ID + " .cd-article .cd-check-item:hover{background:var(--hl);}" +
+  "#" + WIN_ID + " .cd-article .cd-check-box{flex:0 0 auto;width:17px;height:17px;margin-top:1px;border:2px solid var(--faint);border-radius:5px;transition:all .12s;}" +
+  "#" + WIN_ID + " .cd-article .cd-check-item.on .cd-check-box{border-color:#a6e3a1;background:#a6e3a1;position:relative;}" +
+  "#" + WIN_ID + " .cd-article .cd-check-item.on .cd-check-box::after{content:'\\2713';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;color:#11111b;}" +
+  "#" + WIN_ID + " .cd-article .cd-check-item.on .cd-check-txt{color:var(--muted);text-decoration:line-through;}" +
+
   // Вспышка при переходе к разделу (по ссылке/оглавлению)
   "@keyframes cd-flash{0%{background:rgba(var(--ac-rgb),.32);}100%{background:transparent;}}" +
   "#" + WIN_ID + " .cd-flash{animation:cd-flash 1.1s ease-out;border-radius:6px;}" +
@@ -1217,7 +1442,234 @@
   "#" + WIN_ID + " ::-webkit-scrollbar-thumb:hover{background:var(--faint);}" +
   "#" + WIN_ID + " *{scrollbar-width:thin;scrollbar-color:var(--bd) transparent;}" +
   "#" + WIN_ID + " button:focus-visible,#" + WIN_ID + " a:focus-visible,#" + WIN_ID + " textarea:focus-visible,#" + WIN_ID + " input:focus-visible{outline:2px solid var(--ac);outline-offset:2px;border-radius:6px;}" +
-  "#" + WIN_ID + " .cd-home-chip:hover{transform:translateY(-1px);border-color:var(--ac);}";
+  "#" + WIN_ID + " .cd-home-chip:hover{transform:translateY(-1px);border-color:var(--ac);}" +
+
+  // --- Новое: список задач «- [ ] …», якоря заголовков, кнопки «наверх»/«копировать», практика ---
+  // Интерактивные чек-боксы в обычных списках
+  "#" + WIN_ID + " .cd-article ul.cd-tasklist{list-style:none;padding-left:2px;}" +
+  "#" + WIN_ID + " .cd-article li.cd-tl{display:flex;align-items:flex-start;gap:9px;margin:5px 0;}" +
+  "#" + WIN_ID + " .cd-tl-box{flex:0 0 auto;margin-top:2px;width:17px;height:17px;padding:0;cursor:pointer;border:1.6px solid var(--faint);border-radius:5px;background:transparent;transition:background .12s,border-color .12s;}" +
+  "#" + WIN_ID + " .cd-tl-box:hover{border-color:var(--ac);}" +
+  "#" + WIN_ID + " .cd-tl-box.on{border-color:var(--ts);background:var(--ts);position:relative;}" +
+  "#" + WIN_ID + " .cd-tl-box.on::after{content:'\\2713';position:absolute;left:1px;top:-2px;font-size:12px;font-weight:700;color:var(--panel);}" +
+  "#" + WIN_ID + " .cd-tl-txt.done{opacity:.6;text-decoration:line-through;}" +
+  // Якорь «#» у заголовка — виден при наведении на заголовок
+  "#" + WIN_ID + " .cd-article h2,#" + WIN_ID + " .cd-article h3{position:relative;}" +
+  "#" + WIN_ID + " .cd-hlink{border:none;background:none;cursor:pointer;color:var(--faint);font:inherit;font-weight:700;opacity:0;padding:0 4px;margin-left:4px;transition:opacity .12s,color .12s;vertical-align:middle;}" +
+  "#" + WIN_ID + " .cd-article h2:hover .cd-hlink,#" + WIN_ID + " .cd-article h3:hover .cd-hlink{opacity:.55;}" +
+  "#" + WIN_ID + " .cd-hlink:hover{opacity:1 !important;color:var(--ac);}" +
+  "#" + WIN_ID + " .cd-hlink.copied{opacity:1 !important;color:var(--ts);}" +
+  "#" + WIN_ID + " .cd-rbtn.copied{color:var(--ts);border-color:var(--ts);}" +
+  // Плавающая кнопка «наверх»
+  "#" + WIN_ID + " .cd-totop{position:absolute;right:18px;bottom:18px;z-index:8;width:34px;height:34px;border-radius:50%;cursor:pointer;border:1px solid var(--bd);background:var(--panel);color:var(--fg);font-size:16px;line-height:1;box-shadow:0 4px 14px rgba(0,0,0,.4);}" +
+  "#" + WIN_ID + " .cd-totop:hover{border-color:var(--ac);color:var(--ac);}" +
+  "#" + WIN_ID + " .cd-totop[hidden]{display:none;}" +
+  // Кнопка практики на главном экране
+  "#" + WIN_ID + " .cd-home-actions{margin:2px 0 18px;}" +
+  "#" + WIN_ID + " .cd-home-rand{cursor:pointer;border:1px solid var(--bd);background:var(--panel);color:var(--fg);font-family:inherit;font-size:12.5px;font-weight:600;padding:9px 16px;border-radius:10px;transition:border-color .12s,transform .12s;}" +
+  "#" + WIN_ID + " .cd-home-rand:hover{border-color:var(--ac);transform:translateY(-1px);}" +
+  // Зачёркнутый текст
+  "#" + WIN_ID + " .cd-article del{opacity:.7;}" +
+
+  // --- #19 закладки-звёздочки у заголовков ---
+  "#" + WIN_ID + " .cd-hmark{border:none;background:none;cursor:pointer;color:var(--faint);font:inherit;opacity:0;padding:0 3px;margin-left:6px;transition:opacity .12s,color .12s;vertical-align:middle;}" +
+  "#" + WIN_ID + " .cd-article h2:hover .cd-hmark,#" + WIN_ID + " .cd-article h3:hover .cd-hmark{opacity:.55;}" +
+  "#" + WIN_ID + " .cd-hmark:hover{opacity:1 !important;color:var(--ty);}" +
+  "#" + WIN_ID + " .cd-hmark.on{opacity:1 !important;color:var(--ty);}" +
+  "#" + WIN_ID + " .cd-home-mark{text-align:left;}" +
+
+  // --- #11 поиск по тексту материала ---
+  "#" + WIN_ID + " .cd-find{position:absolute;top:10px;right:16px;z-index:9;display:flex;align-items:center;gap:4px;padding:5px 6px;" +
+  "background:var(--bg);border:1px solid var(--bd);border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.4);}" +
+  "#" + WIN_ID + " .cd-find[hidden]{display:none;}" +
+  "#" + WIN_ID + " .cd-find-in{border:1px solid var(--bd);background:var(--panel);color:var(--fg);font-family:inherit;font-size:12.5px;padding:5px 8px;border-radius:7px;width:190px;outline:none;}" +
+  "#" + WIN_ID + " .cd-find-in:focus{border-color:var(--ac);}" +
+  "#" + WIN_ID + " .cd-find-n{min-width:34px;text-align:center;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;}" +
+  "#" + WIN_ID + " .cd-find-n.cd-find-none{color:var(--tp);}" +
+  "#" + WIN_ID + " .cd-find-b{border:1px solid transparent;background:none;color:var(--muted);cursor:pointer;font-size:13px;line-height:1;padding:4px 7px;border-radius:6px;}" +
+  "#" + WIN_ID + " .cd-find-b:hover{background:var(--hl);color:var(--fg);}" +
+  "#" + WIN_ID + " mark.cd-find-hit{background:var(--ty);color:#1e1e2e;border-radius:2px;padding:0 1px;}" +
+  "#" + WIN_ID + " mark.cd-find-hit.cur{background:var(--tn);outline:2px solid var(--tn);}" +
+
+  // --- #8 кольцо прогресса вокруг маскота ---
+  "#" + WIN_ID + " .cd-home-mascot.cd-has-ring{position:relative;width:104px;height:104px;flex:0 0 auto;}" +
+  "#" + WIN_ID + " .cd-ring{position:absolute;inset:0;width:104px;height:104px;transform:rotate(-90deg);}" +
+  "#" + WIN_ID + " .cd-ring-bg{fill:none;stroke:var(--bd);stroke-width:6;}" +
+  "#" + WIN_ID + " .cd-ring-fg{fill:none;stroke:var(--ac);stroke-width:6;stroke-linecap:round;filter:drop-shadow(0 0 4px rgba(var(--ac-rgb),.55));transition:stroke-dashoffset .8s cubic-bezier(.2,.8,.2,1);}" +
+  "#" + WIN_ID + " .cd-ring-in{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;}" +
+  "#" + WIN_ID + " .cd-home-status{margin-top:6px;font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums;}" +
+
+  // --- #2 поиск на главной ---
+  "#" + WIN_ID + " .cd-home-search{position:relative;margin:2px 0 16px;}" +
+  "#" + WIN_ID + " .cd-hs-ic{position:absolute;left:12px;top:11px;font-size:15px;opacity:.4;pointer-events:none;}" +
+  "#" + WIN_ID + " .cd-hs-in{width:100%;padding:10px 12px 10px 34px;border:1px solid var(--bd);border-radius:11px;background:var(--panel);color:var(--fg);font-family:inherit;font-size:13.5px;outline:none;}" +
+  "#" + WIN_ID + " .cd-hs-in:focus{border-color:var(--ac);box-shadow:0 0 0 3px rgba(var(--ac-rgb),.16);}" +
+  "#" + WIN_ID + " .cd-hs-res{margin-top:6px;border:1px solid var(--bd);border-radius:11px;background:var(--bg);overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.35);}" +
+  "#" + WIN_ID + " .cd-hs-res[hidden]{display:none;}" +
+  "#" + WIN_ID + " .cd-hs-item{display:block;width:100%;text-align:left;border:none;border-bottom:1px solid var(--bd2);background:none;color:var(--fg);cursor:pointer;font-family:inherit;padding:8px 12px;}" +
+  "#" + WIN_ID + " .cd-hs-item:hover{background:var(--hl);}" +
+  "#" + WIN_ID + " .cd-hs-item b{font-size:13px;font-weight:600;}" +
+  "#" + WIN_ID + " .cd-hs-item span{display:block;font-size:11px;opacity:.6;margin-top:2px;}" +
+  "#" + WIN_ID + " .cd-hs-empty{padding:10px 12px;font-size:12px;opacity:.6;}" +
+
+  // --- #10 «Что нового» ---
+  "#" + WIN_ID + " .cd-whatsnew{margin:0 0 16px;padding:14px 16px;border:1px solid rgba(var(--ac-rgb),.35);border-radius:13px;background:linear-gradient(180deg,rgba(var(--ac-rgb),.12),transparent);}" +
+  "#" + WIN_ID + " .cd-wn-h{font-weight:700;font-size:13px;margin-bottom:6px;}" +
+  "#" + WIN_ID + " .cd-wn-list{margin:0 0 10px;padding-left:18px;font-size:12.5px;line-height:1.7;color:var(--muted);}" +
+  "#" + WIN_ID + " .cd-wn-list b{color:var(--fg);}" +
+  "#" + WIN_ID + " .cd-wn-ok{cursor:pointer;border:none;background:var(--ac);color:#1e1e2e;font-family:inherit;font-size:12px;font-weight:700;padding:7px 16px;border-radius:9px;}" +
+  "#" + WIN_ID + " .cd-wn-ok:hover{filter:brightness(1.08);}" +
+
+  // --- #9 панель быстрых действий ---
+  "#" + WIN_ID + " .cd-qabar{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 16px;}" +
+  "#" + WIN_ID + " .cd-qa{cursor:pointer;border:1px solid var(--bd);background:var(--panel);color:var(--fg);font-family:inherit;font-size:12.5px;font-weight:600;padding:9px 14px;border-radius:10px;transition:border-color .12s,transform .12s;}" +
+  "#" + WIN_ID + " .cd-qa:hover{border-color:var(--ac);transform:translateY(-1px);}" +
+  "#" + WIN_ID + " .cd-qa-rev{border-color:rgba(var(--ac-rgb),.5);}" +
+  // «Продолжить» — главное действие, акцентная заливка; остальные пилюли — призрачные
+  "#" + WIN_ID + " .cd-qa-cont{background:var(--ac);color:#1e1e2e;border-color:transparent;box-shadow:0 4px 14px rgba(var(--ac-rgb),.28);}" +
+  "#" + WIN_ID + " .cd-qa-cont:hover{border-color:transparent;filter:brightness(1.07);transform:translateY(-1px);}" +
+
+  // --- #3 карточка повторения + «дальше по курсу» ---
+  "#" + WIN_ID + " .cd-home-review,#" + WIN_ID + " .cd-home-cont{width:100%;text-align:left;}" +
+  "#" + WIN_ID + " .cd-home-review{display:flex;align-items:center;gap:14px;margin:0 0 14px;padding:15px 18px;border:1px solid rgba(var(--ac-rgb),.4);border-radius:16px;background:linear-gradient(135deg,rgba(var(--ac-rgb),.14),rgba(var(--ac-rgb),.03));cursor:pointer;color:var(--fg);transition:transform .14s,box-shadow .14s,border-color .14s;}" +
+  "#" + WIN_ID + " .cd-home-review:hover{border-color:var(--ac);transform:translateY(-2px);box-shadow:0 10px 28px rgba(0,0,0,.26);}" +
+  "#" + WIN_ID + " .cd-home-review:hover .cd-hc-arrow{transform:translateX(4px);opacity:1;}" +
+  "#" + WIN_ID + " .cd-hr-art{flex:0 0 auto;}" +
+  "#" + WIN_ID + " .cd-home-next{display:block;width:100%;text-align:left;margin:-6px 0 14px;padding:8px 12px;border:none;background:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:12px;border-radius:8px;}" +
+  "#" + WIN_ID + " .cd-home-next:hover{background:var(--hl);color:var(--fg);}" +
+  "#" + WIN_ID + " .cd-home-next b{color:var(--fg);}" +
+
+  // --- #3 оверлей режима повторения ---
+  "#" + WIN_ID + " .cd-review{position:absolute;inset:0;z-index:8;overflow-y:auto;background:radial-gradient(120% 68% at 50% -12%,rgba(var(--ac-rgb),.15),transparent 60%),var(--bg);}" +
+  "#" + WIN_ID + " .cd-review[hidden]{display:none;}" +
+  "#" + WIN_ID + " .cd-rv-inner{max-width:640px;margin:0 auto;padding:22px 26px 60px;}" +
+  "#" + WIN_ID + " .cd-rv-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}" +
+  "#" + WIN_ID + " .cd-rv-count{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;}" +
+  "#" + WIN_ID + " .cd-rv-close,#" + WIN_ID + " .cd-rv-close2{cursor:pointer;border:1px solid var(--bd);background:var(--panel);color:var(--fg);font-family:inherit;border-radius:8px;padding:5px 10px;}" +
+  "#" + WIN_ID + " .cd-rv-close:hover,#" + WIN_ID + " .cd-rv-close2:hover{border-color:var(--ac);}" +
+  "#" + WIN_ID + " .cd-rv-card{border:1px solid var(--bd);border-radius:16px;background:var(--panel);padding:26px 22px;box-shadow:0 10px 30px rgba(0,0,0,.3);}" +
+  "#" + WIN_ID + " .cd-rv-q{font-size:17px;font-weight:600;line-height:1.5;}" +
+  "#" + WIN_ID + " .cd-rv-a{margin-top:16px;padding-top:16px;border-top:1px solid var(--bd);font-size:15px;line-height:1.6;color:var(--muted);}" +
+  "#" + WIN_ID + " .cd-rv-ctl{margin-top:20px;display:flex;flex-wrap:wrap;gap:8px;}" +
+  "#" + WIN_ID + " .cd-rv-show{cursor:pointer;border:none;background:var(--ac);color:#1e1e2e;font-family:inherit;font-size:13px;font-weight:700;padding:10px 20px;border-radius:10px;}" +
+  "#" + WIN_ID + " .cd-rv-rate{display:flex;gap:8px;flex-wrap:wrap;}" +
+  "#" + WIN_ID + " .cd-rv-grade{cursor:pointer;border:1px solid var(--bd);background:var(--bg);color:var(--fg);font-family:inherit;font-size:12.5px;padding:10px 16px;border-radius:10px;}" +
+  "#" + WIN_ID + " .cd-rv-grade[data-g='0']:hover{border-color:var(--tp);color:var(--tp);}" +
+  "#" + WIN_ID + " .cd-rv-grade[data-g='1']:hover{border-color:var(--tn);color:var(--tn);}" +
+  "#" + WIN_ID + " .cd-rv-grade[data-g='2']:hover{border-color:var(--ts);color:var(--ts);}" +
+  "#" + WIN_ID + " .cd-rv-done{text-align:center;padding:40px 20px;}" +
+  "#" + WIN_ID + " .cd-rv-done-t{font-size:18px;font-weight:700;margin-top:12px;}" +
+  "#" + WIN_ID + " .cd-rv-done-s{font-size:13px;color:var(--muted);margin:8px 0 20px;}" +
+
+  // =====================================================================
+  //  ДИЗАЙН-ПОЛИРОВКА (аккуратная, 2026-09-20). Идёт в конце строки CSS,
+  //  поэтому при равной специфичности перебивает более ранние правила.
+  // =====================================================================
+
+  // --- #14 Система теней: 3 уровня (var --sh1/2/3). Светлая тема — мягче. ---
+  "#" + WIN_ID + "{--sh1:0 1px 2px rgba(0,0,0,.18),0 2px 6px rgba(0,0,0,.20);--sh2:0 6px 18px rgba(0,0,0,.30);--sh3:0 18px 50px rgba(0,0,0,.50);}" +
+  "#" + WIN_ID + ".light{--sh1:0 1px 2px rgba(30,30,46,.06),0 2px 6px rgba(30,30,46,.08);--sh2:0 6px 18px rgba(30,30,46,.13);--sh3:0 18px 46px rgba(30,30,46,.20);}" +
+  "#" + WIN_ID + "{box-shadow:var(--sh3);}" +
+  "#" + WIN_ID + " .cd-viewmenu,#" + WIN_ID + " .cd-tocmenu,#" + WIN_ID + " .cd-hs-res,#" + WIN_ID + " .cd-find{box-shadow:var(--sh2);}" +
+  "#" + WIN_ID + " .cd-taskcard{box-shadow:var(--sh1);}" +
+  "#" + WIN_ID + " .cd-totop{box-shadow:var(--sh2);}" +
+  "#" + WIN_ID + " .cd-home-card:hover,#" + WIN_ID + " .cd-home-cont:hover,#" + WIN_ID + " .cd-home-review:hover,#" + WIN_ID + " .cd-dtile:hover{box-shadow:var(--sh2);}" +
+
+  // --- #1 Чтение: чуть крупнее проза + больше воздуха между абзацами ---
+  "#" + WIN_ID + " .cd-article{font-size:13.5px;}" +
+  "#" + WIN_ID + " .cd-article p{margin:11px 0;}" +
+  "#" + WIN_ID + " .cd-article li{margin:5px 0;}" +
+  "#" + WIN_ID + " .cd-article code{font-size:12.5px;padding:1.5px 6px;}" +
+
+  // --- #16 Светлая тема (Latte): усилить контраст вторичного текста и границ ---
+  "#" + WIN_ID + ".light{--faint:#6c6f85;--bd:rgba(30,30,46,.18);--bd2:rgba(30,30,46,.10);}" +
+
+  // --- #5 Главная: плотнее вертикальный ритм, меньше пустот сверху ---
+  "#" + WIN_ID + " .cd-home-inner{padding-top:24px;}" +
+  "#" + WIN_ID + " .cd-home-hero{margin-bottom:14px;padding:16px 22px;}" +
+  "#" + WIN_ID + " .cd-home-search{margin:0 0 13px;}" +
+  "#" + WIN_ID + " .cd-whatsnew{margin:0 0 13px;}" +
+  "#" + WIN_ID + " .cd-qabar{margin:0 0 13px;}" +
+  "#" + WIN_ID + " .cd-home-review{margin:0 0 12px;}" +
+
+  // --- #6 Плитки статистики: тёплая подсветка под тип + рамка в цвет ---
+  "#" + WIN_ID + " .cd-dt-read{background:color-mix(in srgb,#89b4fa 8%,var(--panel));border-color:color-mix(in srgb,#89b4fa 24%,var(--bd));}" +
+  "#" + WIN_ID + " .cd-dt-solve{background:color-mix(in srgb,#a6e3a1 8%,var(--panel));border-color:color-mix(in srgb,#a6e3a1 24%,var(--bd));}" +
+  "#" + WIN_ID + " .cd-dt-streak{background:color-mix(in srgb,#fab387 9%,var(--panel));border-color:color-mix(in srgb,#fab387 26%,var(--bd));}" +
+  "#" + WIN_ID + " .cd-dt-streak .cd-dt-v{color:#fab387;}" +
+  "#" + WIN_ID + ".light .cd-dt-streak .cd-dt-v{color:#e8590c;}" +
+
+  // --- #7 Живой маскот: мягкое «дыхание» (глушится общим reduced-motion правилом) ---
+  "@keyframes cd-bob{0%,100%{transform:rotate(-5deg) translateY(0);}50%{transform:rotate(-5deg) translateY(-4px);}}" +
+  "#" + WIN_ID + " .cd-home-mascot .cd-sticker{animation:cd-bob 3.6s ease-in-out infinite;}" +
+  "#" + WIN_ID + " .cd-home-mascot:hover .cd-sticker{animation:none;transform:rotate(0) scale(1.05);}" +
+
+  // --- #13 Единый язык кнопок: общий фокус-ринг + тактильное нажатие для шапки и читалки ---
+  "#" + WIN_ID + " .cd-hbtn,#" + WIN_ID + " .cd-rbtn{transition:background .12s,border-color .12s,color .12s,box-shadow .12s,transform .08s;}" +
+  "#" + WIN_ID + " .cd-hbtn:active,#" + WIN_ID + " .cd-rbtn:active{transform:translateY(1px) scale(.97);}" +
+  "#" + WIN_ID + " .cd-hbtn:focus-visible,#" + WIN_ID + " .cd-rbtn:focus-visible{outline:none;box-shadow:0 0 0 2px var(--bg),0 0 0 4px rgba(var(--ac-rgb),.55);}" +
+
+  // --- #10 Микро-праздник: искры + пульс кнопки при «изучено/решено» ---
+  "@keyframes cd-spark-fly{0%{opacity:1;transform:translate(-50%,-50%) scale(1) rotate(0);}" +
+  "100%{opacity:0;transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) scale(.35) rotate(var(--dr));}}" +
+  ".cd-spark{position:fixed;z-index:2147483600;width:7px;height:7px;border-radius:2px;pointer-events:none;" +
+  "transform:translate(-50%,-50%);animation:cd-spark-fly .68s cubic-bezier(.2,.7,.3,1) forwards;}" +
+  "@keyframes cd-pulse{0%{transform:scale(1);}45%{transform:scale(1.16);}100%{transform:scale(1);}}" +
+  "#" + WIN_ID + " .cd-pulse{animation:cd-pulse .42s ease;}" +
+
+  // --- #17 Скелет-загрузка (когда источник данных есть, но материалы ещё не пришли) ---
+  "@keyframes cd-shine{0%{background-position:-320px 0;}100%{background-position:320px 0;}}" +
+  "#" + WIN_ID + " .cd-skel-b{background:linear-gradient(90deg,var(--bd2) 25%,var(--hl) 50%,var(--bd2) 75%);background-size:320px 100%;animation:cd-shine 1.2s linear infinite;border-radius:10px;}" +
+  "#" + WIN_ID + " .cd-skel-hero{height:92px;margin-bottom:16px;border-radius:18px;}" +
+  "#" + WIN_ID + " .cd-skel-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:18px;}" +
+  "#" + WIN_ID + " .cd-skel-tile{height:74px;border-radius:12px;}" +
+  "#" + WIN_ID + " .cd-skel-line{height:14px;margin:10px 0;}" +
+  "#" + WIN_ID + " .cd-skel-line.w40{width:40%;}#" + WIN_ID + " .cd-skel-line.w60{width:60%;}#" + WIN_ID + " .cd-skel-line.w80{width:80%;}" +
+  "#" + WIN_ID + " .cd-skel-note{margin-top:16px;text-align:center;font-size:12px;color:var(--faint);}" +
+  "#" + WIN_ID + " .cd-skel-nav{padding:6px 8px;}#" + WIN_ID + " .cd-skel-nav .cd-skel-b{height:34px;margin:8px 0;border-radius:9px;}" +
+
+  // --- #20 Бренд-росчерк: рисованная подчёркивающая линия у заголовков секций ---
+  "#" + WIN_ID + " .cd-home-sec{border-bottom-color:transparent;}" +
+  "#" + WIN_ID + " .cd-home-sec .cd-sec-lbl{position:relative;}" +
+  "#" + WIN_ID + " .cd-home-sec .cd-sec-lbl::after{content:'';position:absolute;left:0;bottom:-7px;width:1.7em;height:3px;border-radius:3px;" +
+  "background:linear-gradient(90deg,var(--sc,var(--ac)),color-mix(in srgb,var(--sc,var(--ac)) 40%,transparent));transform:rotate(-.7deg);}" +
+  "#" + WIN_ID + " .cd-home-sec .cd-sec-dot{box-shadow:0 0 0 4px color-mix(in srgb,var(--sc,var(--ac)) 16%,transparent);}" +
+
+  // =====================================================================
+  //  ДИЗАЙН-ПОЛИРОВКА, часть 2 (2026-09-20): #3, #4, #8, #9, #12.
+  // =====================================================================
+
+  // --- #3 Ссылки в статье: заметнее (лёгкое подчёркивание в покое) + чистый ховер ---
+  "#" + WIN_ID + " .cd-article a{border-bottom:1px solid color-mix(in srgb,var(--ac) 22%,transparent);transition:color .12s,border-color .12s;}" +
+  "#" + WIN_ID + " .cd-article a:hover{border-bottom-color:var(--ac);color:var(--ac2);}" +
+
+  // --- #4 Таблицы: рамка со скруглением, зебра, чёткий ховер строки ---
+  "#" + WIN_ID + " .cd-article table{border:1px solid var(--bd);border-radius:10px;overflow:hidden;box-shadow:var(--sh1);}" +
+  "#" + WIN_ID + " .cd-article tbody tr:nth-child(even){background:color-mix(in srgb,var(--fg) 3.5%,transparent);}" +
+  "#" + WIN_ID + " .cd-article tbody tr:hover{background:color-mix(in srgb,var(--ac) 10%,transparent);}" +
+  "#" + WIN_ID + " .cd-article th{border-bottom:1px solid var(--bd);}" +
+
+  // --- #8 Карточка «Продолжить/Следующий шаг» — главный акцент экрана ---
+  "#" + WIN_ID + " .cd-home-cont{padding:18px 22px;border-color:rgba(var(--ac-rgb),.48);" +
+  "background:linear-gradient(135deg,rgba(var(--ac-rgb),.24),rgba(var(--ac-rgb),.06));box-shadow:var(--sh1);}" +
+  "#" + WIN_ID + " .cd-home-cont .cd-hc-title{font-size:19px;}" +
+  "#" + WIN_ID + " .cd-home-cont .cd-hc-arrow{width:36px;height:36px;font-size:20px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(var(--ac-rgb),.18);opacity:1;}" +
+  "#" + WIN_ID + " .cd-home-cont:hover .cd-hc-arrow{background:var(--ac);color:#11111b;transform:translateX(3px);}" +
+
+  // --- #9 Единый ритм секций: счётчик красится в цвет секции (как точка и росчерк) ---
+  "#" + WIN_ID + " .cd-home-sec .cd-sec-count{opacity:1;font-weight:700;background:color-mix(in srgb,var(--sc,var(--ac)) 16%,transparent);color:color-mix(in srgb,var(--sc,var(--ac)) 70%,var(--fg));}" +
+
+  // --- #12 Активный пункт рейки «На странице»: мягкое свечение + акцентная планка ---
+  "#" + WIN_ID + " .cd-ol{transition:background .12s,color .12s,border-color .12s,box-shadow .12s;}" +
+  "#" + WIN_ID + " .cd-ol.active{border-left-width:3px;background:color-mix(in srgb,var(--ac) 13%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ac) 16%,transparent);}" +
+
+  // --- Сворачивание разделов (## ) прямо в читалке ---
+  "#" + WIN_ID + " .cd-article h2.cd-foldable{cursor:pointer;}" +
+  "#" + WIN_ID + " .cd-fold-caret{display:inline-block;font-size:.58em;color:var(--faint);margin-right:.5em;transform:translateY(-2px);transition:transform .15s,color .12s;}" +
+  "#" + WIN_ID + " .cd-article h2.cd-foldable:hover .cd-fold-caret{color:var(--ac);}" +
+  "#" + WIN_ID + " .cd-article h2.cd-sec-folded .cd-fold-caret{transform:rotate(-90deg);}" +
+  "#" + WIN_ID + " .cd-article h2.cd-sec-folded{border-bottom-style:dashed;}" +
+  "#" + WIN_ID + " .cd-fold-hidden{display:none!important;}";
 
   // ---------------------------------------------------------------------------
   //  Построение окна.
@@ -1237,6 +1689,11 @@
   var rprogFill = null;      // заполнение полосы прогресса чтения
   var noResultEl = null;     // «ничего не найдено» под поиском
   var readBtn = null;
+  var copyDocBtn = null;     // «копировать весь материал» в шапке читалки
+  var toTopBtn = null;       // плавающая кнопка «наверх» в области чтения
+  var findBtn = null, findBar = null, findInput = null, findCountEl = null;  // поиск по тексту материала
+  var findHits = [], findIdx = -1;   // найденные <mark> и текущий
+  var reviewEl = null, reviewQueue = [], reviewPos = 0, reviewOk = 0;  // сессия повторения карточек
   var backBtn = null, fwdBtn = null;     // навигация по истории переходов
   var fillEl = null, ptextEl = null, continueBtn = null;
   var current = null;        // текущий файл (объект из data)
@@ -1361,7 +1818,16 @@
     homeBtn = el("button", null, "⌂ Главная"); homeBtn.className = "cd-rbtn"; homeBtn.type = "button";
     homeBtn.title = "На главную (приветствие и быстрый доступ)";
     homeBtn.addEventListener("click", function () { showHome(); });
-    rbar.appendChild(titleEl); rbar.appendChild(homeBtn); rbar.appendChild(viewWrap); rbar.appendChild(tocBtn); rbar.appendChild(readBtn);
+    // «Копировать весь материал» — исходный Markdown текущего файла в буфер обмена.
+    copyDocBtn = el("button", null, "⧉"); copyDocBtn.className = "cd-rbtn cd-file-only"; copyDocBtn.type = "button";
+    copyDocBtn.title = "Копировать весь материал (Markdown)";
+    copyDocBtn.setAttribute("aria-label", "Копировать весь материал");
+    copyDocBtn.addEventListener("click", function () { copyWholeDoc(copyDocBtn); });
+    // «Найти в тексте» — открывает панель поиска по открытому материалу.
+    findBtn = el("button", null, "⌕"); findBtn.className = "cd-rbtn cd-file-only"; findBtn.type = "button";
+    findBtn.title = "Найти в этом материале"; findBtn.setAttribute("aria-label", "Найти в материале");
+    findBtn.addEventListener("click", function () { toggleFind(); });
+    rbar.appendChild(titleEl); rbar.appendChild(homeBtn); rbar.appendChild(viewWrap); rbar.appendChild(tocBtn); rbar.appendChild(findBtn); rbar.appendChild(copyDocBtn); rbar.appendChild(readBtn);
     reader.appendChild(rbar);
 
     // тонкая полоса прогресса чтения текущего файла
@@ -1378,6 +1844,34 @@
     outlineEl = el("nav", null); outlineEl.className = "cd-outline";
     outlineEl.setAttribute("aria-label", "Оглавление файла");
     rmain.appendChild(outlineEl);
+
+    // Панель поиска по тексту материала (плавает вверху справа над статьёй).
+    findBar = el("div", null); findBar.className = "cd-find"; findBar.hidden = true;
+    findInput = el("input"); findInput.type = "text"; findInput.className = "cd-find-in";
+    findInput.placeholder = "Найти в материале…"; findInput.setAttribute("aria-label", "Найти в материале");
+    findCountEl = el("span", null, ""); findCountEl.className = "cd-find-n";
+    var findPrev = el("button", null, "↑"); findPrev.type = "button"; findPrev.className = "cd-find-b"; findPrev.title = "Предыдущее (Shift+Enter)";
+    var findNext = el("button", null, "↓"); findNext.type = "button"; findNext.className = "cd-find-b"; findNext.title = "Следующее (Enter)";
+    var findX = el("button", null, "✕"); findX.type = "button"; findX.className = "cd-find-b"; findX.title = "Закрыть (Esc)";
+    findBar.appendChild(findInput); findBar.appendChild(findCountEl);
+    findBar.appendChild(findPrev); findBar.appendChild(findNext); findBar.appendChild(findX);
+    findInput.addEventListener("input", function () { findRun(findInput.value); });
+    findInput.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { e.preventDefault(); findStep(e.shiftKey ? -1 : 1); }
+      else if (e.key === "Escape") { e.preventDefault(); toggleFind(false); }
+    });
+    findPrev.addEventListener("click", function () { findStep(-1); findInput.focus(); });
+    findNext.addEventListener("click", function () { findStep(1); findInput.focus(); });
+    findX.addEventListener("click", function () { toggleFind(false); });
+    rmain.appendChild(findBar);
+
+    // Плавающая кнопка «наверх» — появляется, когда статья прокручена далеко вниз.
+    toTopBtn = el("button", null, "↑"); toTopBtn.className = "cd-totop"; toTopBtn.type = "button";
+    toTopBtn.title = "Наверх"; toTopBtn.setAttribute("aria-label", "Наверх"); toTopBtn.hidden = true;
+    toTopBtn.addEventListener("click", function () {
+      if (contentEl) { try { contentEl.scrollTo({ top: 0, behavior: "smooth" }); } catch (e) { contentEl.scrollTop = 0; } }
+    });
+    rmain.appendChild(toTopBtn);
 
     // второй документ рядом (сплит) — свой заголовок + прокручиваемая статья
     splitEl = el("div", null); splitEl.className = "cd-split"; splitEl.hidden = true;
@@ -1396,6 +1890,11 @@
     // главный экран (приветствие) — оверлей поверх области чтения
     homeEl = el("div", null); homeEl.className = "cd-home"; homeEl.hidden = true;
     rmain.appendChild(homeEl);
+
+    // оверлей режима повторения карточек (#3) — поверх области чтения, как главный экран
+    reviewEl = el("div", null); reviewEl.className = "cd-review"; reviewEl.hidden = true;
+    reviewEl.addEventListener("click", onReviewClick);
+    rmain.appendChild(reviewEl);
 
     reader.appendChild(rmain);
     body.appendChild(reader);
@@ -1514,6 +2013,8 @@
     itemEls = [];
     var groups = groupsFromData();
     if (!groups.length) {
+      // Источник данных есть, но список ещё пуст — скелет вместо «материалов нет».
+      if (hasDataSource()) { navListEl.innerHTML = skelNavHtml(); return; }
       var emptyBox = el("div", null); emptyBox.className = "cd-empty";
       emptyBox.innerHTML = '<div class="cd-empty-art">' + stickerMarkup("mascot-sleep", 92) + '</div>' +
         '<div class="cd-empty-t">Материалов пока нет</div>' +
@@ -1609,6 +2110,39 @@
     if (continueBtn) continueBtn.disabled = done >= total;
   }
 
+  // #10 Микро-праздник: короткий залп искр у элемента + пульс самого элемента.
+  // Тактичный (10 частиц, ~0.7 c), глушится при prefers-reduced-motion.
+  function prefersReducedMotion() {
+    try { return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) { return false; }
+  }
+  function celebrate(anchor, tint) {
+    try {
+      if (!anchor || !anchor.getBoundingClientRect || prefersReducedMotion()) return;
+      var r = anchor.getBoundingClientRect();
+      if (!r.width && !r.height) return;
+      var cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      var colors = tint || ["#a6e3a1", "#f9e2af", "#89b4fa", "#f38ba8", "#cba6f7"];
+      var n = 10;
+      for (var i = 0; i < n; i++) {
+        var s = el("div"); s.className = "cd-spark";
+        var ang = (Math.PI * 2 * i) / n + (Math.random() - 0.5) * 0.6;
+        var dist = 26 + Math.random() * 26;
+        s.style.left = cx + "px"; s.style.top = cy + "px";
+        s.style.background = colors[i % colors.length];
+        s.style.setProperty("--dx", (Math.cos(ang) * dist).toFixed(1) + "px");
+        s.style.setProperty("--dy", (Math.sin(ang) * dist - 10).toFixed(1) + "px");
+        s.style.setProperty("--dr", Math.round(Math.random() * 220 - 110) + "deg");
+        document.body.appendChild(s);
+        (function (node) { setTimeout(function () { if (node.parentNode) node.parentNode.removeChild(node); }, 720); })(s);
+      }
+    } catch (e) {}
+  }
+  function pulse(elm) {
+    if (!elm || !elm.classList || prefersReducedMotion()) return;
+    elm.classList.remove("cd-pulse"); void elm.offsetWidth; elm.classList.add("cd-pulse");
+    setTimeout(function () { if (elm.classList) elm.classList.remove("cd-pulse"); }, 440);
+  }
+
   function toggleRead(rel) {
     if (state.read[rel]) delete state.read[rel]; else state.read[rel] = true;
     recordActivity();
@@ -1621,6 +2155,11 @@
     }
     if (current && current.rel === rel) syncReadBtn();
     updateProgress();
+    // Праздник только при постановке отметки (не при снятии).
+    if (state.read[rel]) {
+      var anc = (current && current.rel === rel && readBtn) ? readBtn : it;
+      if (anc) { celebrate(anc); pulse(anc); }
+    }
   }
   function togglePin(rel) {
     if (state.pins[rel]) delete state.pins[rel]; else state.pins[rel] = true;
@@ -1711,7 +2250,7 @@
       b.setAttribute("data-slug", h.slug);
       b.addEventListener("click", function () {
         var t = articleEl.querySelector('[id="' + cssEscape(h.slug) + '"]');
-        if (t) { t.scrollIntoView({ block: "start" }); flashHeading(t); }
+        if (t) { unfoldContaining(t); t.scrollIntoView({ block: "start" }); flashHeading(t); }
       });
       outlineEl.appendChild(b);
     });
@@ -1740,8 +2279,40 @@
     curHeadings = [];
     if (!articleEl) return;
     articleEl.querySelectorAll("h2[id],h3[id]").forEach(function (h) {
-      curHeadings.push({ el: h, slug: h.id, text: h.textContent });
+      curHeadings.push({ el: h, slug: h.id, text: h.getAttribute("data-title") || h.textContent });
     });
+  }
+
+  // ------- сворачивание разделов (## ) прямо в читалке -------
+  // Клик по заголовку раздела скрывает его содержимое до следующего ## — длинный
+  // материал становится обозримым. Состояние живёт в пределах открытой страницы
+  // (перерисовка разворачивает всё заново). Заголовки задач (cd-task) не трогаем.
+  function foldSectionEls(h2) {
+    var out = [], n = h2.nextElementSibling;
+    while (n && n.tagName !== "H2") { out.push(n); n = n.nextElementSibling; }
+    return out;
+  }
+  function setFold(h2, folded) {
+    h2.classList.toggle("cd-sec-folded", folded);
+    foldSectionEls(h2).forEach(function (node) { node.classList.toggle("cd-fold-hidden", folded); });
+  }
+  function wireFolding() {
+    if (!articleEl) return;
+    articleEl.querySelectorAll("h2[id]").forEach(function (h2) {
+      if (h2.classList.contains("cd-task") || h2.querySelector(".cd-fold-caret")) return;
+      var caret = el("span", null, "▾"); caret.className = "cd-fold-caret"; caret.setAttribute("aria-hidden", "true");
+      h2.insertBefore(caret, h2.firstChild);
+      h2.classList.add("cd-foldable");
+    });
+  }
+  // Раздел, которому принадлежит элемент, развернуть (чтобы переход по оглавлению/
+  // ссылке не упирался в скрытый якорь).
+  function unfoldContaining(target) {
+    if (!target || !articleEl) return;
+    var node = target;
+    while (node && node.parentElement && node.parentElement !== articleEl) node = node.parentElement;
+    var p = node;
+    while (p) { if (p.tagName === "H2") { if (p.classList.contains("cd-sec-folded")) setFold(p, false); return; } p = p.previousElementSibling; }
   }
   var _scrollSaveTimer = null;
   function onContentScroll() {
@@ -1749,6 +2320,7 @@
     var max = contentEl.scrollHeight - contentEl.clientHeight;
     var pct = max > 0 ? contentEl.scrollTop / max : 0;
     if (rprogFill) rprogFill.style.width = Math.round(clamp(pct, 0, 1) * 100) + "%";
+    if (toTopBtn) toTopBtn.hidden = contentEl.scrollTop < 400;
     updateActiveHeading();
     if (current) {
       clearTimeout(_scrollSaveTimer);
@@ -2000,7 +2572,7 @@
     var box = splitArticle.parentNode;
     if (hash) {
       var t = splitArticle.querySelector('[id="' + cssEscape(decodeURIComponent(String(hash).replace(/^#/, ""))) + '"]');
-      if (t) { t.scrollIntoView({ block: "start" }); return; }
+      if (t) { unfoldContaining(t); t.scrollIntoView({ block: "start" }); return; }
     }
     if (box) box.scrollTop = 0;
   }
@@ -2043,12 +2615,37 @@
     if (f.sections) parts.push(f.sections + " " + plural(f.sections, ["раздел", "раздела", "разделов"]));
     return parts.join(" · ");
   }
+  // #17 Есть ли откуда грузить материалы (data/stamp-файл). Если да, но файлов ещё нет —
+  // показываем скелет-заглушку («грузится»), а не пугающее «не найдено / проверь путь».
+  function hasDataSource() {
+    try {
+      var d = DATA();
+      return !!((d && (d.dataUrl || d.stampUrl)) || bootVal("dataUrl") || bootVal("stampUrl"));
+    } catch (e) { return false; }
+  }
+  function skelHomeHtml() {
+    return '<div class="cd-home-inner">' +
+      '<div class="cd-skel-b cd-skel-hero"></div>' +
+      '<div class="cd-skel-tiles"><div class="cd-skel-b cd-skel-tile"></div><div class="cd-skel-b cd-skel-tile"></div><div class="cd-skel-b cd-skel-tile"></div></div>' +
+      '<div class="cd-skel-b cd-skel-line w40"></div>' +
+      '<div class="cd-skel-b cd-skel-line w80"></div>' +
+      '<div class="cd-skel-b cd-skel-line w60"></div>' +
+      '<div class="cd-skel-note">Загружаю материалы…</div></div>';
+  }
+  function skelNavHtml() {
+    var rows = "";
+    for (var i = 0; i < 6; i++) rows += '<div class="cd-skel-b"></div>';
+    return '<div class="cd-skel-nav">' + rows + "</div>";
+  }
+
   function buildHome() {
     if (!homeEl) return;
     var d = DATA();
     // Данные не загрузились (нет файла данных / пустой список) — дружелюбная заглушка
     // с наклейкой вместо пустого экрана.
     if (!d || !d.files.length) {
+      // Источник данных есть, но материалы ещё не пришли — скелет вместо «не найдено».
+      if (hasDataSource()) { homeEl.innerHTML = skelHomeHtml(); return; }
       homeEl.innerHTML = '<div class="cd-home-inner"><div class="cd-empty cd-empty-home">' +
         '<div class="cd-empty-art">' + stickerMarkup("mascot-sleep", 118) + '</div>' +
         '<div class="cd-empty-t">Материалы не загрузились</div>' +
@@ -2058,20 +2655,58 @@
     }
     var total = d.files.length, done = 0;
     d.files.forEach(function (f) { if (state.read[f.rel]) done++; });
-    var pct = total ? Math.round(done / total * 100) : 0;
     var allDone = done >= total && total > 0;   // весь справочник пройден — время поздравить
     var hi = done > 0 ? "С возвращением!" : "Привет!";
     var sub = greeting() + (done > 0 ? " · продолжаем учить C++" : " · документация C++ у тебя под рукой");
 
-    var mood = allDone ? "mascot-done" : (done > 0 ? "mascot-think" : "mascot-hi");   // маскот: машет → думает → празднует
+    var ts = taskStats(), streak = streakDays(), cc = cardCounts();
+    var pct = total ? Math.round((done / total) * 100) : 0;
+    // Новые наклейки (mascot-win / cards-review) могут быть ещё не сгенерированы —
+    // аккуратно падаем на уже существующие, чтобы экран не показывал заглушку.
+    var winMood = (typeof STICKERS !== "undefined" && STICKERS && STICKERS["mascot-win"]) ? "mascot-win" : "mascot-done";
+    var revArt = (typeof STICKERS !== "undefined" && STICKERS && STICKERS["cards-review"]) ? "cards-review" : "icon-cheat";
+    // #8 маскот меняет настроение: победа (всё пройдено / длинная серия) → думает → машет
+    var mood = (allDone || streak >= 7) ? winMood : (done > 0 ? "mascot-think" : "mascot-hi");
+
+    // #8 кольцо прогресса вокруг маскота (SVG). C = длина окружности радиуса 46.
+    var C = 289, off = Math.round(C * (1 - pct / 100));
+    var ring = '<svg class="cd-ring" viewBox="0 0 100 100" aria-hidden="true">' +
+      '<circle class="cd-ring-bg" cx="50" cy="50" r="46"/>' +
+      '<circle class="cd-ring-fg" cx="50" cy="50" r="46" style="stroke-dasharray:' + C + ';stroke-dashoffset:' + off + '"/></svg>';
+
+    // Плитки статистики теперь живут в самой шапке справа (dashTile определён ниже — поднимается
+    // хойстингом). Это заполняет пустое место героя на широком окне и укорачивает экран.
+    var statsHtml =
+      dashTile("📘", "read", done + " / " + total, "изучено", total ? done / total : 0) +
+      dashTile("✅", "solve", ts.done + " / " + ts.total, "решено", ts.total ? ts.done / ts.total : 0) +
+      dashTile("🔥", "streak", String(streak), plural(streak, ["день", "дня", "дней"]) + " подряд", null);
 
     var html = '<div class="cd-home-inner">';
     html += '<div class="cd-home-hero">' +
-      '<div class="cd-home-mascot">' + stickerMarkup(mood, 92) + '</div>' +
+      '<div class="cd-hero-lead">' +
+      '<div class="cd-home-mascot cd-has-ring">' + ring + '<span class="cd-ring-in">' + stickerMarkup(mood, 76) + '</span></div>' +
       '<div class="cd-home-htxt"><div class="cd-home-hi">' + escapeHtml(hi) + '</div>' +
-      '<div class="cd-home-sub">' + escapeHtml(sub) + '</div></div></div>';
+      '<div class="cd-home-sub">' + escapeHtml(sub) + '</div>' +
+      (cc.due > 0 ? '<div class="cd-home-status">🎴 к повторению ' + cc.due + " " + plural(cc.due, ["карточка", "карточки", "карточек"]) + "</div>" : "") +
+      "</div></div>" +
+      '<div class="cd-hero-stats">' + statsHtml + "</div></div>";
 
-    // Дашборд: изучено / решено / серия — с живыми мини-полосками
+    // #2 Поиск по всем материалам прямо на главной
+    html += '<div class="cd-home-search"><span class="cd-hs-ic" aria-hidden="true">⌕</span>' +
+      '<input class="cd-hs-in" type="text" placeholder="Поиск по всем материалам…" aria-label="Поиск по материалам" autocomplete="off">' +
+      '<div class="cd-hs-res" hidden></div></div>';
+
+    // #10 «Что нового» — разовый баннер о свежих возможностях
+    if (state.whatsnew !== WHATSNEW) {
+      html += '<div class="cd-whatsnew"><div class="cd-wn-h">✨ Что нового</div>' +
+        '<ul class="cd-wn-list">' +
+        '<li>Поиск <b>внутри материала</b> — кнопка «⌕» в шапке читалки</li>' +
+        '<li><b>Закладки</b> на разделы — звёздочка ☆ у заголовка</li>' +
+        '<li><b>Повторение карточек</b> и «Следующий шаг» — прямо на этом экране</li>' +
+        '</ul><button class="cd-wn-ok" type="button">Понятно</button></div>';
+    }
+
+    // Плитка статистики (используется в шапке героя). frac=null — без мини-полоски.
     function dashTile(ic, kind, value, label, frac) {
       var bar = (frac != null)
         ? '<div class="cd-dt-bar"><i style="width:' + Math.max(0, Math.min(100, Math.round(frac * 100))) + '%"></i></div>' : '';
@@ -2079,33 +2714,55 @@
         '<div class="cd-dt-v">' + escapeHtml(value) + '</div>' +
         '<div class="cd-dt-l">' + escapeHtml(label) + '</div>' + bar + '</div>';
     }
-    var ts = taskStats(), streak = streakDays();
-    html += '<div class="cd-dash">' +
-      dashTile("📘", "read", done + " / " + total, "изучено тем", total ? done / total : 0) +
-      dashTile("✅", "solve", ts.done + " / " + ts.total, "решено задач", ts.total ? ts.done / ts.total : 0) +
-      dashTile("🔥", "streak", String(streak), plural(streak, ["день", "дня", "дней"]) + " подряд") +
-      "</div>";
+
+    // #9 Панель быстрых действий — запуск в один тап
+    var qab = '<button class="cd-qa cd-qa-cont" type="button">▶ Продолжить</button>';
+    if (ts.total) qab += '<button class="cd-qa cd-qa-rand" type="button">🎲 Случайная задача</button>';
+    if (cc.due + cc.neu > 0) qab += '<button class="cd-qa cd-qa-rev" type="button">🎴 Повторить' + (cc.due ? " · " + cc.due : "") + "</button>";
+    qab += '<button class="cd-qa cd-qa-find" type="button">⌕ Найти</button>';
+    html += '<div class="cd-qabar">' + qab + "</div>";
+
+    // #3 Заметная карточка повторения (если есть что повторять)
+    if (cc.due + cc.neu > 0) {
+      var rlbl = cc.due > 0
+        ? "К повторению: " + cc.due + " " + plural(cc.due, ["карточка", "карточки", "карточек"])
+        : cc.neu + " " + plural(cc.neu, ["новая карточка", "новые карточки", "новых карточек"]);
+      html += '<button class="cd-home-review" type="button">' +
+        '<div class="cd-hr-art">' + stickerMarkup(revArt, 46) + "</div>" +
+        '<div class="cd-hc-main"><div class="cd-hc-lbl">🎴 Повторение</div>' +
+        '<div class="cd-hc-title">' + escapeHtml(rlbl) + "</div>" +
+        '<div class="cd-hc-meta">' + (cc.due > 0 && cc.neu > 0 ? "и " + cc.neu + " новых · интервальное повторение" : "интервальное повторение") + "</div></div>" +
+        '<div class="cd-hc-arrow">→</div></button>';
+    }
 
     if (allDone) {
       // Весь справочник пройден — вместо «Продолжить» поздравляем наклейкой.
       html += '<div class="cd-home-done">' +
-        '<div class="cd-done-art">' + stickerMarkup("mascot-done", 62) + '</div>' +
+        '<div class="cd-done-art">' + stickerMarkup(winMood, 62) + '</div>' +
         '<div class="cd-hc-main"><div class="cd-hc-lbl">Готово</div>' +
         '<div class="cd-hc-title">Всё изучено — ' + total + ' ' + plural(total, ["материал", "материала", "материалов"]) + '!</div>' +
         '<div class="cd-hc-meta">Можно перечитывать любой материал или сбросить прогресс и пройти заново.</div></div></div>';
     } else {
-      // Продолжить (последний открытый) либо предложить старт
+      // #1 Умный «Следующий шаг»: незакрытая последняя тема → продолжить; иначе первая
+      // неизученная по порядку курса; в самом начале — «Начать здесь».
       var lastF = state.last ? lookupFile(state.last) : null;
-      var contF = lastF || findFile(/00-нач|начни/i) || d.files[0];
-      if (contF) {
-        var m = metaOf(contF);
-        html += '<button class="cd-home-cont" data-rel="' + escapeHtml(contF.rel) + '">' +
-          '<div class="cd-hc-main">' +
-          '<div class="cd-hc-lbl">' + (lastF ? "▶ Продолжить чтение" : "▶ Начать здесь") + '</div>' +
-          '<div class="cd-hc-title">' + escapeHtml(contF.title || contF.name) + '</div>' +
-          (m ? '<div class="cd-hc-meta">' + escapeHtml(m) + '</div>' : '') +
-          '</div><div class="cd-hc-arrow">→</div>' +
-          '</button>';
+      var nF = nextUnread();
+      var primary, lbl, reason;
+      if (lastF && !state.read[lastF.rel]) { primary = lastF; lbl = "▶ Продолжить чтение"; reason = "вернуться к последней теме"; }
+      else if (nF) { primary = nF; lbl = "▶ Следующий шаг"; reason = "следующая неизученная тема"; }
+      else { primary = lastF || findFile(/00-нач|начни/i) || d.files[0]; lbl = "▶ Начать здесь"; reason = ""; }
+      if (primary) {
+        var meta = [reason, metaOf(primary)].filter(function (x) { return x; }).join(" · ");
+        html += '<button class="cd-home-cont" data-rel="' + escapeHtml(primary.rel) + '">' +
+          '<div class="cd-hc-main"><div class="cd-hc-lbl">' + lbl + '</div>' +
+          '<div class="cd-hc-title">' + escapeHtml(primary.title || primary.name) + '</div>' +
+          (meta ? '<div class="cd-hc-meta">' + escapeHtml(meta) + '</div>' : '') +
+          '</div><div class="cd-hc-arrow">→</div></button>';
+        // Подсказка «дальше по курсу», если следующий неизученный отличается от primary
+        if (nF && nF.rel !== primary.rel) {
+          html += '<button class="cd-home-next" data-rel="' + escapeHtml(nF.rel) + '">Дальше по курсу: <b>' +
+            escapeHtml(nF.title || nF.name) + "</b> →</button>";
+        }
       }
     }
 
@@ -2118,15 +2775,54 @@
       { re: /zadachnik|задачник/i, t: "Задачник", s: "задачи для практики — реши сам", icon: "icon-tasks" },
       { re: /^examples\//i, t: "Примеры программ", s: "готовый код — собран и запущен", icon: "icon-examples" }
     ];
-    var cards = "";
+    // Единый заголовок секции: цветная точка + подпись + счётчик — общий ритм для всех блоков.
+    function secHead(label, count, color) {
+      return '<div class="cd-home-sec"' + (color ? ' style="--sc:' + color + '"' : "") + ">" +
+        '<span class="cd-sec-dot"></span><span class="cd-sec-lbl">' + escapeHtml(label) + "</span>" +
+        (count != null ? '<span class="cd-sec-count">' + count + "</span>" : "") + "</div>";
+    }
+    var cards = "", quickN = 0;
     quick.forEach(function (q) {
       var f = findFile(q.re); if (!f) return;
+      quickN++;
       var ic = (q.icon && STICKERS && STICKERS[q.icon]) ? '<span class="cd-hcard-ic">' + stickerMarkup(q.icon, 32) + "</span>" : "";
       cards += '<button class="cd-home-card" data-rel="' + escapeHtml(f.rel) + '" style="--gcolor:' + escapeHtml(f.groupColor || "var(--ac)") + '">' +
         '<div class="cd-hcard-head">' + ic + '<div class="cd-hcard-t">' + escapeHtml(q.t) + "</div></div>" +
-        '<div class="cd-hcard-s">' + escapeHtml(f.subtitle || q.s) + "</div></button>";
+        '<div class="cd-hcard-s">' + escapeHtml(f.subtitle || q.s) + "</div>" +
+        '<span class="cd-hcard-go">→</span></button>';
     });
-    if (cards) html += '<div class="cd-home-sec">Быстрый доступ</div><div class="cd-home-grid">' + cards + '</div>';
+    if (cards) html += secHead("Быстрый доступ", quickN, "var(--ac)") + '<div class="cd-home-grid">' + cards + "</div>";
+
+    // Недавнее (кроме файла из «Продолжить», чтобы не дублировать)
+    var recentRels = (state.recent || []).filter(function (r) {
+      return lookupFile(r) && String(r).toLowerCase() !== String(state.last || "").toLowerCase();
+    });
+    if (recentRels.length) {
+      var rchips = "";
+      recentRels.slice(0, 8).forEach(function (r) {
+        var rf = lookupFile(r);
+        rchips += '<button class="cd-home-chip" data-rel="' + escapeHtml(rf.rel) + '" style="--gcolor:' +
+          escapeHtml(rf.groupColor || "var(--ac)") + '">' + escapeHtml(rf.title || rf.name) + "</button>";
+      });
+      html += secHead("Недавнее", recentRels.length, "#f9e2af") + '<div class="cd-home-chips">' + rchips + "</div>";
+    }
+
+    // Закладки на разделы (если есть) — клик ведёт прямо к разделу
+    var markKeys = Object.keys(state.marks || {}).filter(function (k) {
+      return lookupFile(String(k).split("#")[0]);
+    });
+    if (markKeys.length) {
+      var mchips = "";
+      markKeys.slice(0, 16).forEach(function (k) {
+        var parts = String(k).split("#"), rel = parts[0], slug = parts.slice(1).join("#");
+        var mf = lookupFile(rel);
+        var label = state.marks[k] || (mf && (mf.title || mf.name)) || rel;
+        mchips += '<button class="cd-home-chip cd-home-mark" data-rel="' + escapeHtml(mf.rel) +
+          '" data-hash="#' + escapeHtml(slug) + '" style="--gcolor:' + escapeHtml(mf.groupColor || "var(--ac)") +
+          '" title="' + escapeHtml((mf.title || mf.name) + " · раздел") + '">★ ' + escapeHtml(label) + "</button>";
+      });
+      html += secHead("Закладки", markKeys.length, "#cba6f7") + '<div class="cd-home-chips">' + mchips + "</div>";
+    }
 
     // Закреплённое (если есть)
     var pinRels = Object.keys(state.pins || {}).filter(function (r) { return state.pins[r] && lookupFile(r); });
@@ -2136,7 +2832,7 @@
         var f = lookupFile(r);
         chips += '<button class="cd-home-chip" data-rel="' + escapeHtml(f.rel) + '" style="--gcolor:' + escapeHtml(f.groupColor || "var(--ac)") + '">' + escapeHtml(f.title || f.name) + '</button>';
       });
-      html += '<div class="cd-home-sec">Закреплённое</div><div class="cd-home-chips">' + chips + '</div>';
+      html += secHead("Закреплённое", pinRels.length, "#f38ba8") + '<div class="cd-home-chips">' + chips + "</div>";
     }
     html += '</div>';
     homeEl.innerHTML = html;
@@ -2148,11 +2844,66 @@
     });
 
     homeEl.querySelectorAll("[data-rel]").forEach(function (b) {
-      b.addEventListener("click", function () { openFile(b.getAttribute("data-rel")); });
+      b.addEventListener("click", function () { openFile(b.getAttribute("data-rel"), b.getAttribute("data-hash") || undefined); });
     });
+
+    // #9 быстрые действия
+    var cont = homeEl.querySelector(".cd-home-cont");
+    var qaCont = homeEl.querySelector(".cd-qa-cont");
+    if (qaCont) qaCont.addEventListener("click", function () {
+      if (cont) { cont.click(); return; }
+      var lf = state.last ? lookupFile(state.last) : null, f = lf || (d.files[0]);
+      if (f) openFile(f.rel);
+    });
+    var qaRand = homeEl.querySelector(".cd-qa-rand");
+    if (qaRand) qaRand.addEventListener("click", openRandomTask);
+    var qaRev = homeEl.querySelector(".cd-qa-rev");
+    if (qaRev) qaRev.addEventListener("click", startReview);
+
+    // #3 карточка повторения
+    var revCard = homeEl.querySelector(".cd-home-review");
+    if (revCard) revCard.addEventListener("click", startReview);
+
+    // #10 «Что нового» — закрыть и запомнить
+    var wnOk = homeEl.querySelector(".cd-wn-ok");
+    if (wnOk) wnOk.addEventListener("click", function () { state.whatsnew = WHATSNEW; saveState(); buildHome(); });
+
+    // #2 живой поиск по всем материалам
+    var hsIn = homeEl.querySelector(".cd-hs-in");
+    var hsRes = homeEl.querySelector(".cd-hs-res");
+    function hsRender() {
+      var q = norm(hsIn.value.trim());
+      if (!q) { hsRes.hidden = true; hsRes.innerHTML = ""; return; }
+      var all = (DATA() || { files: [] }).files, out = [], i;
+      for (i = 0; i < all.length && out.length < 12; i++) {
+        var f = all[i];
+        if (norm((f.title || "") + " " + (f.subtitle || "") + " " + (f.name || "")).indexOf(q) !== -1) out.push(f);
+      }
+      hsRes.hidden = false;
+      hsRes.innerHTML = out.length
+        ? out.map(function (f) {
+            return '<button class="cd-hs-item" data-rel="' + escapeHtml(f.rel) + '"><b>' + escapeHtml(f.title || f.name) + "</b>" +
+              (f.subtitle ? "<span>" + escapeHtml(f.subtitle) + "</span>" : "") + "</button>";
+          }).join("")
+        : '<div class="cd-hs-empty">Ничего не нашлось</div>';
+    }
+    var qaFind = homeEl.querySelector(".cd-qa-find");
+    if (qaFind && hsIn) qaFind.addEventListener("click", function () { hsIn.focus(); hsIn.select(); });
+    if (hsIn && hsRes) {
+      hsIn.addEventListener("input", hsRender);
+      hsIn.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") { var first = hsRes.querySelector(".cd-hs-item"); if (first) openFile(first.getAttribute("data-rel")); }
+        else if (e.key === "Escape") { hsIn.value = ""; hsRender(); }
+      });
+      hsRes.addEventListener("click", function (e) {
+        var it = e.target.closest && e.target.closest(".cd-hs-item");
+        if (it) openFile(it.getAttribute("data-rel"));
+      });
+    }
   }
   function showHome() {
     if (!homeEl || !winEl) return;
+    if (reviewEl) reviewEl.hidden = true;   // выходим из режима повторения, если был
     buildHome();
     homeEl.hidden = false;
     winEl.classList.add("home");
@@ -2164,6 +2915,7 @@
   function hideHome() {
     if (!homeEl || !winEl) return;
     homeEl.hidden = true;
+    if (reviewEl) reviewEl.hidden = true;
     winEl.classList.remove("home");
   }
 
@@ -2180,7 +2932,15 @@
     // запомнить позицию прокрутки в уходящем файле
     if (current && contentEl) state.scroll[current.rel] = contentEl.scrollTop;
     current = f;
-    if (!silent) state.last = f.rel.toLowerCase();
+    if (!silent) {
+      state.last = f.rel.toLowerCase();
+      // Недавнее: свежий файл — в начало, без дублей, не длиннее 8.
+      var rl = String(f.rel).toLowerCase();
+      state.recent = (Array.isArray(state.recent) ? state.recent : [])
+        .filter(function (r) { return String(r).toLowerCase() !== rl; });
+      state.recent.unshift(f.rel);
+      if (state.recent.length > 8) state.recent = state.recent.slice(0, 8);
+    }
     if (!silent && !navHist) pushHistory(f.rel, hash || "");
     syncActiveTab(f.rel);
 
@@ -2195,9 +2955,12 @@
     collectHeadings();
     buildRouteNav(f);
     decorateTasks(f);
+    wireFolding();          // сворачивание разделов — после decorateTasks (пропускаем cd-task)
+    syncBookmarks();
     renderNotes(f);
     syncReadBtn();
     highlightActive();
+    findReset();   // смена файла — сбрасываем поиск по тексту
     // «Изучено» больше НЕ ставится автоматически при открытии темы — только вручную
     // (кнопка «Отметить изученным» в читалке или ○/✓ в навигаторе), как «решено» в задачнике.
     if (!silent) recordActivity();
@@ -2205,7 +2968,7 @@
     // прокрутка к якорю, к сохранённой позиции или наверх
     if (hash) {
       var target = articleEl.querySelector('[id="' + cssEscape(decodeURIComponent(hash.replace(/^#/, ""))) + '"]');
-      if (target) { target.scrollIntoView({ block: "start" }); flashHeading(target); onContentScroll(); return; }
+      if (target) { unfoldContaining(target); target.scrollIntoView({ block: "start" }); flashHeading(target); onContentScroll(); return; }
     }
     contentEl.scrollTop = state.scroll[f.rel] || 0;
     onContentScroll();
@@ -2280,6 +3043,8 @@
     }
     recordActivity();
     saveState();
+    // #10 Праздник при отметке «решено» — зелёно-мятный залп у кнопки.
+    if (on) { celebrate(btn, ["#a6e3a1", "#94e2d5", "#f9e2af", "#89b4fa"]); pulse(btn); }
   }
 
   // ---- Личные заметки к материалу ----
@@ -2341,21 +3106,156 @@
     return { total: total, done: done };
   }
 
-  function refreshItemRead(rel) {
-    var it = itemEls.filter(function (x) { return x.getAttribute("data-rel") === rel; })[0];
-    if (it) {
-      it.classList.add("read");
-      var b = it.querySelector(".cd-it-act button");
-      if (b) { b.textContent = "✓"; b.className = "on-read"; }
-    }
+  // Все задачи задачника как [{rel, slug, key}]; onlyUnsolved — только ещё не отмеченные «решено».
+  // Ключ и slug строим так же, как рендер (slugify) и decorateTasks (rel#slug) — чтобы совпало.
+  function collectTasks(onlyUnsolved) {
+    var d = DATA(), out = [];
+    if (!d) return out;
+    d.files.forEach(function (f) {
+      if (!isTaskFile(f.rel)) return;
+      String(f.md || "").replace(/\r\n?/g, "\n").split("\n").forEach(function (ln) {
+        var m = ln.match(/^##\s+(.*?)\s*#*\s*$/);
+        if (!m || !isTaskHeading(m[1])) return;
+        var slug = slugify(m[1]), key = f.rel + "#" + slug;
+        if (onlyUnsolved && state.solved[key]) return;
+        out.push({ rel: f.rel, slug: slug, key: key });
+      });
+    });
+    return out;
   }
+  // Открыть случайную задачу: сначала из нерешённых, если все решены — из всех; в крайнем
+  // случае просто открываем сам задачник.
+  function openRandomTask() {
+    var pool = collectTasks(true);
+    if (!pool.length) pool = collectTasks(false);
+    if (!pool.length) { var tf = findFile(/zadachnik|задачник/i); if (tf) openFile(tf.rel); return; }
+    var t = pool[Math.floor(Math.random() * pool.length)];
+    openFile(t.rel, "#" + t.slug);
+  }
+
+  // ------- #1: следующий шаг по курсу (первый неизученный материал в порядке данных) -------
+  function nextUnread() {
+    var d = DATA(); if (!d) return null;
+    for (var i = 0; i < d.files.length; i++) { if (!state.read[d.files[i].rel]) return d.files[i]; }
+    return null;
+  }
+
+  // ------- #3: флеш-карточки к повторению (движок cdCardState/cdSchedule уже есть) -------
+  // Разбор одного блока ```cards в пары {q,a} — та же логика, что в renderCards.
+  function parseCards(src) {
+    var lines = String(src).replace(/\r\n?/g, "\n").split("\n"), out = [], cur = null;
+    function flush() { if (cur && (cur.q.length || cur.a.length)) out.push(cur); cur = null; }
+    for (var i = 0; i < lines.length; i++) {
+      var t = lines[i];
+      var mq = t.match(/^\s*(?:Q|В|Вопрос)\s*[:.]\s*(.*)$/i);
+      var ma = t.match(/^\s*(?:A|О|Ответ)\s*[:.]\s*(.*)$/i);
+      if (mq) { if (cur && cur.a.length) flush(); if (!cur) cur = { q: [], a: [], m: "q" }; cur.q.push(mq[1]); cur.m = "q"; continue; }
+      if (ma) { if (!cur) cur = { q: [], a: [], m: "a" }; cur.a.push(ma[1]); cur.m = "a"; continue; }
+      if (!t.trim()) { if (cur && cur.a.length) flush(); continue; }
+      if (cur) (cur.m === "a" ? cur.a : cur.q).push(t.trim());
+    }
+    flush();
+    return out;
+  }
+  // Все карточки из всех файлов: [{q,a,id,rel}].
+  function collectAllCards() {
+    var d = DATA(), out = [];
+    if (!d) return out;
+    d.files.forEach(function (f) {
+      var md = String(f.md || ""), re = /```+[ \t]*cards[ \t]*\r?\n([\s\S]*?)\r?\n```+/gi, m;
+      while ((m = re.exec(md))) {
+        parseCards(m[1]).forEach(function (c) {
+          var q = c.q.join(" "); if (!q) return;
+          out.push({ q: q, a: c.a.join(" "), id: cdHash(q), rel: f.rel });
+        });
+      }
+    });
+    return out;
+  }
+  // Счётчики для главного экрана: сколько «пора повторить» и сколько «новых».
+  function cardCounts() {
+    var all = collectAllCards(), due = 0, neu = 0;
+    all.forEach(function (c) { var s = cdCardState(c.id).status; if (s === "due") due++; else if (s === "new") neu++; });
+    return { due: due, neu: neu, total: all.length };
+  }
+  // Очередь на сессию: сперва просроченные, затем новые; не длиннее 20 за раз.
+  function buildReviewQueue() {
+    var all = collectAllCards(), dueL = [], newL = [];
+    all.forEach(function (c) { var s = cdCardState(c.id).status; if (s === "due") dueL.push(c); else if (s === "new") newL.push(c); });
+    return dueL.concat(newL).slice(0, 20);
+  }
+  function startReview() {
+    reviewQueue = buildReviewQueue();
+    reviewPos = 0; reviewOk = 0;
+    if (!reviewQueue.length) return;
+    showReview();
+  }
+  function renderReviewCard() {
+    if (!reviewEl) return;
+    if (reviewPos >= reviewQueue.length) {          // сессия окончена — итог
+      var wm = (typeof STICKERS !== "undefined" && STICKERS && STICKERS["mascot-win"]) ? "mascot-win" : "mascot-done";
+      reviewEl.innerHTML = '<div class="cd-rv-inner"><div class="cd-rv-done">' +
+        '<div class="cd-rv-art">' + stickerMarkup(wm, 96) + "</div>" +
+        '<div class="cd-rv-done-t">Повторено ' + reviewOk + " " + plural(reviewOk, ["карточка", "карточки", "карточек"]) + "!</div>" +
+        '<div class="cd-rv-done-s">Отлично. Возвращайся завтра — интервалы уже назначены.</div>' +
+        '<button class="cd-rv-close2" type="button">На главную</button></div></div>';
+      recordActivity(); saveState();
+      return;
+    }
+    var c = reviewQueue[reviewPos];
+    reviewEl.innerHTML = '<div class="cd-rv-inner">' +
+      '<div class="cd-rv-top"><span class="cd-rv-count">' + (reviewPos + 1) + " / " + reviewQueue.length + "</span>" +
+      '<button class="cd-rv-close" type="button" title="Закрыть">✕</button></div>' +
+      '<div class="cd-rv-card"><div class="cd-rv-q">' + inline(c.q) + "</div>" +
+      '<div class="cd-rv-a" hidden>' + inline(c.a) + "</div>" +
+      '<div class="cd-rv-ctl"><button class="cd-rv-show" type="button">Показать ответ</button>' +
+      '<span class="cd-rv-rate" hidden>' +
+      '<button class="cd-rv-grade" data-g="0" type="button">Не помню</button>' +
+      '<button class="cd-rv-grade" data-g="1" type="button">Трудно</button>' +
+      '<button class="cd-rv-grade" data-g="2" type="button">Помню</button></span></div></div></div>';
+  }
+  function reviewGrade(g) {
+    var c = reviewQueue[reviewPos]; if (!c) return;
+    cdSchedule(c.id, g);
+    if (g >= 1) reviewOk++;          // «трудно»/«помню» считаем как повторённую
+    reviewPos++;
+    renderReviewCard();
+  }
+  function onReviewClick(e) {
+    var t = e.target;
+    if (t.closest && t.closest(".cd-rv-close, .cd-rv-close2")) { hideReview(); showHome(); return; }
+    if (t.closest && t.closest(".cd-rv-show")) {
+      var card = reviewEl.querySelector(".cd-rv-card");
+      if (card) { var a = card.querySelector(".cd-rv-a"), rate = card.querySelector(".cd-rv-rate"), show = card.querySelector(".cd-rv-show");
+        if (a) a.hidden = false; if (rate) rate.hidden = false; if (show) show.hidden = true; }
+      return;
+    }
+    var gb = t.closest && t.closest(".cd-rv-grade");
+    if (gb) { reviewGrade(parseInt(gb.getAttribute("data-g"), 10) || 0); return; }
+  }
+  function showReview() {
+    if (!reviewEl || !winEl) return;
+    if (homeEl) homeEl.hidden = true;
+    reviewEl.hidden = false; winEl.classList.add("home");
+    renderReviewCard();
+  }
+  function hideReview() { if (reviewEl) reviewEl.hidden = true; }
 
   // Картинки: data-src → file:// абсолютный путь относительно корня доков.
   function resolveImagesIn(root, f) {
     var d = DATA(); if (!d || !f || !root) return;
     root.querySelectorAll("img[data-src]").forEach(function (img) {
       var src = img.getAttribute("data-src");
-      if (/^https?:|^data:/.test(src)) { img.src = src; return; }
+      if (!src) return;
+      // Доки офлайновые: удалённые (http/https) и inline (data:) картинки не грузим — автозагрузка
+      // внешнего URL из оболочки это канал утечки (IP, факт чтения). Заменяем текстовой заглушкой.
+      if (/^https?:/i.test(src) || /^data:/i.test(src)) {
+        var ph = el("span", "opacity:.55;font-style:italic;font-size:.9em",
+          img.getAttribute("alt") || "внешнее изображение (не загружено)");
+        ph.title = "Внешние картинки отключены ради приватности";
+        if (img.parentNode) img.parentNode.replaceChild(ph, img);
+        return;
+      }
       var res = resolveRel(f.rel, src);
       var base = (d.root || "").replace(/\\/g, "/");
       if (base) img.src = "file:///" + (base + "/" + res.rel).replace(/^\/+/, "");
@@ -2380,8 +3280,12 @@
 
   // Клики внутри статьи: кнопки «копировать» и внутренние ссылки.
   function doCopy(btn) {
-    var pre = btn.parentNode.querySelector("pre.code code");
-    var text = pre ? pre.textContent : "";
+    var text = btn.getAttribute("data-code");
+    if (text == null) {
+      var wrap = btn.closest ? btn.closest(".codewrap") : btn.parentNode;
+      var pre = wrap ? wrap.querySelector("pre.code code") : null;
+      text = pre ? pre.textContent : "";
+    }
     try {
       navigator.clipboard.writeText(text).then(function () { flashCopy(btn); }, function () { legacyCopy(text); flashCopy(btn); });
     } catch (err) { legacyCopy(text); flashCopy(btn); }
@@ -2465,15 +3369,172 @@
     if (frev) { e.preventDefault(); fcReveal(frev); return true; }
     var tcopy = t.closest(".cd-tests-copy");
     if (tcopy) { e.preventDefault(); testsCopy(tcopy); return true; }
+    var chk = t.closest(".cd-check-item");
+    if (chk) { e.preventDefault(); checkToggle(chk); return true; }
     return false;
+  }
+  function checkToggle(btn) {
+    var id = btn.getAttribute("data-id"); if (!id) return;
+    var on = !btn.classList.contains("on");
+    btn.classList.toggle("on", on);
+    if (on) state.checks[id] = true; else delete state.checks[id];
+    saveState();
+  }
+
+  // Чек-бокс списка задач «- [ ] …»: переключаем и красим текст, состояние — в state.checks.
+  function taskCheckToggle(btn) {
+    var id = btn.getAttribute("data-id"); if (!id) return;
+    var on = !btn.classList.contains("on");
+    btn.classList.toggle("on", on);
+    btn.setAttribute("aria-checked", on ? "true" : "false");
+    var txt = btn.parentNode && btn.parentNode.querySelector(".cd-tl-txt");
+    if (txt) txt.classList.toggle("done", on);
+    if (on) state.checks[id] = true; else delete state.checks[id];
+    saveState();
+  }
+
+  // Короткая вспышка «✓» на маленькой кнопке (для «#» и копий, где длинный текст не влезает).
+  function flashTiny(btn, sym) {
+    var prev = btn.textContent;
+    btn.textContent = sym || "✓"; btn.classList.add("copied");
+    setTimeout(function () { try { btn.textContent = prev; btn.classList.remove("copied"); } catch (e) {} }, 1100);
+  }
+  function copyText(text, cb) {
+    try {
+      navigator.clipboard.writeText(text).then(cb, function () { legacyCopy(text); cb(); });
+    } catch (e) { legacyCopy(text); cb(); }
+  }
+  // «#» у заголовка → копирует внутреннюю ссылку вида 07-algoritmy.md#18-алгоритмы.
+  function copyHeadingLink(btn) {
+    var slug = btn.getAttribute("data-slug");
+    if (!slug || !current) return;
+    copyText(current.rel + "#" + slug, function () { flashTiny(btn, "✓"); });
+  }
+  // Кнопка в шапке читалки → копирует весь материал как Markdown-исходник.
+  function copyWholeDoc(btn) {
+    if (!current) return;
+    copyText(current.md || "", function () { flashTiny(btn, "✓"); });
+  }
+
+  // «☆» у заголовка → закладка на раздел (ключ rel#slug, значение — чистый текст заголовка).
+  function toggleBookmark(btn) {
+    var slug = btn.getAttribute("data-slug");
+    if (!slug || !current) return;
+    var key = current.rel + "#" + slug;
+    if (state.marks[key]) {
+      delete state.marks[key];
+      btn.classList.remove("on"); btn.textContent = "☆"; btn.setAttribute("aria-pressed", "false");
+    } else {
+      var h = btn.closest ? btn.closest("h2,h3,h4,h5,h6") : btn.parentNode;
+      var txt = (h && (h.getAttribute("data-title") || h.textContent)) || slug;
+      state.marks[key] = String(txt).replace(/[#☆★\s]+$/, "").trim();
+      btn.classList.add("on"); btn.textContent = "★"; btn.setAttribute("aria-pressed", "true");
+    }
+    saveState();
+  }
+  // Проставить состояние звёздочек после рендера файла (как decorateTasks для «решено»).
+  function syncBookmarks() {
+    if (!articleEl || !current) return;
+    articleEl.querySelectorAll(".cd-hmark").forEach(function (b) {
+      var on = !!state.marks[current.rel + "#" + b.getAttribute("data-slug")];
+      b.classList.toggle("on", on);
+      b.textContent = on ? "★" : "☆";
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+  }
+
+  // ------- поиск по тексту открытого материала -------
+  // Снять прошлую подсветку: заменяем наши <mark class="cd-find-hit"> обратно на текст.
+  function findClear() {
+    if (articleEl) {
+      var hits = articleEl.querySelectorAll("mark.cd-find-hit");
+      for (var i = 0; i < hits.length; i++) {
+        var m = hits[i];
+        if (m.parentNode) m.parentNode.replaceChild(document.createTextNode(m.textContent), m);
+      }
+      if (articleEl.normalize) try { articleEl.normalize(); } catch (e) {}   // склеить соседние текст-узлы
+    }
+    findHits = []; findIdx = -1;
+  }
+  // Полный сброс (смена файла): убрать подсветку и спрятать панель.
+  function findReset() {
+    findClear();
+    if (findBar) findBar.hidden = true;
+    if (findBtn) findBtn.classList.remove("on");
+    if (findInput) findInput.value = "";
+    updateFindCount();
+  }
+  function updateFindCount() {
+    if (!findCountEl) return;
+    findCountEl.textContent = findHits.length ? (findIdx + 1) + "/" + findHits.length : "0";
+    findCountEl.classList.toggle("cd-find-none", !findHits.length && !!(findInput && findInput.value));
+  }
+  // Обойти текст-узлы статьи и обернуть совпадения запроса в <mark class="cd-find-hit">.
+  function findRun(q) {
+    findClear();
+    if (!articleEl) { updateFindCount(); return; }
+    var query = norm(String(q || ""));
+    if (query.length < 1) { updateFindCount(); return; }
+    var nodes = [];
+    (function walk(node) {
+      for (var c = node.firstChild; c; c = c.nextSibling) {
+        if (c.nodeType === 3) { if (c.nodeValue && c.nodeValue.trim()) nodes.push(c); }
+        else if (c.nodeType === 1 && c.tagName !== "MARK" && c.tagName !== "BUTTON") walk(c);
+      }
+    })(articleEl);
+    nodes.forEach(function (tn) {
+      var text = tn.nodeValue, low = norm(text), idx = low.indexOf(query);
+      if (idx === -1) return;
+      var frag = document.createDocumentFragment(), pos = 0;
+      while (idx !== -1) {
+        if (idx > pos) frag.appendChild(document.createTextNode(text.slice(pos, idx)));
+        var m = document.createElement("mark"); m.className = "cd-find-hit";
+        m.textContent = text.slice(idx, idx + query.length);
+        frag.appendChild(m); findHits.push(m);
+        pos = idx + query.length; idx = low.indexOf(query, pos);
+      }
+      if (pos < text.length) frag.appendChild(document.createTextNode(text.slice(pos)));
+      if (tn.parentNode) tn.parentNode.replaceChild(frag, tn);
+    });
+    if (findHits.length) findGo(0); else updateFindCount();
+  }
+  function findGo(i) {
+    if (!findHits.length) { updateFindCount(); return; }
+    if (i < 0) i = findHits.length - 1; else if (i >= findHits.length) i = 0;
+    if (findIdx >= 0 && findHits[findIdx]) findHits[findIdx].classList.remove("cur");
+    findIdx = i;
+    var m = findHits[findIdx];
+    m.classList.add("cur");
+    try { m.scrollIntoView({ block: "center" }); } catch (e) {}
+    updateFindCount();
+  }
+  function findStep(dir) { if (findHits.length) findGo(findIdx + dir); }
+  function toggleFind(force) {
+    if (!findBar) return;
+    var show = (typeof force === "boolean") ? force : findBar.hidden;
+    findBar.hidden = !show;
+    if (findBtn) findBtn.classList.toggle("on", show);
+    if (show) { findInput.focus(); findInput.select(); if (findInput.value) findRun(findInput.value); }
+    else { findClear(); updateFindCount(); }
   }
 
   function onArticleClick(e) {
     var solve = e.target.closest && e.target.closest(".cd-solve");
     if (solve) { e.preventDefault(); e.stopPropagation(); toggleSolved(solve); return; }
+    var hmark = e.target.closest && e.target.closest(".cd-hmark");
+    if (hmark) { e.preventDefault(); e.stopPropagation(); toggleBookmark(hmark); return; }
+    var hlink = e.target.closest && e.target.closest(".cd-hlink");
+    if (hlink) { e.preventDefault(); e.stopPropagation(); copyHeadingLink(hlink); return; }
+    var tl = e.target.closest && e.target.closest(".cd-tl-box");
+    if (tl) { e.preventDefault(); e.stopPropagation(); taskCheckToggle(tl); return; }
     var copy = e.target.closest && e.target.closest(".copybtn");
     if (copy) { doCopy(copy); return; }
     if (quizClick(e)) return;
+    // клик по заголовку раздела (не по его кнопкам/ссылкам) — свернуть/развернуть
+    var foldH = e.target.closest && e.target.closest("h2.cd-foldable");
+    if (foldH && !(e.target.closest("a[href]") || e.target.closest("button"))) {
+      setFold(foldH, !foldH.classList.contains("cd-sec-folded")); return;
+    }
     var a = e.target.closest && e.target.closest("a[href]");
     if (a) {
       var href = a.getAttribute("href");
@@ -2496,10 +3557,8 @@
       document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove();
     } catch (e) {}
   }
-  // Внешняя ссылка: default-навигация увела бы ВЕСЬ workbench-фрейм на URL и сломала бы
-  // редактор до перезагрузки. Поэтому гасим default и открываем через window.open — VS Code
-  // перехватывает это и открывает во внешнем браузере. Если открыть не удалось — просто тихо
-  // ничего, но редактор цел.
+  // Внешняя ссылка: default-навигация увела бы весь workbench-фрейм на URL. Гасим её и открываем
+  // через window.open — VS Code перехватит и откроет во внешнем браузере, редактор цел.
   function openExternalLink(href) {
     try { window.open(href, "_blank", "noopener"); } catch (e) {}
   }
@@ -2509,6 +3568,7 @@
     if (!winEl) return;
     if (e.key === "Escape") {
       if (viewMenu && !viewMenu.hidden) { viewMenu.hidden = true; return; }
+      if (findBar && !findBar.hidden) { e.stopPropagation(); toggleFind(false); return; }  // Esc сперва закрывает поиск, не окно
       closeWindow();
     }
   }
@@ -2530,17 +3590,15 @@
   }
   function toggleWindow() { if (winEl) closeWindow(); else openWindow(); }
 
-  // Перечитать данные: расширение перезаписало cpp-docs-data.js — подтягиваем свежую
-  // версию тем же трюком, что и live-данные vscode-bg (тег <script> с меткой времени).
   function bootVal(key) { try { var b = window.__CPPDOCS_BOOT__; return b && b[key]; } catch (e) { return null; } }
-  // file:///…/x.js → путь на диске (VS Code блокирует file://-скрипты, поэтому читаем через Node fs).
+  // file:///…/x.js → путь на диске (данные читаем через Node fs, а не file://-скриптом).
   function fileUrlToPath(u) {
     if (!u) return null;
     var s = String(u).replace(/^file:\/\/\//, "").replace(/[?#].*$/, "");
     try { s = decodeURIComponent(s); } catch (e) {}
     return s;
   }
-  // Node fs, если доступен (electron-browser workbench): читаем файл напрямую — надёжнее <script src>.
+  // Node fs, если доступен (electron-browser workbench): читаем файл напрямую.
   function nodeRead(u) {
     try {
       var req = null;
@@ -2551,34 +3609,46 @@
       return p ? req("fs").readFileSync(p, "utf8") : null;
     } catch (e) { return null; }
   }
+  // Жив ли каталог расширения. При удалении VS Code не зовёт «отключить окно», и впечатанный
+  // рантайм остаётся навсегда — если файла рантайма на диске нет, окно осиротело (снимаем кнопку).
+  // Нет маячка (старые данные) или fs недоступен — ведём себя как раньше.
+  function extAlive() {
+    try {
+      var d = DATA();
+      var url = (d && d.runtimeUrl) || bootVal("runtimeUrl");
+      if (!url) return true;
+      var p = fileUrlToPath(url);
+      if (!p) return true;
+      var req = null;
+      try { if (typeof require === "function") req = require; } catch (e) {}
+      if (!req && typeof window !== "undefined" && window.require) req = window.require;
+      if (!req) return true;
+      return !!req("fs").existsSync(p);
+    } catch (e) { return true; }
+  }
   function refreshData() {
     var d = DATA();
     var url = (d && d.dataUrl) || bootVal("dataUrl");
     if (!url) { rebuildFromData(); return; }
-    // Основной путь — Node fs (file://-скрипт в оболочке заблокирован схемой vscode-file://).
+    // Только чтение через Node fs + JSON.parse: файл НЕ исполняется (иначе подмена файла в
+    // globalStorage = произвольный код в оболочке). Нет fs / не распарсилось — остаёмся на старых данных.
     var txt = nodeRead(url);
     if (txt != null) {
       try {
         var jm = txt.replace(/^[\s\S]*?window\.__CPPDOCS__\s*=\s*/, "").replace(/;\s*$/, "");
-        var obj = JSON.parse(jm);
-        if (obj && Array.isArray(obj.files)) window.__CPPDOCS__ = obj;
+        var obj = sanitizeData(JSON.parse(jm));
+        if (obj) window.__CPPDOCS__ = obj;
       } catch (e) {}
-      rebuildFromData();
-      return;
     }
-    var s = applyNonce(document.createElement("script"));
-    s.src = url + (url.indexOf("?") >= 0 ? "&" : "?") + "r=" + Date.now();
-    s.async = true;
-    // Всегда пересобираем: при успехе — со свежими данными, при ошибке загрузки
-    // (CSP/файла нет) — хотя бы из уже загруженных, чтобы кнопка не казалась «мёртвой».
-    s.onload = function () { rebuildFromData(); try { s.remove(); } catch (e) {} };
-    s.onerror = function () { rebuildFromData(); try { s.remove(); } catch (e) {} };
-    document.head.appendChild(s);
+    rebuildFromData();
   }
   function rebuildFromData() {
     if (!winEl) return;
+    var onHome = winEl.classList.contains("home");
     var keepRel = current && current.rel;
     renderNav();
+    // Были на главной (в т.ч. на скелете загрузки) — обновляем её, не выкидывая на файл.
+    if (onHome) { showHome(); return; }
     var map = fileMap();
     if (keepRel && map[keepRel.toLowerCase()]) openFile(keepRel);
     else { var d = DATA(); if (d && d.files[0]) openFile(d.files[0].rel); }
@@ -2587,45 +3657,20 @@
   // Автообновление: расширение при правке доков/кнопке «Обновить» переписывает крошечный
   // файл-метку (cpp-docs-stamp.js → window.__CPPDOCS_STAMP__). Опрашиваем ЕГО, а не тяжёлый
   // data-файл; полный refreshData() дёргаем только когда метка реально сменилась.
-  var lastStamp = null, stampInit = false, stampBusy = false;
+  var lastStamp = null, stampInit = false;
   function pollStamp() {
-    if (stampBusy) return;
     var d = DATA();
     var url = (d && d.stampUrl) || bootVal("stampUrl");
     if (!url) return;
-    // Основной путь — Node fs: читаем крошечную метку напрямую.
+    // Метку читаем только через Node fs (файл не исполняем, как и в refreshData).
     var txt = nodeRead(url);
-    if (txt != null) {
-      var mm = txt.match(/=\s*(\d+)/);
-      var st = mm ? parseInt(mm[1], 10) : null;
-      if (st != null) {
-        if (!stampInit) { stampInit = true; lastStamp = st; }
-        else if (st !== lastStamp) { lastStamp = st; refreshData(); }
-      }
-      return;
+    if (txt == null) return;
+    var mm = txt.match(/=\s*(\d+)/);
+    var st = mm ? parseInt(mm[1], 10) : null;
+    if (st != null) {
+      if (!stampInit) { stampInit = true; lastStamp = st; }
+      else if (st !== lastStamp) { lastStamp = st; refreshData(); }
     }
-    stampBusy = true;
-    var s = applyNonce(document.createElement("script"));
-    s.src = url + (url.indexOf("?") >= 0 ? "&" : "?") + "r=" + Date.now();
-    s.async = true;
-    // Страховка: если скрипт-метки завис (ни onload, ни onerror), через 8 с всё равно
-    // снимаем флаг — иначе автообновление молча встанет навсегда.
-    var guard = setTimeout(function () { stampBusy = false; try { s.remove(); } catch (e) {} }, 8000);
-    var done = function () { clearTimeout(guard); stampBusy = false; try { s.remove(); } catch (e) {} };
-    s.onload = function () {
-      try {
-        var st = window.__CPPDOCS_STAMP__;
-        if (st != null) {
-          // Первое успешное чтение — базовая метка (инлайн-снимок и файл собраны с зазором в
-          // пару мс, поэтому первый прогон не считаем изменением). Дальше — только реальные правки.
-          if (!stampInit) { stampInit = true; lastStamp = st; }
-          else if (st !== lastStamp) { lastStamp = st; refreshData(); }
-        }
-      } catch (e) {}
-      done();
-    };
-    s.onerror = done;
-    document.head.appendChild(s);
   }
 
   // ---------------------------------------------------------------------------
@@ -2638,6 +3683,7 @@
   function ensureButton() {
     if (document.getElementById(BTN_ID)) return;
     if (!document.body) return;
+    if (!extAlive()) return;   // расширение удалено — осиротевшую кнопку не создаём
     var d = DATA();
     var n = d ? d.files.length : 0;
     var b = el("div"); b.id = BTN_ID;
@@ -2669,6 +3715,8 @@
   }
 
   function heal() {
+    // Расширение удалено — убираем кнопку и больше ничего не подрисовываем.
+    try { if (!extAlive()) { var ob = document.getElementById(BTN_ID); if (ob) ob.remove(); return; } } catch (e) {}
     try { applyAccent(); } catch (e) {}   // акцент под тему/обои — до отрисовки стиля и кнопки
     try { ensureStyle(); } catch (e) {}
     try { ensureButton(); } catch (e) {}
@@ -2707,5 +3755,9 @@
   else boot();
 
   // Узкий мост для превью/отладки (в реальном воркбенче не мешает).
-  window.__cppDocs = { open: openWindow, close: closeWindow, toggle: toggleWindow, render: renderMarkdown };
+  window.__cppDocs = {
+    open: openWindow, close: closeWindow, toggle: toggleWindow, render: renderMarkdown,
+    // для тестов: чистая логика главного экрана (карточки/следующий шаг)
+    collectAllCards: collectAllCards, cardCounts: cardCounts, nextUnread: nextUnread,
+  };
 })();

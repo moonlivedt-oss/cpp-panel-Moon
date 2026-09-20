@@ -91,6 +91,46 @@ if (render) {
   check("картинка со схемой javascript: обезврежена (data-src=\"\")", imgBad.indexOf('data-src=""') !== -1);
   var imgRel = R("![x](img/a.png)");
   check("относительная картинка сохранена", imgRel.indexOf('data-src="img/a.png"') !== -1);
+
+  // Новое: зачёркивание ~~…~~
+  check("зачёркивание ~~ → <del>", R("~~старое~~").indexOf("<del>старое</del>") !== -1);
+  check("одиночная ~ не трогается", R("a ~ b").indexOf("<del>") === -1);
+
+  // Новое: выравнивание колонок таблицы из строки-разделителя
+  var tbl = R("| A | B | C |\n| :-- | :--: | --: |\n| 1 | 2 | 3 |");
+  check("таблица: выравнивание по центру", tbl.indexOf("text-align:center") !== -1);
+  check("таблица: выравнивание вправо", tbl.indexOf("text-align:right") !== -1);
+
+  // Новое: список задач «- [ ] …» → интерактивный чек-бокс
+  var tl = R("- [ ] выучить указатели\n- [x] циклы");
+  check("список задач → чек-боксы", tl.indexOf('class="cd-tasklist"') !== -1 && tl.indexOf("cd-tl-box") !== -1);
+  check("обычный список без чек-боксов", R("- просто пункт").indexOf("cd-tl-box") === -1);
+
+  // Новое: у заголовка есть якорь «#» и чистый data-title (без «#» для крошек)
+  var hh = R("## Указатели");
+  check("заголовок: якорь копирования ссылки", hh.indexOf('class="cd-hlink"') !== -1);
+  check("заголовок: кнопка-закладка", hh.indexOf('class="cd-hmark"') !== -1);
+  check("заголовок: чистый data-title без «#»", hh.indexOf('data-title="Указатели"') !== -1);
+}
+
+// --- логика главного экрана: карточки к повторению и «следующий шаг» ---
+console.log("\nГлавный экран: карточки и следующий шаг");
+if (api && typeof api.cardCounts === "function") {
+  global.window.__CPPDOCS__ = {
+    root: "docs", indexFile: "00.md", generatedAt: 1, files: [
+      { rel: "a.md", name: "a.md", title: "Тема A", subtitle: "", group: "Главное", groupColor: "",
+        minutes: 1, sections: 0, md: "# Тема A\n\n```cards\nQ: 2+2?\nA: 4\n\nQ: тип bool?\nA: логический\n```\n" },
+      { rel: "b.md", name: "b.md", title: "Тема B", subtitle: "", group: "Главное", groupColor: "",
+        minutes: 1, sections: 0, md: "# Тема B\n\nбез карточек" },
+    ],
+  };
+  var cards = api.collectAllCards();
+  check("collectAllCards находит 2 карточки", cards.length === 2, "нашлось " + cards.length);
+  var cnt = api.cardCounts();
+  check("cardCounts: обе карточки новые", cnt.neu === 2 && cnt.due === 0, JSON.stringify(cnt));
+  var nu = api.nextUnread();
+  check("nextUnread: первый неизученный — a.md", nu && nu.rel === "a.md", nu && nu.rel);
+  global.window.__CPPDOCS__ = null;
 }
 
 // ------------------------------------------------------------

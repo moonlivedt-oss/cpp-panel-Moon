@@ -1,34 +1,26 @@
-// ============================================================
-//  Панель «Документация C++»
-//
-//  Иконка книги в панели действий открывает список материалов проекта:
-//  справочник, примеры, инструменты. Названия и описания читаются из самих
-//  файлов, поэтому новые материалы появляются в панели сами.
-//
-//  Что внутри:
-//    findDocsRoot()   — где лежит документация (проект → настройка);
-//    collectGroups()  — что показать и в каком порядке;
-//    DocsViewProvider — сборка HTML и обмен сообщениями с панелью.
-// ============================================================
+// Панель «Документация C++»: список материалов (справочник/примеры/инструменты),
+// названия и описания читаются из самих .md-файлов. Ключевое: findDocsRoot (где доки),
+// collectGroups (что и в каком порядке), DocsViewProvider (HTML + обмен с панелью).
 
 const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-// Пределы на объём вшиваемых данных: содержимое всех доков попадает инлайном в
-// привилегированную оболочку workbench.html. Без потолка крафт/огромная папка
-// раздули бы оболочку и повесили старт редактора (локальный DoS).
-const MAX_DOC_BYTES = 512 * 1024;         // один файл в окно — не больше 512 КБ текста
-const MAX_TOTAL_DOC_BYTES = 8 * 1024 * 1024;  // суммарно на все материалы — не больше 8 МБ
+// Потолок объёма: доки попадают инлайном в привилегированную оболочку workbench.html;
+// без лимита огромная папка раздула бы её и повесила старт редактора (локальный DoS).
+const MAX_DOC_BYTES = 512 * 1024;             // один файл в окно
+const MAX_TOTAL_DOC_BYTES = 8 * 1024 * 1024;  // суммарно на все материалы
+
+// Якорь целостности рантайма: перед впечатыванием сверяем SHA-256 cpp-docs-runtime.js с этим
+// значением (подмена файла на диске не пройдёт). Ставит `npm run hash:runtime`; пусто — проверку
+// пропускаем. Доверенная точка тут сам extension.js.
+const RUNTIME_SHA256 = '9218f334c246c9758cea1b8822d6d841da5c1da1276b9eef7ad2f82e7c805506'; /* HASH:runtime — ставит scripts/hash-runtime.js */
 
 const INDEX_FILE = '00-НАЧНИ-ОТСЮДА.md';
-// Путь к документации, вшитой прямо в расширение (extension/docs). Задаётся в activate.
-// Нужен, чтобы расширение работало «из коробки» после установки с Marketplace, даже когда
-// в проекте пользователя нет своей папки docs.
+// Доки, вшитые в расширение (extension/docs) — fallback, когда у пользователя нет своей папки docs.
 let BUNDLED_DOCS = null;
-// Диагностический канал: раньше десятки ошибок глотались молча (catch (e) {}), и провал
-// инъекции/записи было не отследить. Пишем причины сюда; команда «показать лог» открывает канал.
+// Диагностический канал (команда «показать лог») вместо молчаливых catch.
 let outputChannel = null;
 function log(msg, err) {
   try {
@@ -44,25 +36,18 @@ const PINS_KEY = 'cppDocs.pins';
 const READ_KEY = 'cppDocs.read';        // какие материалы уже открывали — отметка «изучено»
 const FRESH_MS = 24 * 60 * 60 * 1000;   // «недавно изменён» — за последние сутки
 
-// ===== Плавающее окно документации (инъекция в оболочку VS Code) =====
-// Окно рисует extension/cpp-docs-runtime.js, внедрённый в окно редактора тем же
-// загрузчиком, что и MoonLight custom-bg: subframe7536.custom-ui-style (живучее,
-// переживает обновления VS Code) или be5invis.vscode-custom-css (классический).
-// Расширение лишь прописывает импорт рантайма и генерирует рядом файл с данными
-// (window.__CPPDOCS__) — сам рантайм API расширений не видит. См. writeDocsData,
-// ensureWindowImport, removeWindowImport, windowHealth ниже.
+// Плавающее окно рисует cpp-docs-runtime.js. Совместимость со сторонними загрузчиками
+// (custom-ui-style / be5invis) оставлена; основной путь — прямой патч оболочки (ниже).
 const BE5_ID = 'be5invis.vscode-custom-css';
-const BE5_IMPORTS_KEY = 'vscode_custom_css.imports';        // формат: массив строк-URL
+const BE5_IMPORTS_KEY = 'vscode_custom_css.imports';        // массив строк-URL
 const CUS_ID = 'subframe7536.custom-ui-style';
-const CUS_IMPORTS_KEY = 'custom-ui-style.external.imports'; // формат: массив { type, url }
-const WINDOW_SETUP_KEY = 'cppDocs.windowSetupOffered';      // первый запуск: предложили окно один раз
-const WINDOW_ON_KEY = 'cppDocs.windowEnabled';              // окно было включено (для авто-восстановления после апдейта VS Code)
+const CUS_IMPORTS_KEY = 'custom-ui-style.external.imports'; // массив { type, url }
+const WINDOW_SETUP_KEY = 'cppDocs.windowSetupOffered';      // предложили окно один раз
+const WINDOW_ON_KEY = 'cppDocs.windowEnabled';              // окно было включено (для восстановления после апдейта)
 
-/** Ищет папку docs: сначала в открытом проекте, потом путь из настроек. */
-/** Доверяем ли текущему воркспейсу. Контент доков попадает в привилегированную оболочку,
- *  поэтому в НЕдоверенной папке (open чужого репо) не читаем ни docs/ проекта, ни настройку
- *  cppDocs.path — только вшитую документацию. isTrusted === false означает явное недоверие;
- *  undefined (старый VS Code / заглушка в тестах) считаем доверием, сохраняя прежнее поведение. */
+/** Доверяем ли воркспейсу. Контент доков идёт в привилегированную оболочку, поэтому в
+ *  недоверенной папке читаем только вшитую документацию, игнорируя docs/ проекта и cppDocs.path.
+ *  isTrusted === undefined (старый VS Code / тест) считаем доверием. */
 function workspaceTrusted() {
   try { return !(vscode.workspace && vscode.workspace.isTrusted === false); } catch (e) { return true; }
 }
@@ -75,13 +60,20 @@ function findDocsRoot() {
       if (fs.existsSync(path.join(candidate, INDEX_FILE))) return candidate;
       if (fs.existsSync(path.join(folder.uri.fsPath, INDEX_FILE))) return folder.uri.fsPath;
     }
-    const configured = vscode.workspace.getConfiguration('cppDocs').get('path');
-    // Путь из настройки принимаем, только если это действительно папка с доками, —
-    // иначе панель отрисовала бы пустые группы вместо понятной заглушки.
+    const conf = vscode.workspace.getConfiguration('cppDocs');
+    const configured = conf.get('path');
+    // Путь из настройки принимаем, только если там реально папка с доками.
     if (configured && fs.existsSync(path.join(configured, INDEX_FILE))) return configured;
+    // Список путей cppDocs.paths — берём первый, где реально лежит документация. Позволяет
+    // держать несколько возможных папок (разные машины/проекты), не переписывая cppDocs.path.
+    const extra = conf.get('paths');
+    if (Array.isArray(extra)) {
+      for (const p of extra) {
+        if (typeof p === 'string' && p && fs.existsSync(path.join(p, INDEX_FILE))) return p;
+      }
+    }
   }
-  // Всегда доступный fallback — документация, вшитая в само расширение (работает без проекта
-  // и в недоверенной папке). Её содержимое наше, поэтому безопасно вшивать в оболочку.
+  // Fallback — вшитая документация (работает без проекта и в недоверенной папке).
   if (BUNDLED_DOCS && fs.existsSync(path.join(BUNDLED_DOCS, INDEX_FILE))) return BUNDLED_DOCS;
   return null;
 }
@@ -118,8 +110,7 @@ function mdFilesIn(dir) {
   if (!fs.existsSync(dir)) return [];
   let ents;
   try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return []; }
-  // Симлинки НЕ разворачиваем: симлинк в чужой папке доков увёл бы чтение за пределы корня
-  // (утечка данных в вшиваемый контент). Берём только настоящие файлы *.md.
+  // Симлинки НЕ разворачиваем: увели бы чтение за пределы корня (утечка в вшиваемый контент).
   const names = ents
     .filter((d) => !d.isSymbolicLink() && d.isFile() && d.name.toLowerCase().endsWith('.md'))
     .map((d) => d.name)
@@ -132,10 +123,8 @@ function mdFilesIn(dir) {
   return names.map((n) => path.join(dir, n));
 }
 
-/** Текст файла для поиска: заголовки и абзацы без разметки, первые 6 КБ.
- *  Нужен, чтобы запрос «тест» находил файл про тестирование, даже если этого
- *  слова нет ни в названии, ни в описании. Регистр сохраняем — из этого текста
- *  панель вырезает читаемый фрагмент-контекст вокруг совпадения. */
+/** Текст файла для поиска (первые 6 КБ, без разметки): чтобы находить по содержимому, а не
+ *  только по названию. Регистр сохраняем — из этого текста вырезается фрагмент-контекст. */
 function parseBody(content) {
   return content
     .slice(0, 6000)
@@ -182,9 +171,7 @@ function estimateMinutes(content) {
   return Math.max(1, Math.round(words / 150));
 }
 
-// Кэш разобранных файлов: пока файл не менялся (по mtime), не перечитываем и не
-// разбираем его заново. Раньше describe() читал каждый файл четыре раза, и вся
-// папка перечитывалась при любой перерисовке (открытие, закладка, слежение).
+// Кэш разбора файла по mtime: пока файл не менялся — не перечитываем и не разбираем заново.
 const docCache = new Map();
 
 function describe(filePath) {
@@ -287,6 +274,7 @@ function collectGroups(root, recent, pins) {
   }
 
   const sections = [
+    ['zametki', 'Мои заметки', '#4ec9b0'],
     ['ref', 'Справочник по темам', 'var(--vscode-charts-purple, #b180d7)'],
     ['zadachnik', 'Задачник', 'var(--vscode-charts-red, #e06c75)'],
     ['examples', 'Примеры программ', 'var(--vscode-charts-green, #89d185)'],
@@ -317,8 +305,7 @@ function buildDocsData(root) {
       seen.add(it.file);
       let md = '';
       try {
-        // Симлинки не читаем (могут указывать вне корня); большие файлы обрезаем, а по
-        // достижении общего потолка — вовсе не тащим тело в оболочку.
+        // Симлинки не читаем (вне корня); большой файл обрезаем; за общим потолком — тело не тащим.
         const st = fs.lstatSync(it.file);
         if (st.isSymbolicLink()) { md = ''; }
         else if (totalBytes >= MAX_TOTAL_DOC_BYTES) { md = '\n> _Материал не показан в окне: превышен общий лимит объёма._\n'; }
@@ -393,14 +380,11 @@ function writeDocsData(context) {
   if (!root) return false;
   let data;
   try { data = buildDocsData(root); } catch (e) { return false; }
-  data.dataUrl = fileUrl(dataFilePath(context));   // чтобы окно могло перечитать себя по кнопке «Обновить»
-  data.stampUrl = fileUrl(stampFilePath(context)); // лёгкая метка для автообновления окна
-  // Загрузчик (be5invis/custom-ui-style) встраивает этот файл ИНЛАЙНОМ: <script>…</script>.
-  // Если в материалах попадётся литеральный </script> (например, пример с HTML), он досрочно
-  // закроет тег — данные вывалятся текстом, а window.__CPPDOCS__ не установится. Экранируем его
-  // так же, как это делает превью-харнесс, но полнее: safeJsonForScript глушит </script,
-  // <!-- и <script разом и защищает от разделителей строк — данные ведь могут прийти из
-  // чужого воркспейса, а исполняются в оболочке.
+  data.dataUrl = fileUrl(dataFilePath(context));   // для кнопки «Обновить» в окне
+  data.stampUrl = fileUrl(stampFilePath(context)); // лёгкая метка для автообновления
+  data.runtimeUrl = fileUrl(runtimeScriptPath(context)); // маячок «живо ли расширение» (самопроверка окна)
+  // Загрузчик встраивает файл инлайном; safeJsonForScript глушит </script, <!--, <script и
+  // разделители строк — контент может прийти из чужого воркспейса, а исполняется в оболочке.
   const body = 'window.__CPPDOCS__ = ' + safeJsonForScript(data) + ';\n';
   try {
     const p = dataFilePath(context);
@@ -503,11 +487,9 @@ const WB_END = '<!-- CPPDOCS-WINDOW-END -->';
 /** Экранировать </script, чтобы инлайн-<script> не закрылся на содержимом. */
 function escapeScript(s) { return String(s).replace(/<\/script/gi, '<\\/script'); }
 
-/** Безопасно вложить JSON в инлайн-<script>. Экранируем КАЖДЫЙ '<' в <: этого одного
- *  достаточно, чтобы нейтрализовать сразу </script, <!-- и <script (все способы сломать тег
- *  или запутать HTML-парсер), а JSON.parse вернёт исходный '<'. Плюс разделители строк
- *  U+2028/U+2029 — они валидны в JSON, но рвут JS-литерал. Важнее обычного экранирования,
- *  потому что данные могут прийти из чужого воркспейса, а исполняются в оболочке. */
+/** JSON для инлайн-<script>: экранируем каждый '<' (глушит </script, <!--, <script разом)
+ *  и разделители строк U+2028/U+2029 (валидны в JSON, но рвут JS-литерал). JSON.parse вернёт
+ *  исходные символы. Данные могут прийти из чужого воркспейса, а исполняются в оболочке. */
 function safeJsonForScript(obj) {
   return JSON.stringify(obj)
     .replace(/</g, '\\u003c')
@@ -520,19 +502,20 @@ function neutralizeCsp(html) {
   return html.replace(/<meta\s+[^>]*Content-Security-Policy[^>]*>/gi, '');
 }
 
-/** Впустить наши скрипты по nonce, НЕ снимая CSP целиком. Раньше расширение вырезало
- *  Content-Security-Policy из оболочки — это ослабляло защиту ВСЕГО VS Code от инъекции
- *  скриптов из любого источника. Теперь:
- *   - CSP-меты нет (как в свежих сборках) → ничего не навязываем, наши скрипты и так идут;
- *   - есть script-src → дописываем 'nonce-…' (наш инлайн) и file: (перечитка данных из file://),
- *     в style-src — тот же nonce для нашего <style>; чужие инлайн-скрипты остаются заблокированы;
- *   - CSP без script-src (редкость) → безопаснее снять, чем гадать про default-src. */
+/** Впустить наши скрипты по nonce, НЕ снимая CSP целиком (раньше вырезали её — это ослабляло
+ *  защиту всего VS Code). Нет CSP-меты — ничего не навязываем; есть script-src — дописываем
+ *  'nonce-…' file:; нет script-src — добавляем минимальную директиву, не снимая CSP; в style-src
+ *  вешаем тот же nonce для нашего <style>. Чужие инлайн-скрипты остаются заблокированы. */
 function armCspWithNonce(html, nonce) {
   const re = /<meta\s+[^>]*Content-Security-Policy[^>]*>/i;
   const m = html.match(re);
   if (!m) return html;
-  if (!/script-src/i.test(m[0])) return html.replace(re, '');
-  let meta = m[0].replace(/(script-src)([^;>"']*)/i, "$1$2 'nonce-" + nonce + "' file:");
+  let meta = m[0];
+  if (/script-src/i.test(meta)) {
+    meta = meta.replace(/(script-src)([^;>"']*)/i, "$1$2 'nonce-" + nonce + "' file:");
+  } else {
+    meta = meta.replace(/(content\s*=\s*)(["'])/i, "$1$2script-src 'nonce-" + nonce + "' file:; ");
+  }
   if (/style-src/i.test(meta)) meta = meta.replace(/(style-src)([^;>"']*)/i, "$1$2 'nonce-" + nonce + "'");
   return html.replace(re, meta);
 }
@@ -543,10 +526,8 @@ function windowBlockRe() {
   return new RegExp(esc(WB_START) + '[\\s\\S]*?' + esc(WB_END));
 }
 
-/** Тело data-скрипта: window.__CPPDOCS__ = {…}; — ИНЛАЙНОМ в оболочку. Внешний <script src=file://>
- *  не годится: VS Code грузит workbench.html по схеме vscode-file:// и блокирует file://-скрипты,
- *  поэтому и данные, и рантайм впечатываем прямо в оболочку. Ссылки dataUrl/stampUrl+scriptNonce
- *  кладём в данные — для автообновления и для nonce на динамике. */
+/** Тело data-скрипта (window.__CPPDOCS__ = {…};) — инлайном в оболочку: внешний file://-скрипт
+ *  VS Code блокирует (схема vscode-file://), поэтому и данные, и рантайм впечатываем напрямую. */
 function windowDataBody(context, nonce) {
   const root = findDocsRoot();
   if (!root) return null;
@@ -555,6 +536,7 @@ function windowDataBody(context, nonce) {
   try {
     data.dataUrl = fileUrl(dataFilePath(context));
     data.stampUrl = fileUrl(stampFilePath(context));
+    data.runtimeUrl = fileUrl(runtimeScriptPath(context)); // маячок для самопроверки окна
   } catch (e) {}
   if (nonce) data.scriptNonce = nonce;
   return 'window.__CPPDOCS__ = ' + safeJsonForScript(data) + ';\n';
@@ -603,10 +585,8 @@ function writeWorkbenchAtomic(file, data) {
   throw lastErr;
 }
 
-/** Вернуть CSP-мету из оригинального бэкапа, если мы её сняли, а сейчас её нет.
- *  Так «отключить окно» не оставляет защиту оболочки снятой навсегда. Если у сборки
- *  VS Code CSP-меты и не было (как в свежих версиях) — тихо ничего не делаем. Чужие
- *  вставки (например, обои custom-bg) не трогаем: восстанавливаем только саму мету. */
+/** Вернуть CSP-мету из бэкапа при отключении окна (не оставляем защиту снятой навсегда).
+ *  Если в оригинале CSP не было — ничего не делаем; чужие вставки не трогаем. */
 function restoreCspFromBackup(html, bakPath) {
   const RE = /<meta\s+[^>]*Content-Security-Policy[^>]*>/i;
   let orig;
@@ -674,7 +654,6 @@ function cleanupLeftovers() {
   return removed;
 }
 
-/** Подключить плавающее окно: прямой патч оболочки, без стороннего загрузчика. */
 /** Ядро инъекции без UI: патчит все workbench.html. Возвращает {ok,done,denied,reason}. */
 function injectWindowFiles(context) {
   const nonce = makeNonce();
@@ -688,24 +667,32 @@ function injectWindowFiles(context) {
   let runtimeJs;
   try { runtimeJs = fs.readFileSync(scriptPath, 'utf8'); }
   catch (e) { return { ok: false, done: 0, denied: false, reason: 'read-runtime' }; }
-  // Санити рантайма: не впечатываем в привилегированную оболочку пустой/подменённый файл —
-  // он должен быть достаточного размера и нести свой маркер.
+  // Санити: пустой/подменённый рантайм в оболочку не впечатываем (нужен размер + свой маркер).
   if (runtimeJs.length < 5000 || runtimeJs.indexOf('__CPPDOCS_RUNTIME__') === -1) {
     return { ok: false, done: 0, denied: false, reason: 'bad-runtime' };
+  }
+  // Целостность: хэш рантайма должен совпасть с якорем RUNTIME_SHA256 (защита от подмены).
+  // Пустой якорь (dev до генерации) — проверку пропускаем.
+  if (RUNTIME_SHA256) {
+    let actual = '';
+    try { actual = crypto.createHash('sha256').update(runtimeJs, 'utf8').digest('hex'); } catch (e) {}
+    if (actual && actual !== RUNTIME_SHA256) {
+      log('инъекция окна отменена: SHA-256 рантайма (' + actual.slice(0, 12) + '…) не совпал с ожидаемым — возможна подмена');
+      return { ok: false, done: 0, denied: false, reason: 'bad-runtime' };
+    }
   }
   const block = buildWindowBlock(dataBody, runtimeJs, nonce);
   let done = 0, denied = false;
   for (const f of files) {
-    // #8: пишем только в настоящий workbench.html оболочки — не в случайный файл.
+    // Пишем только в настоящий workbench.html оболочки, не в случайный файл.
     if (!/[\\/]workbench[\\/]workbench\.html$/i.test(f)) continue;
     try {
       const bak = f + '.cppdocs-backup';
       const raw = fs.readFileSync(f, 'utf8');
-      // Бэкап держим равным ОРИГИНАЛУ: если текущий файл ещё не наш (нет маркера) — это
-      // чистая оболочка (в т.ч. после обновления VS Code), обновляем бэкап под неё.
+      // Бэкап держим равным оригиналу: файл ещё без нашего маркера — значит чистая оболочка.
       if (raw.indexOf(WB_START) === -1) { try { fs.copyFileSync(f, bak); } catch (e) {} }
       else if (!fs.existsSync(bak)) { try { fs.copyFileSync(f, bak); } catch (e) {} }
-      const html = armCspWithNonce(raw, nonce);  // впустить наши скрипты по nonce, не снимая CSP целиком
+      const html = armCspWithNonce(raw, nonce);
       const next = applyWindowInjection(html, block);
       if (next == null) continue;
       writeWorkbenchAtomic(f, next);
@@ -751,11 +738,8 @@ async function disableWindow(context) {
     try {
       const html = fs.readFileSync(f, 'utf8');
       if (html.indexOf(WB_START) === -1) continue;
-      // Снимаем ТОЛЬКО свой блок между маркерами, НЕ восстанавливая оболочку целиком
-      // из бэкапа: полное восстановление затирает чужие вставки (например, обои
-      // custom-bg через be5invis), которых в бэкапе могло не быть. А вот CSP-мету,
-      // если мы её сняли при инъекции, возвращаем — чтобы защита оболочки не осталась
-      // отключённой навсегда после «отключить окно».
+      // Снимаем ТОЛЬКО свой блок (полное восстановление из бэкапа затёрло бы чужие вставки,
+      // например обои custom-bg). CSP-мету, если снимали при инъекции, возвращаем.
       let next = stripWindowInjection(html);
       next = restoreCspFromBackup(next, f + '.cppdocs-backup');
       writeWorkbenchAtomic(f, next);
@@ -770,6 +754,13 @@ async function disableWindow(context) {
     ? 'Плавающее окно отключено. Перезапустите редактор (Developer: Reload Window).'
     : (denied ? 'Нет доступа на запись к оболочке VS Code (нужен администратор).'
               : 'Инъекция окна не найдена — оболочка уже чистая.'));
+}
+
+/** Одна команда-переключатель: окно впечатано — снять, иначе подключить. Удобная единая точка
+ *  входа (без отдельной горячей клавиши) — по состоянию оболочки решаем, что делать. */
+async function toggleWindow(context) {
+  if (windowInjected()) return disableWindow(context);
+  return enableWindow(context);
 }
 
 /** Прописан ли уже наш импорт (для health и первого запуска). */
@@ -819,8 +810,7 @@ async function windowHealth(context) {
 }
 
 async function openDoc(filePath, forceText) {
-  // Файл могли удалить/переместить уже после того, как панель собрала список, —
-  // не даём showTextDocument упасть с непонятной ошибкой, говорим по-человечески.
+  // Файл могли удалить/переместить после сборки списка — говорим об этом внятно.
   if (!fs.existsSync(filePath)) {
     vscode.window.showWarningMessage('Файл не найден (возможно, перемещён или удалён): ' + path.basename(filePath));
     return;
@@ -878,11 +868,10 @@ class DocsViewProvider {
     clearTimeout(this.renderTimer);
     this.renderTimer = setTimeout(() => {
       this.renderAll();
-      // Плавающее окно читает материалы из сгенерированного файла — держим его свежим.
-      // Пишем только если окно уже подключено (файл данных существует), иначе не тратим диск.
+      // Держим файл данных окна свежим — но только если окно уже подключено (файл существует).
       try {
         if (fs.existsSync(dataFilePath(this.context))) writeDocsData(this.context);
-      } catch (e) { /* нет прав/папки — окно просто обновится при следующем открытии */ }
+      } catch (e) { /* нет прав/папки — окно обновится при следующем открытии */ }
     }, 150);
   }
 
@@ -976,8 +965,12 @@ class DocsViewProvider {
       await openDoc(msg.file, true);
       this.renderAll();
     } else if (msg.type === 'runTests') {
+      // Задача воркспейса запускается по имени — в недоверенной папке не запускаем
+      // (вредоносный .vscode/tasks.json мог бы подсунуть под этим именем свою команду).
+      if (!workspaceTrusted()) { vscode.window.showWarningMessage('Запуск задач доступен только в доверенной папке (Workspace Trust).'); return; }
       await vscode.commands.executeCommand('workbench.action.tasks.runTask', 'C++: прогнать тесты');
     } else if (msg.type === 'checkDocs') {
+      if (!workspaceTrusted()) { vscode.window.showWarningMessage('Запуск задач доступен только в доверенной папке (Workspace Trust).'); return; }
       await vscode.commands.executeCommand('workbench.action.tasks.runTask', 'Документация: проверить');
     } else if (msg.type === 'clearRecent') {
       await this.context.globalState.update(RECENT_KEY, []);
@@ -1008,11 +1001,18 @@ class DocsViewProvider {
   /** Открыть меню отдельной панелью в области редактора (во всю ширину, не в сайдбаре). */
   openMenuPanel() {
     if (this.panel) { this.panel.reveal(); return; }
+    // Корни ресурсов вебвью — только папка расширения.
+    const opts = { enableScripts: true, retainContextWhenHidden: true };
+    try {
+      if (vscode.Uri && typeof vscode.Uri.file === 'function' && this.context && this.context.extensionPath) {
+        opts.localResourceRoots = [vscode.Uri.file(this.context.extensionPath)];
+      }
+    } catch (e) {}
     const panel = vscode.window.createWebviewPanel(
       'cppDocsMenu',
       'Документация C++',
       vscode.ViewColumn.Active,
-      { enableScripts: true, retainContextWhenHidden: true }
+      opts
     );
     try {
       panel.iconPath = vscode.Uri.file(path.join(__dirname, 'icon.svg'));
@@ -1030,8 +1030,10 @@ class DocsViewProvider {
   htmlFor() {
     const root = findDocsRoot();
     this.ensureWatcher(root);
+    // Кнопки задач показываем только для доверенного проекта, не для встроенного fallback.
+    const showTasks = !!root && workspaceTrusted() && root !== BUNDLED_DOCS;
     return root
-      ? this.buildHtml(collectGroups(root, this.recent(), this.pins()), this.currentDocFile(), this.pins(), this.read())
+      ? this.buildHtml(collectGroups(root, this.recent(), this.pins()), this.currentDocFile(), this.pins(), this.read(), showTasks)
       : this.buildEmptyHtml();
   }
 
@@ -1048,7 +1050,14 @@ class DocsViewProvider {
 
   resolveWebviewView(webviewView) {
     this.view = webviewView;
-    webviewView.webview.options = { enableScripts: true };
+    // Корни ресурсов вебвью — только папка расширения (защита в глубину поверх CSP).
+    const opts = { enableScripts: true };
+    try {
+      if (vscode.Uri && typeof vscode.Uri.file === 'function' && this.context && this.context.extensionPath) {
+        opts.localResourceRoots = [vscode.Uri.file(this.context.extensionPath)];
+      }
+    } catch (e) {}
+    webviewView.webview.options = opts;
     this.render();
 
     webviewView.webview.onDidReceiveMessage((msg) => this.handleMessage(msg));
@@ -1107,7 +1116,7 @@ class DocsViewProvider {
   buildEmptyHtml() {
     const nonce = nonceString();
     return `<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'none'; font-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
 <style>
   body { font-family: var(--vscode-font-family); color: var(--vscode-foreground);
          padding: 18px 16px; font-size: 13px; line-height: 1.55; }
@@ -1122,8 +1131,8 @@ class DocsViewProvider {
   button:hover { background: var(--vscode-button-hoverBackground); }
 </style></head><body>
 <p><b>Папка с документацией не найдена.</b></p>
-<p class="hint">Открой проект <code>D:\\Desktop\\components\\cpp-docs-panel</code> или укажи путь в настройке
-<code>cppDocs.path</code>.</p>
+<p class="hint">Обычно расширение показывает встроенную документацию. Если её нет — открой проект
+с папкой <code>docs</code> или укажи путь в настройке <code>cppDocs.path</code>.</p>
 <button id="open-settings" type="button">Открыть настройки</button>
 <script nonce="${nonce}">
   const vscode = acquireVsCodeApi();
@@ -1134,7 +1143,7 @@ class DocsViewProvider {
 </body></html>`;
   }
 
-  buildHtml(groups, currentFile, pins, read) {
+  buildHtml(groups, currentFile, pins, read, showTasks) {
     const nonce = nonceString();
     const pinnedSet = new Set(pins || []);
     const readSet = new Set(read || []);
@@ -1207,7 +1216,7 @@ class DocsViewProvider {
       .join('');
 
     return `<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'none'; font-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
 <style>
   * { box-sizing: border-box; }
   body {
@@ -1525,10 +1534,10 @@ class DocsViewProvider {
 
 <button id="to-top" type="button" title="Наверх" aria-label="Наверх">↑</button>
 
-<div class="actions">
+${showTasks ? `<div class="actions">
   <button id="btn-tests" title="Прогнать тесты для открытого .cpp">Прогнать тесты</button>
   <button id="btn-check" title="Проверить, что документация не устарела">Проверить доки</button>
-</div>
+</div>` : ''}
 
 <script nonce="${nonce}">
 (function () {
@@ -1837,8 +1846,10 @@ class DocsViewProvider {
   });
 
   clearBtn.addEventListener('click', () => { search.value = ''; applyFilter(); search.focus(); saveState(); });
-  document.getElementById('btn-tests').addEventListener('click', () => vscode.postMessage({ type: 'runTests' }));
-  document.getElementById('btn-check').addEventListener('click', () => vscode.postMessage({ type: 'checkDocs' }));
+  const btnTests = document.getElementById('btn-tests');
+  if (btnTests) btnTests.addEventListener('click', () => vscode.postMessage({ type: 'runTests' }));
+  const btnCheck = document.getElementById('btn-check');
+  if (btnCheck) btnCheck.addEventListener('click', () => vscode.postMessage({ type: 'checkDocs' }));
 
   // «Наверх».
   toTop.addEventListener('click', () => { window.scrollTo(0, 0); search.focus(); });
@@ -1964,11 +1975,10 @@ function activate(context) {
       openDoc(path.join(root, INDEX_FILE), false);
     }),
     vscode.commands.registerCommand('cppDocs.focusSearch', () => provider.focusSearch()),
-    // Плавающее окно: подключить / отключить / проверить.
-    // Прямой патч оболочки, без стороннего загрузчика (ensureWindowImport/
-    // removeWindowImport оставлены как совместимость со старым способом).
+    // Плавающее окно: подключить / отключить / проверить (прямой патч оболочки).
     vscode.commands.registerCommand('cppDocs.enableWindow', () => enableWindow(context)),
     vscode.commands.registerCommand('cppDocs.disableWindow', () => disableWindow(context)),
+    vscode.commands.registerCommand('cppDocs.toggleWindow', () => toggleWindow(context)),
     vscode.commands.registerCommand('cppDocs.windowHealth', () => windowHealth(context)),
     vscode.commands.registerCommand('cppDocs.showLog', () => { log('открыт журнал'); if (outputChannel) outputChannel.show(true); })
   );
@@ -1976,35 +1986,37 @@ function activate(context) {
   try { cleanupLeftovers(context); } catch (e) { log('уборка хвостов', e); }
 
   try {
-  // Всегда держим файл данных окна свежим при запуске: он нужен и окну, подключённому
-  // через загрузчик, и авто-инъектору workbench.html (батник «Плавающее-окно.bat»),
-  // который сам впечатывает данные + рантайм без стороннего загрузчика.
+  // Держим файл данных окна свежим при запуске (нужен окну и авто-инъектору).
   try { writeDocsData(context); } catch (e) {}
 
-  // Авто-восстановление: если окно было включено, но патч пропал (обновление VS Code
-  // заменило workbench.html) — тихо впечатываем заново и предлагаем перезагрузку.
+  // Патч пропал после обновления VS Code, а окно было включено — не патчим молча,
+  // а спрашиваем согласие; впечатываем только по «Восстановить».
   try {
     if (context.globalState.get(WINDOW_ON_KEY) && findDocsRoot() &&
         findWorkbenchFiles().length && !windowInjected()) {
-      const r = injectWindowFiles(context);
-      if (r.ok) {
-        setTimeout(() => {
-          vscode.window.showInformationMessage(
-            'Документация C++: плавающее окно восстановлено после обновления VS Code. Перезагрузить окно?',
-            'Перезагрузить', 'Позже'
-          ).then((pick) => { if (pick === 'Перезагрузить') { try { vscode.commands.executeCommand('workbench.action.reloadWindow'); } catch (e) {} } });
-        }, 2500);
-      } else if (r.denied) {
-        setTimeout(() => {
-          vscode.window.showWarningMessage(
-            'Документация C++: не удалось восстановить окно (нет доступа на запись к оболочке). Запустите VS Code от имени администратора и выполните «подключить плавающее окно».');
-        }, 2500);
-      }
+      setTimeout(() => {
+        vscode.window.showInformationMessage(
+          'Документация C++: после обновления VS Code плавающее окно пропало. Восстановить? Это снова разово изменит оболочку VS Code (появится баннер «…corrupt», его можно закрыть).',
+          'Восстановить', 'Позже'
+        ).then((pick) => {
+          if (pick !== 'Восстановить') return;
+          const r = injectWindowFiles(context);
+          if (r.ok) {
+            vscode.window.showInformationMessage(
+              'Окно восстановлено. Перезагрузить редактор?', 'Перезагрузить', 'Позже'
+            ).then((p2) => { if (p2 === 'Перезагрузить') { try { vscode.commands.executeCommand('workbench.action.reloadWindow'); } catch (e) {} } });
+          } else if (r.denied) {
+            vscode.window.showWarningMessage(
+              'Не удалось восстановить окно (нет доступа на запись к оболочке). Запустите VS Code от имени администратора и выполните «подключить плавающее окно».');
+          } else {
+            vscode.window.showWarningMessage('Не удалось восстановить плавающее окно. Откройте «проверить плавающее окно» для диагностики.');
+          }
+        });
+      }, 2500);
     }
   } catch (e) {}
 
-  // Первый запуск: один раз предложим включить плавающее окно (прямой патч оболочки,
-  // без стороннего загрузчика) — это основной способ читать доки поверх редактора.
+  // Первый запуск: один раз предложим включить плавающее окно.
   try {
     if (!context.globalState.get(WINDOW_SETUP_KEY)) {
       context.globalState.update(WINDOW_SETUP_KEY, true);

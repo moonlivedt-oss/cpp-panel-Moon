@@ -122,11 +122,16 @@ check("рантайм фильтрует схемы ссылок (safeUrl)",
 // #3 строгая форма данных + защита прототипа.
 check("рантайм валидирует форму данных и глушит __proto__ (looksSafe)",
       runtimeRaw.indexOf("function looksSafe") !== -1 && runtimeRaw.indexOf("__proto__") !== -1);
-// #2 nonce вешается на динамические script/style, кешируется в boot.
+// #2 nonce вешается на динамический <style>, кешируется в boot.
 check("рантайм вешает nonce на динамику (applyNonce) и кеширует CD_NONCE",
       runtimeRaw.indexOf("function applyNonce") !== -1 &&
       /CD_NONCE = /.test(runtimeRaw) &&
-      (runtimeRaw.match(/applyNonce\(/g) || []).length >= 3);
+      (runtimeRaw.match(/applyNonce\(/g) || []).length >= 2);
+// #1 Перечитка данных/метки НЕ исполняет файл (нет динамического <script> под данные/refresh).
+check("рантайм перечитывает данные только через fs+JSON.parse, без исполнения файла",
+      runtimeRaw.indexOf("sanitizeData(JSON.parse(") !== -1 &&
+      !/document\.head\.appendChild\(s\)/.test(runtimeRaw) &&
+      !/s\.src = url/.test(runtimeRaw));
 // #1 гейт по доверию воркспейса.
 check("findDocsRoot гейтит недоверенный воркспейс (workspaceTrusted/isTrusted)",
       extRaw.indexOf("function workspaceTrusted") !== -1 &&

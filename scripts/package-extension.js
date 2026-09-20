@@ -287,6 +287,24 @@ function preflight(pkg) {
     }
   } catch (e) { if (e && e.__cppdocsFail) throw e; /* корневого package.json нет — не критично */ }
 
+  // 4a. #3 Якорь целостности рантайма (RUNTIME_SHA256 в extension.js) должен совпадать с
+  //     фактическим SHA-256 cpp-docs-runtime.js — иначе проверка при инъекции отвергнет
+  //     штатный рантайм. Обновить: `npm run hash:runtime`.
+  try {
+    var rtTxt = fs.readFileSync(path.join(EXT, "cpp-docs-runtime.js"), "utf8");
+    var rtSha = crypto.createHash("sha256").update(rtTxt, "utf8").digest("hex");
+    var extTxt = fs.readFileSync(path.join(EXT, "extension.js"), "utf8");
+    var anchor = (extTxt.match(/const RUNTIME_SHA256 = '([0-9a-f]*)';/) || [])[1];
+    if (anchor === undefined) {
+      fail("в extension.js нет константы RUNTIME_SHA256 — не могу проверить целостность рантайма.");
+    } else if (anchor && anchor !== rtSha) {
+      fail("SHA-256 рантайма (" + rtSha.slice(0, 12) + "…) не совпал с якорем RUNTIME_SHA256 в extension.js" +
+           " (" + (anchor.slice(0, 12) || "пусто") + "…). Выполните: npm run hash:runtime");
+    } else if (!anchor) {
+      console.warn("  ! RUNTIME_SHA256 пуст — проверка целостности рантайма отключена. Выполните: npm run hash:runtime");
+    }
+  } catch (e) { if (e && e.__cppdocsFail) throw e; }
+
   // 4b. В CHANGELOG есть запись под эту версию — иначе релиз без истории изменений.
   try {
     var ch = fs.readFileSync(path.join(ROOT, "CHANGELOG.md"), "utf8");

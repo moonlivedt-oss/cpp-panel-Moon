@@ -20,6 +20,7 @@
 var fs = require("fs");
 var path = require("path");
 var Module = require("module");
+var crypto = require("crypto");
 
 var ROOT = path.join(__dirname, "..");
 var EXT = path.join(ROOT, "extension");
@@ -50,6 +51,7 @@ function makeVscodeStub(options) {
         return {
           get: function (key) {
             if (key === "path") return opts.docsPath || "";
+            if (key === "paths") return opts.docsPaths || [];
             return true;
           },
         };
@@ -335,6 +337,25 @@ check("названа настройка пути", html3.indexOf("cppDocs.path"
 check("на пустом экране есть кнопка настроек", html3.indexOf("open-settings") !== -1);
 
 // ------------------------------------------------------------
+//  5b. cppDocs.paths — берётся первый существующий путь из списка
+// ------------------------------------------------------------
+console.log("\nНесколько корней (cppDocs.paths)");
+if (fs.existsSync(path.join(docsPath, "00-НАЧНИ-ОТСЮДА.md"))) {
+  var extP = loadExtension(makeVscodeStub({
+    captured: { commands: [], provider: null, viewId: null },
+    docsPath: "", folders: [],
+    docsPaths: [path.join(tmp, "нет-такой-папки"), docsPath],   // первый не существует, второй — реальный
+  }));
+  check("cppDocs.paths: первый существующий путь найден", extP.findDocsRoot() === docsPath);
+  var extP2 = loadExtension(makeVscodeStub({
+    captured: { commands: [], provider: null, viewId: null },
+    docsPath: "", folders: [], docsPaths: [path.join(tmp, "нет-1"), path.join(tmp, "нет-2")],
+  }));
+  var rootP2 = extP2.findDocsRoot();
+  check("cppDocs.paths: все пути пусты → fallback на встроенные/нет", rootP2 === null || rootP2 !== path.join(tmp, "нет-1"));
+}
+
+// ------------------------------------------------------------
 //  6. Плавающее окно: команды, данные, рантайм
 // ------------------------------------------------------------
 console.log("\nПлавающее окно");
@@ -401,7 +422,7 @@ check("окно: прописывание импорта", srcAll.indexOf("funct
 check("окно: удаление импорта", srcAll.indexOf("function removeWindowImport") !== -1);
 check("окно: прямой патч оболочки без загрузчика", srcAll.indexOf("function enableWindow") !== -1 && srcAll.indexOf("function findWorkbenchFiles") !== -1);
 check("окно: команда подключения ведёт на прямой патч", srcAll.indexOf("() => enableWindow(context)") !== -1);
-check("окно: авто-восстановление после апдейта VS Code", srcAll.indexOf("WINDOW_ON_KEY") !== -1 && srcAll.indexOf("function injectWindowFiles") !== -1 && srcAll.indexOf("восстановлено после обновления VS Code") !== -1);
+check("окно: восстановление после апдейта VS Code — только по согласию", srcAll.indexOf("WINDOW_ON_KEY") !== -1 && srcAll.indexOf("function injectWindowFiles") !== -1 && srcAll.indexOf("после обновления VS Code плавающее окно пропало") !== -1);
 check("окно: команда в манифесте", pkg.contributes.commands.some(function (c) { return c.command === "cppDocs.enableWindow"; }));
 check("окно: кнопка в шапке панели", JSON.stringify(pkg.contributes.menus["view/title"]).indexOf("cppDocs.enableWindow") !== -1);
 
@@ -420,6 +441,60 @@ check("упаковщик: предполётная проверка перед 
 check("упаковщик: проверяет синтаксис JS (node --check)", pkgScript.indexOf('"--check"') !== -1);
 check("упаковщик: проверяет обязательные файлы", pkgScript.indexOf("нет обязательного файла") !== -1);
 check("скрипт встраивания наклеек на месте", fs.existsSync(path.join(ROOT, "scripts", "embed-stickers.js")));
+
+// ------------------------------------------------------------
+//  8. Харденинг безопасности (топ-10 улучшений)
+// ------------------------------------------------------------
+console.log("\nБезопасность");
+var rtSec = fs.readFileSync(path.join(EXT, "cpp-docs-runtime.js"), "utf8");
+var ps1Path = path.join(ROOT, "dist", "cpp-docs-panel-install", "window-inject.ps1");
+var ps1 = fs.existsSync(ps1Path) ? fs.readFileSync(ps1Path, "utf8") : "";
+
+// #1 файл данных не исполняется при перечитке
+check("#1 перечитка данных без исполнения файла (fs+JSON.parse, sanitizeData)",
+      rtSec.indexOf("sanitizeData(JSON.parse(") !== -1 && !/s\.src = url/.test(rtSec));
+// #2 PS1-установщик вооружает CSP nonce, а не снимает её целиком
+check("#2 PS1 вооружает CSP nonce (не снимает целиком)",
+      ps1.indexOf("nonce-") !== -1 && ps1.indexOf("script-src") !== -1 &&
+      ps1.indexOf("Content-Security-Policy[^>]*>', ''") === -1);
+// #3 якорь целостности рантайма + сверка при инъекции
+check("#3 SHA-256 рантайма: якорь и сверка перед инъекцией",
+      /const RUNTIME_SHA256 = '[0-9a-f]{64}';/.test(srcAll) &&
+      srcAll.indexOf("actual !== RUNTIME_SHA256") !== -1 &&
+      fs.existsSync(path.join(ROOT, "scripts", "hash-runtime.js")));
+check("#3 якорь совпадает с фактическим SHA-256 рантайма",
+      (function () {
+        var m = srcAll.match(/const RUNTIME_SHA256 = '([0-9a-f]{64})';/);
+        if (!m) return false;
+        return m[1] === crypto.createHash("sha256").update(rtSec, "utf8").digest("hex");
+      })());
+// #4 удалённые картинки не грузятся из привилегированной оболочки
+check("#4 внешние/inline картинки блокируются в окне",
+      rtSec.indexOf("внешнее изображение (не загружено)") !== -1 &&
+      /https\?:/.test(rtSec) && rtSec.indexOf("Внешние картинки отключены") !== -1);
+// #5 запуск задач воркспейса гейтится доверием + кнопки прячутся вне проекта
+check("#5 задачи воркспейса под гейтом доверия",
+      (srcAll.match(/if \(!workspaceTrusted\(\)\)/g) || []).length >= 2 &&
+      srcAll.indexOf("const showTasks =") !== -1);
+// #6 вебвью: сужены корни ресурсов + явные img-src/font-src
+check("#6 localResourceRoots + строгий CSP вебвью",
+      (srcAll.match(/localResourceRoots/g) || []).length >= 2 &&
+      (srcAll.match(/img-src 'none'; font-src 'none'/g) || []).length >= 2);
+// #7 переинъекция после апдейта — только по согласию
+check("#7 восстановление окна только по согласию",
+      srcAll.indexOf("после обновления VS Code плавающее окно пропало") !== -1);
+// #8 armCspWithNonce не удаляет CSP при отсутствии script-src, а дополняет её nonce
+check("#8 CSP без script-src не снимается, а дополняется nonce",
+      srcAll.indexOf("script-src 'nonce-") !== -1 &&
+      srcAll.indexOf("if (!/script-src/i.test(m[0])) return html.replace(re, '')") === -1);
+// #9 самопроверка «жив ли каталог расширения»
+check("#9 окно самопроверяется на удаление расширения (extAlive)",
+      rtSec.indexOf("function extAlive") !== -1 && rtSec.indexOf("if (!extAlive()) return;") !== -1 &&
+      srcAll.indexOf("data.runtimeUrl = ") !== -1);
+// #10 строгая валидация перечитанных данных
+check("#10 sanitizeData: строгая форма + лимиты объёма",
+      rtSec.indexOf("function sanitizeData") !== -1 && rtSec.indexOf("CD_MAX_TOTAL_MD") !== -1 &&
+      rtSec.indexOf("if (!looksSafe(d)) return null;") !== -1);
 
 // ------------------------------------------------------------
 console.log("\n" + (failures.length ? "ПРОВАЛОВ: " + failures.length : "Все проверки пройдены") +
