@@ -12,9 +12,9 @@
 поиск по содержимому · оглавление и переходы по внутренним ссылкам · прогресс изучения · ноль зависимостей
 
 [![CI](https://github.com/moonlivedt-oss/cpp-panel-Moon/actions/workflows/ci.yml/badge.svg)](https://github.com/moonlivedt-oss/cpp-panel-Moon/actions/workflows/ci.yml)
-![version](https://img.shields.io/badge/version-3.1.0-cba6f7)
+![version](https://img.shields.io/badge/version-3.5.0-cba6f7)
 ![vscode](https://img.shields.io/badge/VS%20Code-%5E1.75-007ACC?logo=visualstudiocode&logoColor=white)
-![tests](https://img.shields.io/badge/тесты-180%20ok-a6e3a1)
+![tests](https://img.shields.io/badge/тесты-251%20ok-a6e3a1)
 ![deps](https://img.shields.io/badge/зависимостей-0-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-green)
 

@@ -1,7 +1,7 @@
 {
   "name": "cpp-docs-panel-project",
   "private": true,
-  "version": "3.4.1",
+  "version": "3.5.0",
   "description": "Панель документации C++ для VS Code — сборка и тесты",
   "scripts": {
     "package": "node scripts/package-extension.js",
@@ -12,11 +12,14 @@
     "check": "node --check extension/extension.js && node --check extension/cpp-docs-runtime.js && node test/smoke.js && node test/inject.js && node test/runtime.js",
     "lint": "eslint extension scripts test",
     "version:set": "node scripts/set-version.js",
+    "hash:runtime": "node scripts/hash-runtime.js",
+    "hash:check": "node scripts/hash-runtime.js --check",
     "preview": "node scripts/preview.js",
     "preview:window": "node scripts/preview-window.js",
     "screenshots": "node scripts/preview-window.js docs && node scripts/preview.js docs && node scripts/screenshots.js",
     "embed:logo": "node scripts/embed-logo.js",
-    "embed:stickers": "node scripts/embed-stickers.js"
+    "embed:stickers": "node scripts/embed-stickers.js",
+    "docs:slova": "node scripts/gen-snippets-doc.js"
   },
   "devDependencies": {
     "eslint": "^9.0.0"
