@@ -39,7 +39,7 @@ Separately:
 
 ```bash
 npm run package          # only build dist/cpp-docs-panel-<version>.vsix
-npm test                 # smoke test (154 checks, no VS Code needed)
+npm test                 # smoke test (172 checks, no VS Code needed)
 npm run check            # syntax + tests
 npm run preview:window   # build build/preview-window.html — see the window in a browser
 ```
@@ -118,6 +118,14 @@ To disable — the **"Документация C++: отключить плав�
 
 <div align="center">
 <img src="docs/screenshots/window.png" alt="Floating window in reading mode: navigator on the left, C++-highlighted text with a copy button, outline on the right" width="820">
+</div>
+
+**Hard parts, with character.** Gotchas like `int` overflow are explained with hand-drawn sticker
+diagrams; deep theory hides inside collapsible "dig deeper" blocks, and any section folds with a
+click on its heading — long documents stay scannable.
+
+<div align="center">
+<img src="docs/screenshots/diagram.png" alt="Reader with a hand-drawn int-overflow diagram, a collapsible «dig deeper» block and the file outline on the right" width="820">
 </div>
 
 ## Recommended companion: MoonLight custom-bg
@@ -223,7 +231,7 @@ cpp-docs-panel/
 │   ├── preview.js              sidebar preview → build/preview.html
 │   └── preview-window.js       floating-window preview → build/preview-window.html
 ├── test/
-│   └── smoke.js                154 checks without launching the editor
+│   └── smoke.js                172 checks without launching the editor
 ├── docs/                       hand-written C++ docs (what the panel shows)
 ├── build/                      generated previews (in .gitignore)
 └── dist/                       built packages
@@ -255,7 +263,7 @@ No dependencies, no `npm install` needed — the scripts just call `node`.
 ```bash
 npm run package          # build dist/cpp-docs-panel-<version>.vsix
 npm run install:vsix     # build and install into VS Code
-npm test                 # smoke test (154 checks, no VS Code needed)
+npm test                 # smoke test (172 checks, no VS Code needed)
 npm run check            # node --check + smoke test in one command
 npm run preview          # build/preview.html — sidebar in a browser
 npm run preview:window   # build/preview-window.html — floating window in a browser

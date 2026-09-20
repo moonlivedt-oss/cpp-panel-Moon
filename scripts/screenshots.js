@@ -196,6 +196,28 @@ function editorBackdrop() {
         console.log("saved docs/screenshots/window.png");
         await ctxW.close();
 
+        // ---------- DIAGRAM: рисованная схема-наклейка в контексте материала ----------
+        var ctxD = await browser.newContext({ deviceScaleFactor: 2, viewport: { width: 1360, height: 850 }, colorScheme: "dark" });
+        var pageD = await ctxD.newPage();
+        await pageD.goto(base + "/build/preview-window.html", { waitUntil: "networkidle" });
+        var winD = pageD.locator("#cppdocs-window");
+        await winD.waitFor({ state: "visible", timeout: 10000 });
+        await pageD.locator("#cppdocs-window .cd-item", { hasText: "Основы: сборка, типы, переменные" }).first().click();
+        await pageD.waitForTimeout(800);
+        await pageD.evaluate(function () {
+          var content = document.querySelector("#cppdocs-window .cd-content");
+          var fig = document.querySelector("#cppdocs-window .cd-figure");   // первая фигура = рисованная схема int
+          if (content && fig) {
+            content.style.scrollBehavior = "auto";                          // мгновенно, без плавной прокрутки
+            var cr = content.getBoundingClientRect(), fr = fig.getBoundingClientRect();
+            content.scrollTop += (fr.top - cr.top) - 56;                    // фигуру к верху области чтения
+          }
+        });
+        await pageD.waitForTimeout(500);
+        await winD.screenshot({ path: path.join(OUT, "diagram.png") });
+        console.log("saved docs/screenshots/diagram.png");
+        await ctxD.close();
+
         // ---------- БОКОВАЯ ПАНЕЛЬ ----------
         var ctx2 = await browser.newContext({ deviceScaleFactor: 2, viewport: { width: 340, height: 820 }, colorScheme: "dark" });
         var page2 = await ctx2.newPage();

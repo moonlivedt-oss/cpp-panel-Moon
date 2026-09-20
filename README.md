@@ -39,7 +39,7 @@ npm run install:vsix     # собрать пакет и сразу постав�
 
 ```bash
 npm run package          # только собрать dist/cpp-docs-panel-<версия>.vsix
-npm test                 # смоук-тест (154 проверки, VS Code не нужен)
+npm test                 # смоук-тест (172 проверки, VS Code не нужен)
 npm run check            # синтаксис + тесты
 npm run preview:window   # собрать build/preview-window.html — посмотреть окно в браузере
 ```
@@ -118,6 +118,14 @@ npm run preview:window   # собрать build/preview-window.html — посм
 
 <div align="center">
 <img src="docs/screenshots/window.png" alt="Плавающее окно в режиме чтения: навигатор слева, текст с подсветкой C++ и кнопкой «копировать», оглавление справа" width="820">
+</div>
+
+**Трудные места — с характером.** Ловушки вроде переполнения `int` объясняются рисованными
+схемами-наклейками; глубокая теория прячется в сворачиваемые блоки «Копнуть глубже», а любой
+раздел можно свернуть кликом по заголовку — длинный материал остаётся обозримым.
+
+<div align="center">
+<img src="docs/screenshots/diagram.png" alt="Читалка с рисованной схемой переполнения int, сворачиваемым блоком «Копнуть глубже» и оглавлением файла справа" width="820">
 </div>
 
 ## Рекомендуемый компаньон: MoonLight custom-bg
@@ -254,7 +262,7 @@ cpp-docs-panel/
 ```bash
 npm run package          # собрать dist/cpp-docs-panel-<версия>.vsix
 npm run install:vsix     # собрать и сразу поставить в VS Code
-npm test                 # смоук-тест (154 проверки, VS Code не нужен)
+npm test                 # смоук-тест (172 проверки, VS Code не нужен)
 npm run check            # node --check + смоук-тест одной командой
 npm run preview          # build/preview.html — боковая панель в браузере
 npm run preview:window   # build/preview-window.html — плавающее окно в браузере
