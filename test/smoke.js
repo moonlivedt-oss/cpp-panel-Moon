@@ -447,7 +447,7 @@ check("скрипт встраивания наклеек на месте", fs.e
 // ------------------------------------------------------------
 console.log("\nБезопасность");
 var rtSec = fs.readFileSync(path.join(EXT, "cpp-docs-runtime.js"), "utf8");
-var ps1Path = path.join(ROOT, "dist", "cpp-docs-panel-install", "window-inject.ps1");
+var ps1Path = path.join(ROOT, "installer", "window-inject.ps1");
 var ps1 = fs.existsSync(ps1Path) ? fs.readFileSync(ps1Path, "utf8") : "";
 
 // #1 файл данных не исполняется при перечитке

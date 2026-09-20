@@ -153,7 +153,7 @@ check("injectWindowFiles проверяет рантайм перед инъек
 check("injectWindowFiles впечатывает данные инлайном (windowDataBody/__CPPDOCS__)",
       extRaw.indexOf("windowDataBody") !== -1 && extRaw.indexOf("window.__CPPDOCS__ = ") !== -1);
 // #4 паритет офлайн-установщика: те же маркеры и та же инлайн-схема, что в JS.
-var ps1 = fs.readFileSync(path.join(EXT, "..", "dist", "cpp-docs-panel-install", "window-inject.ps1"), "utf8");
+var ps1 = fs.readFileSync(path.join(EXT, "..", "installer", "window-inject.ps1"), "utf8");
 check("PS1-установщик: те же маркеры + инлайн данных/рантайма + экранирование </script",
       ps1.indexOf("CPPDOCS-WINDOW-START") !== -1 &&
       ps1.indexOf("$dataJs") !== -1 && ps1.indexOf("$runtimeJs") !== -1 &&
