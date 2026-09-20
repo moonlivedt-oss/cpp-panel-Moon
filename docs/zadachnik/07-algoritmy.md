@@ -72,6 +72,17 @@
 
 > **Как подступиться.** `std::sort(v.begin(), v.end());` — и печатайте.
 
+Написал решение — прогони его на этих входах (нажми «копировать», вставь в программу), особенно на краях:
+
+```tests
+# обычные (первое число — сколько дальше чисел)
+5 3 1 4 1 5 => 1 1 3 4 5
+3 -5 -1 -3 => -5 -3 -1
+# края
+1 42 => 42
+4 9 9 9 9 => 9 9 9 9
+```
+
 <details>
 <summary>Полное решение с разбором — открывай, только если застрял</summary>
 
@@ -140,6 +151,66 @@ int main() {
 
 > **Как подступиться.** Передайте третьим аргументом `[](int a, int b){ return a > b; }`.
 
+Написал решение — прогони его на этих входах (нажми «копировать», вставь в программу), особенно на краях:
+
+```tests
+# один элемент; повторы
+5 3 1 4 1 5 => 5 4 3 1 1
+1 42 => 42
+4 2 2 1 3 => 3 2 2 1
+```
+
+<details>
+<summary>Подсказка посильнее — с чего начать</summary>
+
+`std::sort` с лямбдой-компаратором `a > b` даёт убывание.
+
+```c++
+std::sort(v.begin(), v.end(), [](int a, int b){ return a > b; });
+```
+
+</details>
+
+<details>
+<summary>Полное решение с разбором — открывай, только если застрял</summary>
+
+Ход мысли по шагам:
+
+1. Читаю числа в `vector`.
+2. Сортирую с собственным правилом — лямбдой `[](int a, int b){ return a > b; }` («больше идёт раньше»).
+3. Печатаю через пробел.
+
+```cpp
+#include <iostream>
+#include <vector>
+#include <algorithm>
+
+int main() {
+    int n = 0;
+    std::cin >> n;
+    std::vector<int> v;
+    for (int i = 0; i < n; ++i) {
+        int x = 0;
+        std::cin >> x;
+        v.push_back(x);
+    }
+
+    std::sort(v.begin(), v.end(), [](int a, int b) { return a > b; });   // по убыванию
+
+    bool first = true;
+    for (int x : v) {
+        if (!first) std::cout << " ";
+        std::cout << x;
+        first = false;
+    }
+    std::cout << "\n";
+    return 0;
+}
+```
+
+Открывай это, только когда правда застрял — весь смысл в том, чтобы пройти путь «затык → идея → код» самому.
+</details>
+
 ---
 
 ## 7.3. Сколько больше среднего 🔴
@@ -169,6 +240,66 @@ int main() {
 
 > **Разбор примера.** Среднее здесь `22`, больше него только `100`.
 
+Написал решение — прогони его на этих входах (нажми «копировать», вставь в программу), особенно на краях:
+
+```tests
+# если все равны — никто не больше среднего
+5 1 2 3 4 5 => 2
+3 10 10 10 => 0
+4 1 2 3 100 => 1
+```
+
+<details>
+<summary>Подсказка посильнее — с чего начать</summary>
+
+Сначала среднее по всем (сумму копи в `long long`), потом посчитай, сколько строго больше него.
+
+```c++
+long long sum = std::accumulate(v.begin(), v.end(), 0LL);
+double avg = (double)sum / v.size();
+auto count = std::count_if(v.begin(), v.end(), [avg](int x){ return x > avg; });
+```
+
+</details>
+
+<details>
+<summary>Полное решение с разбором — открывай, только если застрял</summary>
+
+Ход мысли по шагам:
+
+1. Сумму беру `std::accumulate(..., 0LL)` — `0LL` копит в `long long`.
+2. Среднее дробное: `static_cast<double>(sum) / v.size()`.
+3. Считаю подходящие через `count_if`, захватив среднее в лямбду `[avg]`; условие — строго `x > avg`.
+
+```cpp
+#include <iostream>
+#include <vector>
+#include <numeric>
+#include <algorithm>
+
+int main() {
+    int n = 0;
+    std::cin >> n;
+    std::vector<int> v;
+    for (int i = 0; i < n; ++i) {
+        int x = 0;
+        std::cin >> x;
+        v.push_back(x);
+    }
+
+    long long sum = std::accumulate(v.begin(), v.end(), 0LL);   // 0LL — копим в long long
+    double avg = static_cast<double>(sum) / static_cast<double>(v.size());
+
+    auto count = std::count_if(v.begin(), v.end(),
+                               [avg](int x) { return x > avg; });   // avg захвачено
+    std::cout << count << "\n";
+    return 0;
+}
+```
+
+Открывай это, только когда правда застрял — весь смысл в том, чтобы пройти путь «затык → идея → код» самому.
+</details>
+
 ---
 
 ## 7.4. Медиана 🟡
@@ -195,6 +326,60 @@ int main() {
 - **Где пригодится:** медиана устойчивее среднего к выбросам — её используют в статистике зарплат, времени отклика, цен.
 
 > **Как подступиться.** Отсортируйте, возьмите элемент с индексом `N / 2` (для нечётного `N` это ровно середина).
+
+Написал решение — прогони его на этих входах (нажми «копировать», вставь в программу), особенно на краях:
+
+```tests
+# один элемент; повторы
+5 3 1 4 1 5 => 3
+1 42 => 42
+3 7 7 7 => 7
+```
+
+<details>
+<summary>Подсказка посильнее — с чего начать</summary>
+
+Отсортируй и возьми центральный элемент — при нечётном N это и есть медиана.
+
+```c++
+std::sort(v.begin(), v.end());
+std::cout << v[v.size() / 2] << "\n";
+```
+
+</details>
+
+<details>
+<summary>Полное решение с разбором — открывай, только если застрял</summary>
+
+Ход мысли по шагам:
+
+1. Сортирую вектор.
+2. Для нечётного `N` середина — индекс `N / 2` (целочисленное деление как раз даёт центр).
+3. Печатаю `v[v.size() / 2]`.
+
+```cpp
+#include <iostream>
+#include <vector>
+#include <algorithm>
+
+int main() {
+    int n = 0;
+    std::cin >> n;
+    std::vector<int> v;
+    for (int i = 0; i < n; ++i) {
+        int x = 0;
+        std::cin >> x;
+        v.push_back(x);
+    }
+
+    std::sort(v.begin(), v.end());
+    std::cout << v[v.size() / 2] << "\n";    // центр отсортированного
+    return 0;
+}
+```
+
+Открывай это, только когда правда застрял — весь смысл в том, чтобы пройти путь «затык → идея → код» самому.
+</details>
 
 ---
 
@@ -231,6 +416,65 @@ anna
 
 > **Разбор примера.** `boris` и `vera` по 55; `boris` меньше по алфавиту, поэтому он первый.
 
+<details>
+<summary>Подсказка посильнее — компаратор и «не больше трёх»</summary>
+
+Правило сортировки задаётся лямбдой прямо в `std::sort`, а «первые три, но не больше, чем есть» — через `std::min`:
+
+```c++
+std::sort(v.begin(), v.end(), [](const P& a, const P& b){
+    if (a.score != b.score) return a.score > b.score;  // балл по убыванию
+    return a.name < b.name;                            // при равенстве — имя по алфавиту
+});
+std::size_t top = std::min<std::size_t>(3, v.size());  // если участников меньше трёх
+```
+
+</details>
+
+<details>
+<summary>Полное решение с разбором — открывай, только если застрял</summary>
+
+Ход мысли по шагам:
+
+1. Завожу `struct Participant { name; score; }` и читаю всех в `vector`.
+2. Сортирую своим правилом: по баллам убыв., при равенстве — по имени возр.
+3. Печатаю первые `min(3, размер)` имён.
+
+```cpp
+#include <iostream>
+#include <vector>
+#include <string>
+#include <algorithm>
+
+struct Participant {
+    std::string name;
+    int score = 0;
+};
+
+int main() {
+    int n = 0;
+    std::cin >> n;
+    std::vector<Participant> people;
+    for (int i = 0; i < n; ++i) {
+        Participant p;
+        std::cin >> p.name >> p.score;
+        people.push_back(p);
+    }
+
+    std::sort(people.begin(), people.end(), [](const Participant &a, const Participant &b) {
+        return a.score != b.score ? a.score > b.score : a.name < b.name;   // балл убыв., имя возр.
+    });
+
+    std::size_t top = std::min<std::size_t>(3, people.size());
+    for (std::size_t i = 0; i < top; ++i)
+        std::cout << people[i].name << "\n";
+    return 0;
+}
+```
+
+Открывай это, только когда правда застрял — весь смысл в том, чтобы пройти путь «затык → идея → код» самому.
+</details>
+
 ---
 
 ## 7.6. Минимум и максимум одной строкой 🟢
@@ -258,6 +502,49 @@ anna
 
 > **Как подступиться.** `min_element` возвращает **итератор** (указатель на элемент); значение достаётся звёздочкой `*`.
 
+Написал решение — прогони его на этих входах (нажми «копировать», вставь в программу), особенно на краях:
+
+```tests
+# один элемент; отрицательные
+5 3 1 4 1 5 => 1 5
+1 42 => 42 42
+4 -5 0 5 2 => -5 5
+```
+
+<details>
+<summary>Полное решение с разбором — открывай, только если застрял</summary>
+
+Ход мысли по шагам:
+
+1. Читаю числа в `vector`.
+2. `std::min_element`/`std::max_element` возвращают **итераторы** — значение достаю звёздочкой `*`.
+3. Печатаю минимум и максимум.
+
+```cpp
+#include <iostream>
+#include <vector>
+#include <algorithm>
+
+int main() {
+    int n = 0;
+    std::cin >> n;
+    std::vector<int> v;
+    for (int i = 0; i < n; ++i) {
+        int x = 0;
+        std::cin >> x;
+        v.push_back(x);
+    }
+
+    int mn = *std::min_element(v.begin(), v.end());   // * — достаём значение
+    int mx = *std::max_element(v.begin(), v.end());
+    std::cout << mn << " " << mx << "\n";
+    return 0;
+}
+```
+
+Открывай это, только когда правда застрял — весь смысл в том, чтобы пройти путь «затык → идея → код» самому.
+</details>
+
 ---
 
 ## 7.7. Сколько чётных 🟡
@@ -283,6 +570,59 @@ anna
 - **Где пригодится:** «сколько подходящих» по любому признаку (активные пользователи, товары в наличии).
 
 > **Как подступиться.** Правило чётности передайте лямбдой прямо в `count_if`.
+
+Написал решение — прогони его на этих входах (нажми «копировать», вставь в программу), особенно на краях:
+
+```tests
+# нет чётных; и все чётные
+6 1 2 3 4 5 6 => 3
+3 1 3 5 => 0
+4 2 4 6 8 => 4
+```
+
+<details>
+<summary>Подсказка посильнее — с чего начать</summary>
+
+`std::count_if` с предикатом чётности — одна строка.
+
+```c++
+auto count = std::count_if(v.begin(), v.end(), [](int x){ return x % 2 == 0; });
+```
+
+</details>
+
+<details>
+<summary>Полное решение с разбором — открывай, только если застрял</summary>
+
+Ход мысли по шагам:
+
+1. Читаю числа в `vector`.
+2. `std::count_if` с лямбдой-условием `x % 2 == 0`.
+3. Печатаю результат — это целое, можно выводить сразу.
+
+```cpp
+#include <iostream>
+#include <vector>
+#include <algorithm>
+
+int main() {
+    int n = 0;
+    std::cin >> n;
+    std::vector<int> v;
+    for (int i = 0; i < n; ++i) {
+        int x = 0;
+        std::cin >> x;
+        v.push_back(x);
+    }
+
+    auto count = std::count_if(v.begin(), v.end(), [](int x) { return x % 2 == 0; });
+    std::cout << count << "\n";
+    return 0;
+}
+```
+
+Открывай это, только когда правда застрял — весь смысл в том, чтобы пройти путь «затык → идея → код» самому.
+</details>
 
 ---
 
@@ -313,6 +653,59 @@ banana
 - **Где пригодится:** ранжирование по нескольким критериям, «сначала короткие/дешёвые/новые».
 
 > **Как подступиться.** Компаратор: если длины разные — сравниваем длины, иначе сравниваем сами строки.
+
+<details>
+<summary>Подсказка посильнее — с чего начать</summary>
+
+`std::sort` с компаратором: разные длины — сравниваем длины, равные — по алфавиту.
+
+```c++
+std::sort(words.begin(), words.end(), [](const std::string &a, const std::string &b){
+    if (a.size() != b.size()) return a.size() < b.size();
+    return a < b;
+});
+```
+
+</details>
+
+<details>
+<summary>Полное решение с разбором — открывай, только если застрял</summary>
+
+Ход мысли по шагам:
+
+1. Читаю слова в `vector<string>`.
+2. Сортирую по вычисляемому ключу: если длины разные — по длине, иначе по алфавиту.
+3. Печатаю по слову в строке.
+
+```cpp
+#include <iostream>
+#include <vector>
+#include <string>
+#include <algorithm>
+
+int main() {
+    int n = 0;
+    std::cin >> n;
+    std::vector<std::string> words;
+    for (int i = 0; i < n; ++i) {
+        std::string w;
+        std::cin >> w;
+        words.push_back(w);
+    }
+
+    std::sort(words.begin(), words.end(), [](const std::string &a, const std::string &b) {
+        if (a.size() != b.size()) return a.size() < b.size();   // сначала по длине
+        return a < b;                                           // при равной — по алфавиту
+    });
+
+    for (const std::string &w : words)
+        std::cout << w << "\n";
+    return 0;
+}
+```
+
+Открывай это, только когда правда застрял — весь смысл в том, чтобы пройти путь «затык → идея → код» самому.
+</details>
 
 ---
 

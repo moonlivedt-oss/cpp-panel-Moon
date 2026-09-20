@@ -72,6 +72,64 @@
 
 > **Как подступиться.** Опишите `Point`, прочитайте две точки, примените теорему Пифагора через `std::sqrt`.
 
+Написал решение — прогони его на этих входах (нажми «копировать», вставь в программу), особенно на краях:
+
+```tests
+# нулевое расстояние; отрицательные координаты
+0 0 3 4 => 5.00
+1 1 1 1 => 0.00
+-1 -1 2 3 => 5.00
+```
+
+<details>
+<summary>Подсказка посильнее — с чего начать</summary>
+
+Расстояние — теорема Пифагора: `sqrt(dx*dx + dy*dy)` из `<cmath>`.
+
+```c++
+#include <cmath>
+double dx = a.x - b.x, dy = a.y - b.y;
+double dist = std::sqrt(dx * dx + dy * dy);
+// вывод с std::setprecision(2)
+```
+
+</details>
+
+<details>
+<summary>Полное решение с разбором — открывай, только если застрял</summary>
+
+Ход мысли по шагам:
+
+1. Завожу `struct Point { double x, y; }` и читаю две точки.
+2. По теореме Пифагора: `sqrt((x1−x2)² + (y1−y2)²)` через `std::sqrt` (`<cmath>`).
+3. Печатаю с двумя знаками.
+
+```cpp
+#include <iostream>
+#include <iomanip>
+#include <cmath>
+
+struct Point {
+    double x = 0.0;
+    double y = 0.0;
+};
+
+int main() {
+    Point a, b;
+    std::cin >> a.x >> a.y >> b.x >> b.y;
+
+    double dx = a.x - b.x;
+    double dy = a.y - b.y;
+    double dist = std::sqrt(dx * dx + dy * dy);   // теорема Пифагора
+
+    std::cout << std::fixed << std::setprecision(2) << dist << "\n";
+    return 0;
+}
+```
+
+Открывай это, только когда правда застрял — весь смысл в том, чтобы пройти путь «затык → идея → код» самому.
+</details>
+
 ---
 
 ## 8.2. Округление до N знаков 🟡
@@ -105,6 +163,52 @@
 
 > **Как подступиться.** `setprecision` умеет принимать переменную — задайте ей `n`.
 
+Написал решение — прогони его на этих входах (нажми «копировать», вставь в программу), особенно на краях:
+
+```tests
+# округление до нуля знаков; половина
+3.14159 2 => 3.14
+2.5 0 => 2
+1.005 2 => 1.00
+```
+
+<details>
+<summary>Подсказка посильнее — с чего начать</summary>
+
+Число знаков — переменная: в `std::setprecision(n)` можно передать саму `n`.
+
+```c++
+std::cout << std::fixed << std::setprecision(n) << x << "\n";
+```
+
+</details>
+
+<details>
+<summary>Полное решение с разбором — открывай, только если застрял</summary>
+
+Ход мысли по шагам:
+
+1. Читаю число `x` и точность `n`.
+2. `std::setprecision` умеет принимать переменную — передаю ей `n`.
+3. `std::fixed` + `setprecision(n)`: при `n == 0` выведется целое.
+
+```cpp
+#include <iostream>
+#include <iomanip>
+
+int main() {
+    double x = 0.0;
+    int n = 0;
+    std::cin >> x >> n;
+
+    std::cout << std::fixed << std::setprecision(n) << x << "\n";   // n — переменная
+    return 0;
+}
+```
+
+Открывай это, только когда правда застрял — весь смысл в том, чтобы пройти путь «затык → идея → код» самому.
+</details>
+
 ---
 
 ## 8.3. Самый большой прямоугольник 🟡
@@ -136,6 +240,68 @@
 
 > **Выбор типа.** Стороны до 10000, площадь до 10^8 — подумайте про тип, куда её класть.
 
+Написал решение — прогони его на этих входах (нажми «копировать», вставь в программу), особенно на краях:
+
+```tests
+# один прямоугольник
+3 2 3 5 5 1 10 => 25
+1 4 4 => 16
+```
+
+<details>
+<summary>Подсказка посильнее — с чего начать</summary>
+
+Заведи `struct` с методом `area()`, читай прямоугольники в `vector`, ищи максимум площади.
+
+```c++
+struct Rect { int w, h; long long area() const { return 1LL * w * h; } };
+// читаем N пар в vector<Rect>; затем максимум по r.area()
+```
+
+</details>
+
+<details>
+<summary>Полное решение с разбором — открывай, только если застрял</summary>
+
+Ход мысли по шагам:
+
+1. Завожу `struct Rect` со сторонами и **методом** `area()` — объект сам считает свою площадь.
+2. Внутри `area()` привожу к `long long` — привычка защищаться от переполнения (метод `const`, он только читает поля).
+3. Читаю прямоугольники в `vector` и ищу максимум `r.area()`.
+
+```cpp
+#include <iostream>
+#include <vector>
+
+struct Rect {
+    int w = 0;
+    int h = 0;
+    long long area() const {                 // const — метод только читает поля
+        return static_cast<long long>(w) * h;
+    }
+};
+
+int main() {
+    int n = 0;
+    std::cin >> n;
+    std::vector<Rect> rects;
+    for (int i = 0; i < n; ++i) {
+        Rect r;
+        std::cin >> r.w >> r.h;
+        rects.push_back(r);
+    }
+
+    long long best = 0;
+    for (const Rect &r : rects)
+        if (r.area() > best) best = r.area();
+    std::cout << best << "\n";
+    return 0;
+}
+```
+
+Открывай это, только когда правда застрял — весь смысл в том, чтобы пройти путь «затык → идея → код» самому.
+</details>
+
 ---
 
 ## 8.4. Квадраты в файл 🟡
@@ -160,6 +326,55 @@
 - **Где пригодится:** сохранение результатов, экспорт отчёта, генерация данных для другой программы.
 
 > **Как подступиться.** Откройте `ofstream`, проверьте, что открылся, и пишите в него так же, как в `cout`.
+
+<details>
+<summary>Подсказка посильнее — с чего начать</summary>
+
+Открой файл через `std::ofstream` и пиши в него как в `cout`; проверь, что файл открылся.
+
+```c++
+#include <fstream>
+std::ofstream out("squares.txt");
+if (!out) { std::cerr << "нет файла\n"; return 1; }
+// в цикле: out << 1LL * x * x << "\n";
+```
+
+</details>
+
+<details>
+<summary>Полное решение с разбором — открывай, только если застрял</summary>
+
+Ход мысли по шагам:
+
+1. Открываю файл на запись: `std::ofstream out("squares.txt")`.
+2. Проверяю, что открылся (`if (!out) ...`).
+3. Пишу квадраты в него так же, как в `cout`; `static_cast<long long>` спасает от переполнения. Файл закроется сам.
+
+```cpp
+#include <iostream>
+#include <fstream>
+
+int main() {
+    int n = 0;
+    std::cin >> n;
+
+    std::ofstream out("squares.txt");
+    if (!out) {                                   // проверяем открытие
+        std::cerr << "не удалось открыть файл\n";
+        return 1;
+    }
+
+    for (int i = 0; i < n; ++i) {
+        int x = 0;
+        std::cin >> x;
+        out << static_cast<long long>(x) * x << "\n";   // пишем как в cout
+    }
+    return 0;                                     // файл закроется сам
+}
+```
+
+Открывай это, только когда правда застрял — весь смысл в том, чтобы пройти путь «затык → идея → код» самому.
+</details>
 
 ---
 
@@ -191,6 +406,65 @@
 
 > **Где лежит файл.** Сначала создайте `data.txt` сами с любыми числами, потом запускайте программу. На вашей сборке файл ищется рядом с `.exe` — если не находится, положите его туда же, где лежит собранная программа (см. раздел 21 справочника).
 
+<details>
+<summary>Подсказка посильнее — с чего начать</summary>
+
+Читай из `std::ifstream` как из `cin` — `while (in >> x)`; не забудь защиту от деления на ноль.
+
+```c++
+#include <fstream>
+std::ifstream in("data.txt");
+int count = 0;  long long sum = 0;  int x;
+while (in >> x) { ++count; sum += x; }
+// если count == 0 — вывести нули; иначе среднее = sum / count
+```
+
+</details>
+
+<details>
+<summary>Полное решение с разбором — открывай, только если застрял</summary>
+
+Ход мысли по шагам:
+
+1. Открываю `std::ifstream in("data.txt")` и проверяю открытие.
+2. Читаю в цикле `while (in >> x)`, как из `cin`, копя сумму и счётчик.
+3. Среднее считаю только при `count > 0` (защита от деления на ноль), печатаю с двумя знаками.
+
+```cpp
+#include <iostream>
+#include <iomanip>
+#include <fstream>
+
+int main() {
+    std::ifstream in("data.txt");
+    if (!in) {
+        std::cerr << "не удалось открыть data.txt\n";
+        return 1;
+    }
+
+    int count = 0;
+    long long sum = 0;
+    int x = 0;
+    while (in >> x) {              // читаем как из cin, пока читается
+        ++count;
+        sum += x;
+    }
+
+    if (count == 0) {             // защита от деления на ноль
+        std::cout << "0 0 0.00\n";
+        return 0;
+    }
+
+    double avg = static_cast<double>(sum) / count;
+    std::cout << count << " " << sum << " "
+              << std::fixed << std::setprecision(2) << avg << "\n";
+    return 0;
+}
+```
+
+Открывай это, только когда правда застрял — весь смысл в том, чтобы пройти путь «затык → идея → код» самому.
+</details>
+
 ---
 
 ## 8.6. Площадь круга через struct 🟢
@@ -216,6 +490,17 @@
 - **Где пригодится:** объектный стиль «объект сам умеет себя посчитать» — база для будущих классов.
 
 > **Как подступиться.** Метод `area()` возвращает `π · r · r`; π заведите как `const double`.
+
+Написал решение — прогони его на этих входах (нажми «копировать», вставь в программу), особенно на краях:
+
+```tests
+# обычные
+1 => 3.14
+2 => 12.57
+# края
+0 => 0.00
+10 => 314.16
+```
 
 <details>
 <summary>Полное решение с разбором — открывай, только если застрял</summary>
@@ -273,6 +558,56 @@ boris 75
 
 > **Как подступиться.** Откройте файл, проверьте открытие, пишите пары в цикле, как в `cout`.
 
+<details>
+<summary>Подсказка посильнее — с чего начать</summary>
+
+Пиши пары «имя очки» построчно в `std::ofstream`, как в `cout`.
+
+```c++
+#include <fstream>
+std::ofstream out("students.txt");
+// в цикле: cin >> name >> score; out << name << " " << score << "\n";
+```
+
+</details>
+
+<details>
+<summary>Полное решение с разбором — открывай, только если застрял</summary>
+
+Ход мысли по шагам:
+
+1. Открываю `std::ofstream out("students.txt")` и проверяю открытие.
+2. В цикле читаю пары «имя балл» и пишу их в файл строкой.
+3. Файл закроется сам при выходе из `main`.
+
+```cpp
+#include <iostream>
+#include <fstream>
+#include <string>
+
+int main() {
+    int n = 0;
+    std::cin >> n;
+
+    std::ofstream out("students.txt");
+    if (!out) {
+        std::cerr << "не удалось открыть файл\n";
+        return 1;
+    }
+
+    for (int i = 0; i < n; ++i) {
+        std::string name;
+        int score = 0;
+        std::cin >> name >> score;
+        out << name << " " << score << "\n";
+    }
+    return 0;
+}
+```
+
+Открывай это, только когда правда застрял — весь смысл в том, чтобы пройти путь «затык → идея → код» самому.
+</details>
+
 ---
 
 ## 8.8. Лучший студент из файла 🔴
@@ -297,6 +632,62 @@ vera 88
 > **Как подступиться.** Читайте пары `имя балл`, пока получается; держите текущего лидера, старт задайте первой записью.
 
 > **Подготовка.** Сначала запустите задачу 8.7 (она создаст файл) или создайте `students.txt` вручную рядом с программой.
+
+<details>
+<summary>Подсказка посильнее — с чего начать</summary>
+
+Читай из файла пары `while (in >> name >> score)`; держи лучшего, старт задаёт флаг `first`.
+
+```c++
+std::string bestName;  int bestScore = 0;  bool first = true;
+while (in >> name >> score)
+    if (first || score > bestScore) { bestScore = score; bestName = name; first = false; }
+```
+
+</details>
+
+<details>
+<summary>Полное решение с разбором — открывай, только если застрял</summary>
+
+Ход мысли по шагам:
+
+1. Открываю `std::ifstream in("students.txt")` и проверяю открытие.
+2. Читаю пары `while (in >> name >> score)`, держу текущего лидера.
+3. Старт задаю флагом «первая запись», чтобы отрицательные баллы не сломали сравнение.
+
+```cpp
+#include <iostream>
+#include <fstream>
+#include <string>
+
+int main() {
+    std::ifstream in("students.txt");
+    if (!in) {
+        std::cerr << "не удалось открыть students.txt\n";
+        return 1;
+    }
+
+    std::string bestName;
+    int bestScore = 0;
+    bool first = true;
+
+    std::string name;
+    int score = 0;
+    while (in >> name >> score) {
+        if (first || score > bestScore) {   // флаг first задаёт старт
+            bestScore = score;
+            bestName = name;
+            first = false;
+        }
+    }
+
+    std::cout << bestName << "\n";
+    return 0;
+}
+```
+
+Открывай это, только когда правда застрял — весь смысл в том, чтобы пройти путь «затык → идея → код» самому.
+</details>
 
 ---
 

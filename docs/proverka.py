@@ -64,8 +64,8 @@ def read(path):
 
 
 def code_blocks(text):
-    """Все блоки ```cpp ... ``` из markdown."""
-    return re.findall(r"```cpp\n(.*?)\n```", text, flags=re.DOTALL)
+    """Все блоки ```cpp ... ``` из markdown (в т.ч. с подсветкой строк: ```cpp {3,5-7})."""
+    return re.findall(r"```cpp[^\n]*\n(.*?)\n```", text, flags=re.DOTALL)
 
 
 def is_full_program(block):
@@ -180,7 +180,10 @@ def check_examples_sync():
             problems.append("%s: не нашёл блок с кодом" % md)
             continue
         checked += 1
-        if blocks[0].strip() != read(cp).strip():
+        # Полный код примера может идти не первым блоком (перед ним — стадии «Собираем
+        # по шагам»). Достаточно, чтобы каноничный листинг совпадал с .cpp где-то в файле.
+        target = read(cp).strip()
+        if not any(b.strip() == target for b in blocks):
             problems.append("%s разошёлся с code/%s — обнови текст примера" % (md, cpp))
     return checked, problems
 
