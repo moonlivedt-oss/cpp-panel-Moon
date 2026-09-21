@@ -72,6 +72,7 @@ double dist(const Point &a, const Point &b) {   // тело функции
 
 **`main.cpp`** — пользуется:
 
+<!-- docs:no-compile: часть многофайлового примера (geometry.h показан рядом в тексте) -->
 ```cpp
 #include <iostream>
 #include "geometry.h"   // берём объявления Point и dist

@@ -7,9 +7,10 @@ on:
     branches: [main]
 
 jobs:
-  # Проверка модулей и смоук-тест. Зависимостей нет (npm ci не нужен) —
+  # Проверка модулей, смоук-тест и целостность ссылок. Зависимостей нет (npm ci не нужен) —
   # node --check ловит синтаксис в каждом файле, смоук ловит рантайм после активации
-  # расширения в заглушке vscode. Оба прогоняются одной командой npm run check.
+  # расширения в заглушке vscode, check-links ловит битые внутренние ссылки в docs/.
+  # Всё прогоняется одной командой npm run check.
   check:
     runs-on: ubuntu-latest
     strategy:
@@ -21,8 +22,33 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-      - name: Синтаксис модулей + смоук
+      - name: Синтаксис модулей + смоук + ссылки
         run: npm run check
+
+  # Компиляция примеров кода из docs/. Самодостаточные блоки C++ (в блоке есть #include и
+  # int main) собираются синтаксически (-fsyntax-only, без .exe) — ловит примеры, которые
+  # перестали собираться. Метка <!-- docs:no-compile --> исключает намеренно-ошибочные блоки.
+  #
+  # Раннер — Windows + MSYS2 UCRT64, тот же тулчейн, что у пользователя: примеры включают
+  # <windows.h> (SetConsoleCP для русской консоли), которого на Linux нет. Node ставим из msys2,
+  # чтобы node и g++ были в одном окружении, а шаги идут в шелле msys2.
+  docs-code:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup MSYS2 UCRT64 (g++ + node)
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: false
+          install: mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-nodejs
+      - name: Версия g++ и node
+        run: g++ --version && node --version
+      - name: Компиляция примеров кода
+        run: npm run check:code
 
   # Линт: eslint — dev-зависимость (рантайм по-прежнему ноль зависимостей). Ставим и гоняем.
   lint:
