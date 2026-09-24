@@ -15,7 +15,7 @@ var BROWSER_GLOBALS = {
   window: "readonly", document: "readonly", localStorage: "readonly", navigator: "readonly",
   setTimeout: "readonly", clearTimeout: "readonly", setInterval: "readonly", clearInterval: "readonly",
   console: "readonly", MutationObserver: "readonly", getComputedStyle: "readonly",
-  requestAnimationFrame: "readonly", XMLHttpRequest: "readonly",
+  requestAnimationFrame: "readonly", XMLHttpRequest: "readonly", atob: "readonly", NodeFilter: "readonly",
   // В оболочке VS Code (electron-browser) доступен Node require — рантайм читает файлы напрямую.
   require: "readonly",
 };
@@ -33,7 +33,7 @@ function merge(a, b) { var o = {}; for (var k in a) o[k] = a[k]; for (var j in b
 module.exports = [
   { ignores: ["node_modules/**", "dist/**", "**/.ruff_cache/**", "**/*.min.js"] },
   {
-    files: ["extension/extension.js", "scripts/**/*.js", "test/**/*.js", "eslint.config.js"],
+    files: ["extension/extension.js", "extension/lib/**/*.js", "scripts/**/*.js", "test/**/*.js", "eslint.config.js"],
     languageOptions: { ecmaVersion: 2021, sourceType: "commonjs", globals: NODE_GLOBALS },
     rules: COMMON_RULES,
   },

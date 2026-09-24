@@ -1,11 +1,27 @@
 @echo off
-chcp 65001 >nul
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0window-diagnose.ps1" > "%~dp0otchet.txt" 2>&1
-type "%~dp0otchet.txt"
+setlocal enableextensions
+set "T=%~dp0tools\common.cmd"
+call "%T%" init
+title Диагностика — Документация C++
+call "%T%" header "Диагностика плавающего окна"
+call "%T%" info "Только читает и ничего не меняет на компьютере."
 echo.
-echo   ==========================================================
-echo   Отчёт также сохранён в файл  otchet.txt  (рядом с этим .bat).
-echo   Откройте его, скопируйте ВЕСЬ текст и пришлите.
-echo   ==========================================================
+
+rem Отчёт — рядом с батником; если папка только для чтения (например, открыта прямо из архива) — во временную.
+set "REPORT=%~dp0otchet.txt"
+(echo.) >"%REPORT%" 2>nul || set "REPORT=%TEMP%\cppdocs-otchet.txt"
+
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\window-diagnose.ps1" >"%REPORT%" 2>&1
+type "%REPORT%"
+
+rem Копируем отчёт в буфер обмена (через PowerShell — он не портит кириллицу, в отличие от clip).
+powershell -NoProfile -Command "Get-Content -Raw -Encoding UTF8 -LiteralPath $env:REPORT | Set-Clipboard" >nul 2>&1
+set "CLIPPED=%errorlevel%"
+
 echo.
-pause
+echo   %C_ACC%╭──────────────────────────────────────────────────╮%C_0%
+if "%CLIPPED%"=="0" echo   %C_ACC%│%C_0%  %C_OK%✔%C_0% Отчёт уже скопирован — просто вставьте его в сообщение.
+echo   %C_ACC%│%C_0%  Файл отчёта: %C_DIM%%REPORT%%C_0%
+echo   %C_ACC%╰──────────────────────────────────────────────────╯%C_0%
+call "%T%" finish 0
+exit /b 0

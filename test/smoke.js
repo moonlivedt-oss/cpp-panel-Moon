@@ -24,6 +24,16 @@ var crypto = require("crypto");
 
 var ROOT = path.join(__dirname, "..");
 var EXT = path.join(ROOT, "extension");
+// Исходник хоста расширения целиком: extension.js + модули lib/. Проверки «по исходнику»
+// ищут строки во всём коде расширения, а не в одном файле.
+function readHostSource() {
+  var lib = path.join(EXT, "lib");
+  var parts = [fs.readFileSync(path.join(EXT, "extension.js"), "utf8")];
+  if (fs.existsSync(lib)) fs.readdirSync(lib).sort().forEach(function (n) {
+    if (/\.js$/.test(n)) parts.push(fs.readFileSync(path.join(lib, n), "utf8"));
+  });
+  return parts.join("\n");
+}
 
 var failures = [];
 var checks = 0;
@@ -103,7 +113,10 @@ function loadExtension(stub) {
     loaded: true,
     exports: stub,
   };
-  delete require.cache[require.resolve(path.join(EXT, "extension.js"))];
+  // Сбрасываем из кэша и точку входа, и модули lib/: иначе они остались бы с прошлой заглушкой vscode.
+  Object.keys(require.cache).forEach(function (k) {
+    if (k === path.join(EXT, "extension.js") || k.indexOf(path.join(EXT, "lib") + path.sep) === 0) delete require.cache[k];
+  });
   var ext = require(path.join(EXT, "extension.js"));
   Module._resolveFilename = orig;
   return ext;
@@ -256,11 +269,15 @@ if (!fs.existsSync(path.join(docsPath, "00-НАЧНИ-ОТСЮДА.md"))) {
   // регрессия: свёрнутое оглавление слушается hidden, а не висит раскрытым
   check("свёрнутое оглавление скрыто", html.indexOf(".item-toc[hidden]") !== -1 && html.indexOf("display: none") !== -1);
 
-  var src = fs.readFileSync(path.join(EXT, "extension.js"), "utf8");
+  var src = readHostSource();
   check("есть отдельное меню-панель (webview panel)", src.indexOf("createWebviewPanel") !== -1);
   check("рендер общий для сайдбара и панели", src.indexOf("renderAll") !== -1 && src.indexOf("renderPanel") !== -1);
   check("панель следит за файлами", src.indexOf("createFileSystemWatcher") !== -1);
   check("панель реагирует на смену редактора", src.indexOf("onDidChangeActiveTextEditor") !== -1);
+  check("мост доки↔редактор: подписка на курсор", src.indexOf("onDidChangeTextEditorSelection") !== -1 && src.indexOf("writeEditorContext") !== -1);
+  check("мост доки↔редактор: настройка-тумблер объявлена", !!(pkg.contributes.configuration.properties["cppDocs.editorBridge"]));
+  check("напиши и запусти: канал компиляции в хосте", src.indexOf("runUserCode") !== -1 && src.indexOf("setupWindowChannels") !== -1);
+  check("напиши и запусти: настройки localRun/compiler объявлены", !!(pkg.contributes.configuration.properties["cppDocs.localRun"] && pkg.contributes.configuration.properties["cppDocs.compiler"]));
   check("переход к разделу оглавления", src.indexOf("openAt") !== -1);
   check("закладки хранятся между сессиями", src.indexOf("PINS_KEY") !== -1);
   check("прогресс изучения хранится между сессиями", src.indexOf("READ_KEY") !== -1);
@@ -272,10 +289,10 @@ if (!fs.existsSync(path.join(docsPath, "00-НАЧНИ-ОТСЮДА.md"))) {
   check("подсчёт числа разделов", src.indexOf("function countSections") !== -1);
   check("обработка «открепить всё»", src.indexOf("msg.type === 'clearPins'") !== -1);
   check("обработка ручной отметки «изучено»", src.indexOf("msg.type === 'toggleRead'") !== -1 && src.indexOf("toggleRead(filePath)") !== -1);
-  // Считаем только парсер доков (до блока инъекции окна): у окна свои законные
-  // чтения workbench.html/рантайма, они к кэшу парсинга отношения не имеют.
+  // Считаем только парсер доков (lib/docs.js): у окна свои законные чтения workbench.html,
+  // рантайма и файловых каналов, к кэшу парсинга они отношения не имеют.
   check("единственное чтение файла в парсере доков",
-    (src.slice(0, src.indexOf("const WB_START")).match(/readFileSync/g) || []).length <= 3);
+    (fs.readFileSync(path.join(EXT, "lib", "docs.js"), "utf8").match(/readFileSync/g) || []).length <= 3);
 
   // --- регрессии на исправленные баги ---
   // Свёрнутость групп привязана к имени, а не к порядковому индексу
@@ -398,7 +415,18 @@ if (fs.existsSync(runtimePath)) {
   // --- надёжность рантайма: подпорченное состояние из localStorage не ломает окно ---
   check("рантайм: словари состояния санируются (plainMap)", rt.indexOf("function plainMap") !== -1);
   check("рантайм: масштаб шрифта клампится в [0.8..1.6]", rt.indexOf("isFinite(state.fs)") !== -1 && rt.indexOf("Math.min(1.6") !== -1);
-  check("рантайм: позиция/размер окна принимаются только числами", rt.indexOf('["x", "y", "w", "h"]') !== -1);
+  check("рантайм: позиция/размер окна принимаются только числами", rt.indexOf('["x", "y", "w", "h", "btnX", "btnY"]') !== -1);
+  check("рантайм: пилюлю-запуск можно перетаскивать", rt.indexOf("function installBtnDrag") !== -1 && rt.indexOf("state.btnX") !== -1);
+  check("рантайм: режим «только основное» (свернуть все разборы)", rt.indexOf("function applyExpandNotes") !== -1 && rt.indexOf("state.expandNotes") !== -1);
+  check("рантайм: подсказки-термины при наведении", rt.indexOf("function annotateTerms") !== -1 && rt.indexOf("var GLOSSARY") !== -1 && rt.indexOf("cd-term") !== -1);
+  check("рантайм: интерактивная таблица сниппетов (клик — код)", rt.indexOf("function renderSnippets") !== -1 && rt.indexOf("cd-snip-code") !== -1);
+  check("рантайм: меню «Настройки» + подсказки/анимации", rt.indexOf('"Настройки"') !== -1 && rt.indexOf("state.termHints") !== -1 && rt.indexOf("state.noAnim") !== -1);
+  check("рантайм: настройки темы и «праздника»", rt.indexOf("state.theme") !== -1 && rt.indexOf("state.noCelebrate") !== -1 && rt.indexOf('segRow("Тема"') !== -1);
+  check("рантайм: кружок прогресса у пункта виден всегда", rt.indexOf("cd-a-read") !== -1);
+  check("рантайм: чипы-фильтр навигатора", rt.indexOf("cd-filterbar") !== -1 && rt.indexOf("state.navFilter") !== -1 && rt.indexOf("function navMatch") !== -1);
+  check("рантайм: аккордеон групп + прогресс на группе", rt.indexOf("function updateGroupProgress") !== -1 && rt.indexOf("cd-gprog") !== -1);
+  check("рантайм: правый клик по пункту (контекстное меню)", rt.indexOf("function showItemMenu") !== -1 && rt.indexOf("cd-ctxmenu") !== -1);
+  check("рантайм: клик по строке задачника ведёт к заданию", rt.indexOf("function decorateTaskTables") !== -1 && rt.indexOf("cd-taskrow") !== -1 && rt.indexOf("function gotoTask") !== -1);
 
   // --- наклейки-иллюстрации (пустые состояния, приветствие, «всё изучено») ---
   check("рантайм: слоты наклеек и SVG-заглушки", rt.indexOf("function stickerMarkup") !== -1 && rt.indexOf("STICKER_SVG") !== -1);
@@ -414,12 +442,13 @@ if (fs.existsSync(runtimePath)) {
   check("наклейка " + n + ".png на месте", fs.existsSync(path.join(EXT, "stickers", n + ".png")));
 });
 
-var srcAll = fs.readFileSync(path.join(EXT, "extension.js"), "utf8");
-check("окно: поддержан загрузчик custom-ui-style", srcAll.indexOf("custom-ui-style") !== -1);
-check("окно: поддержан загрузчик be5invis", srcAll.indexOf("vscode_custom_css.imports") !== -1);
+var srcAll = readHostSource();
+// Сторонние загрузчики (custom-ui-style / be5invis) больше не используются: окно ставится прямым
+// патчем оболочки. Их код удалён — проверяем, что он не вернулся мёртвым грузом.
+check("окно: нет мёртвого кода сторонних загрузчиков", srcAll.indexOf("function ensureWindowImport") === -1 && srcAll.indexOf("vscode_custom_css.imports") === -1);
 check("окно: генерация файла данных", srcAll.indexOf("function writeDocsData") !== -1);
-check("окно: прописывание импорта", srcAll.indexOf("function ensureWindowImport") !== -1);
-check("окно: удаление импорта", srcAll.indexOf("function removeWindowImport") !== -1);
+check("хост разбит на модули lib/, extension.js — только точка входа",
+  fs.existsSync(path.join(EXT, "lib", "docs.js")) && fs.readFileSync(path.join(EXT, "extension.js"), "utf8").split("\n").length < 400);
 check("окно: прямой патч оболочки без загрузчика", srcAll.indexOf("function enableWindow") !== -1 && srcAll.indexOf("function findWorkbenchFiles") !== -1);
 check("окно: команда подключения ведёт на прямой патч", srcAll.indexOf("() => enableWindow(context)") !== -1);
 check("окно: восстановление после апдейта VS Code — только по согласию", srcAll.indexOf("WINDOW_ON_KEY") !== -1 && srcAll.indexOf("function injectWindowFiles") !== -1 && srcAll.indexOf("после обновления VS Code плавающее окно пропало") !== -1);
@@ -447,7 +476,7 @@ check("скрипт встраивания наклеек на месте", fs.e
 // ------------------------------------------------------------
 console.log("\nБезопасность");
 var rtSec = fs.readFileSync(path.join(EXT, "cpp-docs-runtime.js"), "utf8");
-var ps1Path = path.join(ROOT, "installer", "window-inject.ps1");
+var ps1Path = path.join(ROOT, "installer", "tools", "window-inject.ps1");
 var ps1 = fs.existsSync(ps1Path) ? fs.readFileSync(ps1Path, "utf8") : "";
 
 // #1 файл данных не исполняется при перечитке
@@ -460,7 +489,7 @@ check("#2 PS1 вооружает CSP nonce (не снимает целиком)"
 // #3 якорь целостности рантайма + сверка при инъекции
 check("#3 SHA-256 рантайма: якорь и сверка перед инъекцией",
       /const RUNTIME_SHA256 = '[0-9a-f]{64}';/.test(srcAll) &&
-      srcAll.indexOf("actual !== RUNTIME_SHA256") !== -1 &&
+      srcAll.indexOf("actual !== runtimeAnchor") !== -1 && srcAll.indexOf("setRuntimeAnchor(RUNTIME_SHA256)") !== -1 &&
       fs.existsSync(path.join(ROOT, "scripts", "hash-runtime.js")));
 check("#3 якорь совпадает с фактическим SHA-256 рантайма",
       (function () {

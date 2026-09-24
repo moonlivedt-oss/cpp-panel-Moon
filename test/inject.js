@@ -29,6 +29,16 @@ var Module = require("module");
 var ROOT = path.join(__dirname, "..");
 var EXT = path.join(ROOT, "extension");
 var DOCS = path.join(ROOT, "docs");
+// Исходник хоста расширения целиком: extension.js + модули lib/. Проверки «по исходнику»
+// ищут строки во всём коде расширения, а не в одном файле.
+function readHostSource() {
+  var lib = path.join(EXT, "lib");
+  var parts = [fs.readFileSync(path.join(EXT, "extension.js"), "utf8")];
+  if (fs.existsSync(lib)) fs.readdirSync(lib).sort().forEach(function (n) {
+    if (/\.js$/.test(n)) parts.push(fs.readFileSync(path.join(lib, n), "utf8"));
+  });
+  return parts.join("\n");
+}
 
 var failures = [];
 var checks = 0;
@@ -105,11 +115,11 @@ check("внешние ссылки идут через openExternalLink (window.
       runtimeRaw.indexOf("function openExternalLink") !== -1 &&
       runtimeRaw.indexOf("window.open") !== -1 &&
       (runtimeRaw.match(/openExternalLink\(href\)/g) || []).length >= 2);
-// Один фоновый тикер (heal + poll вместе), не два.
-check("фоновый тикер один (setInterval с шагом 3000)",
+// Один фоновый тикер (heal + poll + контекст редактора вместе), не два.
+check("фоновый тикер один (setInterval)",
       (runtimeRaw.match(/setInterval\(/g) || []).length === 1);
 // Поиск workbench.html кешируется на сессию.
-var extRaw = fs.readFileSync(path.join(EXT, "extension.js"), "utf8");
+var extRaw = readHostSource();
 check("findWorkbenchFiles кеширует результат (_wbCache)",
       extRaw.indexOf("_wbCache") !== -1 && /_wbCache = out/.test(extRaw));
 
@@ -153,7 +163,7 @@ check("injectWindowFiles проверяет рантайм перед инъек
 check("injectWindowFiles впечатывает данные инлайном (windowDataBody/__CPPDOCS__)",
       extRaw.indexOf("windowDataBody") !== -1 && extRaw.indexOf("window.__CPPDOCS__ = ") !== -1);
 // #4 паритет офлайн-установщика: те же маркеры и та же инлайн-схема, что в JS.
-var ps1 = fs.readFileSync(path.join(EXT, "..", "installer", "window-inject.ps1"), "utf8");
+var ps1 = fs.readFileSync(path.join(EXT, "..", "installer", "tools", "window-inject.ps1"), "utf8");
 check("PS1-установщик: те же маркеры + инлайн данных/рантайма + экранирование </script",
       ps1.indexOf("CPPDOCS-WINDOW-START") !== -1 &&
       ps1.indexOf("$dataJs") !== -1 && ps1.indexOf("$runtimeJs") !== -1 &&

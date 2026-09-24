@@ -21,9 +21,11 @@ npm run install:vsix     # собрать .vsix и поставить в VS Code
 
   | Файл | За что отвечает |
   |---|---|
-  | `extension/extension.js` | хост-логика: поиск папки `docs`, сбор списка материалов, webview боковой/отдельной панели, подключение плавающего окна, команды и задачи |
+  | `extension/extension.js` | точка входа: `activate()` регистрирует команды и связывает модули `lib/` |
+  | `extension/lib/*.js` | хост-логика по модулям: `docs` (папка и .md), `sidebar` (webview), `storage` (файлы и настройки), `data` (данные окна), `window` (впечатывание окна), `editor-bridge`, `run`, `actions`, `log` |
   | `extension/cpp-docs-runtime.js` | рантайм плавающего окна: рендер Markdown, подсветка C++/bash, drag/resize, оглавление, переходы по ссылкам, акцент из темы / custom-bg |
   | `scripts/package-extension.js` | сборка `.vsix` |
+  | `scripts/build-installer.js`, `installer/` | офлайн-установщик: батники + `tools/common.cmd` (цвета, поиск VS Code) |
   | `scripts/preview*.js` | превью панели и окна в браузер (`build/`) |
   | `test/smoke.js` | смоук-тест без запуска VS Code |
 

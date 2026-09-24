@@ -267,7 +267,7 @@ function preflight(pkg) {
   });
 
   // 3. Синтаксис JS (node --check) — не пакуем заведомо сломанный код
-  ["extension.js", "cpp-docs-runtime.js"].forEach(function (name) {
+  ["extension.js", "cpp-docs-runtime.js"].concat(libFiles()).forEach(function (name) {
     var full = path.join(EXT, name);
     if (!fs.existsSync(full)) return;
     try {
@@ -347,8 +347,28 @@ function bundledDocsFiles() {
   return out;
 }
 
+/**
+ * Убрать из задачника блоки «Полное решение с разбором …» (свёрнутые <details> с готовым кодом).
+ * Подсказки (в т.ч. «Подсказка посильнее» и нумерованные блоки в «# Подсказки») НЕ трогаем.
+ * Используется для варианта .vsix «без решений» (флаг --no-solutions) — исходные docs остаются как есть.
+ */
+function stripSolutions(md) {
+  return String(md)
+    .replace(/[ \t]*<details>\s*<summary>\s*Полное решение[\s\S]*?<\/details>[ \t]*\n?/g, "")
+    .replace(/\n{3,}/g, "\n\n");
+}
+
+/** Модули хоста расширения: lib/*.js (пути относительно extension/, прямые слэши). */
+function libFiles() {
+  var dir = path.join(EXT, "lib");
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir).filter(function (n) { return /.js$/.test(n); }).sort()
+    .map(function (n) { return "lib/" + n; });
+}
+
 function main() {
   var pkg = JSON.parse(fs.readFileSync(path.join(EXT, "package.json"), "utf8"));
+  var NO_SOLUTIONS = process.argv.indexOf("--no-solutions") !== -1;
   preflight(pkg);
 
   var entries = [
@@ -367,19 +387,34 @@ function main() {
         entries.push({ name: "extension/" + name, data: fs.readFileSync(full) });
       }
     });
+  // Модули расширения (extension/lib/*.js) — extension.js подключает их через require.
+  libFiles().forEach(function (rel) {
+    entries.push({ name: "extension/" + rel, data: fs.readFileSync(path.join(EXT, rel)) });
+  });
 
   // Вшиваем документацию в пакет (extension/docs) — расширение работает без своей папки docs.
   var docsFiles = bundledDocsFiles();
+  var strippedCount = 0;
   docsFiles.forEach(function (d) {
-    entries.push({ name: "extension/docs/" + d.rel, data: fs.readFileSync(d.full) });
+    var data;
+    if (NO_SOLUTIONS && /^zadachnik\//.test(d.rel)) {
+      var src = fs.readFileSync(d.full, "utf8");
+      var out = stripSolutions(src);
+      if (out !== src) strippedCount++;
+      data = Buffer.from(out, "utf8");
+    } else {
+      data = fs.readFileSync(d.full);
+    }
+    entries.push({ name: "extension/docs/" + d.rel, data: data });
   });
+  if (NO_SOLUTIONS) console.log("  ✂ Вариант БЕЗ решений: убраны блоки «Полное решение» в " + strippedCount + " файлах задачника");
 
   // CHANGELOG из корня → в пакет (Marketplace показывает вкладку «Changelog»).
   var chLog = path.join(ROOT, "CHANGELOG.md");
   if (fs.existsSync(chLog)) entries.push({ name: "extension/CHANGELOG.md", data: fs.readFileSync(chLog) });
 
   if (!fs.existsSync(DIST)) fs.mkdirSync(DIST, { recursive: true });
-  var outName = pkg.name + "-" + pkg.version + ".vsix";
+  var outName = pkg.name + "-" + pkg.version + (NO_SOLUTIONS ? "-bez-reshenij" : "") + ".vsix";
   var outPath = path.join(DIST, outName);
   var zipBuf = makeZip(entries);
   fs.writeFileSync(outPath, zipBuf);
@@ -412,17 +447,20 @@ function main() {
         var full = path.join(EXT, name);
         if (fs.statSync(full).isFile()) fs.copyFileSync(full, path.join(dest, name));
       });
+    // модули расширения — в dest/lib (старую папку убираем, чтобы не остался переименованный модуль)
+    fs.rmSync(path.join(dest, "lib"), { recursive: true, force: true });
+    libFiles().forEach(function (rel) {
+      fs.mkdirSync(path.join(dest, "lib"), { recursive: true });
+      fs.copyFileSync(path.join(EXT, rel), path.join(dest, rel));
+    });
     // и вшитую документацию (dest/docs) — тем же фильтром
     bundledDocsFiles().forEach(function (d) {
       var target = path.join(dest, "docs", d.rel);
       fs.mkdirSync(path.dirname(target), { recursive: true });
       fs.copyFileSync(d.full, target);
     });
-    console.log("\nГотово. ВАЖНО: одного «Reload Window» мало — загрузчик вшивает рантайм в");
-    console.log("оболочку и держит старую копию. Переприменить загрузчик:");
-    console.log("  • Custom CSS and JS (be5invis): команда «Reload Custom CSS and JS» → перезапуск;");
-    console.log("  • Custom UI Style: команда «Custom UI Style: Reload».");
-    console.log("Либо: «Документация C++: подключить плавающее окно» и подтвердить применение.");
+    console.log("\nГотово. ВАЖНО: рантайм окна впечатан в оболочку VS Code — одного «Reload Window» мало.");
+    console.log("Выполните «Документация C++: подключить плавающее окно» и нажмите «Перезапустить».");
   }
 }
 

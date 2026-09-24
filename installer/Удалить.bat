@@ -1,43 +1,37 @@
 @echo off
-chcp 866 >nul
 setlocal enableextensions
-title ��������: ���㬥���� C++
-
-echo.
-echo   ============================================
-echo     �������� ���७�� "���㬥���� C++"
-echo   ============================================
-echo.
+set "T=%~dp0tools\common.cmd"
+call "%T%" init
+title Удаление — Документация C++
+call "%T%" header "Удаление расширения"
 
 set "EXTID=moonlivedt.cpp-docs-panel"
+set "LOG=%TEMP%\cppdocs-uninstall.log"
 
-where code >nul 2>nul
-if %errorlevel%==0 (
-  call code --uninstall-extension %EXTID%
-  if %errorlevel%==0 goto :done
+call "%T%" step "1/2" "Ищу VS Code"
+call "%T%" findcode
+if errorlevel 1 (
+  call "%T%" err "VS Code не найден — удалить через него не получится."
+  call "%T%" info "Вручную: VS Code - Extensions - найти «Документация C++» - Uninstall."
+  goto :fail
 )
+call "%T%" ok "VS Code найден."
 
-set "CODE1=%LOCALAPPDATA%\Programs\Microsoft VS Code\bin\code.cmd"
-set "CODE2=%ProgramFiles%\Microsoft VS Code\bin\code.cmd"
-set "CODE3=%ProgramFiles(x86)%\Microsoft VS Code\bin\code.cmd"
+call "%T%" step "2/2" "Удаляю расширение"
+call "%CODE%" --uninstall-extension %EXTID% >"%LOG%" 2>&1
+set "LEFT="
+for /f "delims=" %%L in ('call "%CODE%" --list-extensions 2^>nul ^| findstr /i /x "%EXTID%"') do set "LEFT=%%L"
+if defined LEFT (
+  call "%T%" err "Расширение всё ещё на месте. Ответ VS Code:"
+  type "%LOG%"
+  goto :fail
+)
+call "%T%" ok "Расширение удалено."
+call "%T%" info "Перезапустите VS Code, чтобы значок пропал с панели."
+call "%T%" info "Если включали плавающее окно — сначала запустите Убрать-окно.bat."
+call "%T%" finish 0
+exit /b 0
 
-if exist "%CODE1%" ( call "%CODE1%" --uninstall-extension %EXTID% & goto :done )
-if exist "%CODE2%" ( call "%CODE2%" --uninstall-extension %EXTID% & goto :done )
-if exist "%CODE3%" ( call "%CODE3%" --uninstall-extension %EXTID% & goto :done )
-
-echo   [������] �� 㤠���� ���� VS Code (������� code).
-echo.
-echo   ������ ���७�� ������:
-echo   VS Code  -  Extensions (Ctrl+Shift+X)  -  ������ "���㬥���� C++"  -  Uninstall
-goto :end
-
-:done
-echo.
-echo   ---------------------------------------------
-echo   ������. ����७�� 㤠����.
-echo   ��१������ VS Code, �⮡� ��������� ���㯨�� � ᨫ�.
-echo   ---------------------------------------------
-
-:end
-echo.
-pause
+:fail
+call "%T%" finish 1
+exit /b 1

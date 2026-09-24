@@ -105,13 +105,14 @@ itself: clean typography, **C++/bash highlighting**, **"copy code"** buttons, ta
 **file table of contents** and **internal-link jumps** across files with a jump to the right
 section. The theme (light / dark) comes from VS Code.
 
-**How to enable.** The window is drawn by `cpp-docs-runtime.js`, injected into the VS Code shell by
-a loader — **Custom UI Style** (`subframe7536.custom-ui-style`, resilient, survives editor
-updates) or **Custom CSS and JS** (`be5invis.vscode-custom-css`). Install the loader, then:
+**How to enable.** The window is drawn by `cpp-docs-runtime.js`, which the extension injects into
+the VS Code shell itself — no third-party loader needed:
 
 1. Command palette → **"Документация C++: подключить плавающее окно"** (or the window button in the
-   panel header) → "Apply" / "Enable Custom CSS".
-2. After the window reloads, click the floating **"C++"** pill at the bottom right of the editor.
+   panel header) → "Перезапустить". The "…appears to be corrupt" banner can be closed — it is expected.
+2. After the reload, click the floating **"C++"** pill at the bottom right of the editor.
+
+A VS Code update removes the window — the extension offers to restore it.
 
 To disable — the **"Документация C++: отключить плавающее окно"** command; to check state —
 **"…проверить плавающее окно"**. The sidebar panel remains available as a fallback.
@@ -221,20 +222,31 @@ or drop by [Discussions](https://github.com/moonlivedt-oss/cpp-panel-Moon/discus
 ```
 cpp-docs-panel/
 ├── extension/                  extension sources
-│   ├── extension.js            logic: find the folder, build the list, webview, wire the window
-│   ├── cpp-docs-runtime.js     floating-window runtime (MD render, highlight, drag/resize)
+│   ├── extension.js            entry point: activate() wires the lib/ modules
+│   ├── lib/
+│   │   ├── docs.js             where docs live, reading .md, material groups
+│   │   ├── sidebar.js          sidebar webview and opening .md files
+│   │   ├── storage.js          globalStorage files, their URLs, risky settings
+│   │   ├── data.js             floating-window data (window.__CPPDOCS__)
+│   │   ├── window.js           injecting the window into the VS Code shell
+│   │   ├── editor-bridge.js    word/error under cursor → window, "Find in reference"
+│   │   ├── run.js              "Write and run": compile and test
+│   │   ├── actions.js          window actions: "to editor", "to notes"
+│   │   └── log.js              log (Output → "Документация C++")
+│   ├── cpp-docs-runtime.js     floating-window runtime — one file, injected whole
 │   ├── package.json            extension manifest
 │   ├── README.md               short description (shown on the extension page)
 │   └── icon.svg                activity-bar icon
+├── installer/                  offline installer: .bat files + tools/ (helper .cmd/.ps1)
 ├── scripts/
 │   ├── package-extension.js    .vsix build (own ZIP writer over zlib)
+│   ├── build-installer.js      installer folder dist/cpp-docs-panel-install
 │   ├── preview.js              sidebar preview → build/preview.html
 │   └── preview-window.js       floating-window preview → build/preview-window.html
-├── test/
-│   └── smoke.js                172 checks without launching the editor
+├── test/                       smoke / inject / runtime / run — no editor needed
 ├── docs/                       hand-written C++ docs (what the panel shows)
 ├── build/                      generated previews (in .gitignore)
-└── dist/                       built packages
+└── dist/                       built packages and installer folder (in .gitignore)
 ```
 
 </details>

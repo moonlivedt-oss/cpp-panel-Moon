@@ -10,11 +10,7 @@ $START = "<!-- CPPDOCS-WINDOW-START -->"
 $END   = "<!-- CPPDOCS-WINDOW-END -->"
 function Line($t) { Write-Host $t }
 
-Line ""
-Line "  ============================================"
-Line "    Плавающее окно: подключение"
-Line "  ============================================"
-Line ""
+# Заголовок окна рисует батник (tools/common.cmd), здесь — только шаги.
 
 # 1) Папка установки VS Code (по Code.exe) и ВСЕ workbench.html
 $root = $null

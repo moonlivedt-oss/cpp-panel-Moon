@@ -1,10 +1,10 @@
 # Ошибки компилятора: словарь
 
-> Двадцать сообщений, которые ты увидишь чаще всего. Все они **воспроизведены** на твоём g++ 15.2 —
+> Двадцать семь сообщений, которые ты увидишь чаще всего. Все они **воспроизведены** на твоём g++ 15.2 —
 > тексты приведены дословно, а не пересказаны.
 > Как устроено сообщение вообще — [раздел 1](01-osnovy.md#как-читать-ошибку-компилятора).
 
-[← Начни отсюда](../00-НАЧНИ-ОТСЮДА.md) · [← Словарь терминов](10-slovar.md) · [Как ловить баги →](12-lovim-bagi.md) · [Примеры программ](../examples/README.md)
+[← Начни отсюда](../00-НАЧНИ-ОТСЮДА.md) · [← Словарь функций](10a-slovar-funkcij.md) · [Как ловить баги →](12-lovim-bagi.md) · [Примеры программ](../examples/README.md)
 
 ---
 
@@ -15,12 +15,17 @@
 - **[Имена и опечатки](#имена-и-опечатки)**
   - [`'cout' was not declared in this scope`](#cout-was-not-declared-in-this-scope)
   - [`'vector' is not a member of 'std'`](#vector-is-not-a-member-of-std)
+  - [`'string' does not name a type`](#string-does-not-name-a-type)
+  - [`request for member 'size' in 'n', which is of non-class type 'int'`](#request-for-member-size-in-n-which-is-of-non-class-type-int)
 - **[Знаки препинания](#знаки-препинания)**
   - [`expected ';' after struct definition`](#expected--after-struct-definition)
   - [`expected '}' at end of input`](#expected--at-end-of-input)
   - [`jump to case label`](#jump-to-case-label)
+  - [`expected primary-expression before ';' token`](#expected-primary-expression-before--token)
+  - [`extended character « is not valid in an identifier`](#extended-character--is-not-valid-in-an-identifier)
 - **[Функции](#функции)**
   - [`too many arguments to function`](#too-many-arguments-to-function)
+  - [`no matching function for call to 'max(int&, double&)'`](#no-matching-function-for-call-to-maxint-double)
   - [`undefined reference to 'calc(int)'`](#undefined-reference-to-calcint)
   - [`multiple definition of 'main'`](#multiple-definition-of-main)
   - [`control reaches end of non-void function`](#control-reaches-end-of-non-void-function)
@@ -31,6 +36,8 @@
   - [`invalid conversion from 'const char*' to 'int'`](#invalid-conversion-from-const-char-to-int)
   - [`no match for 'operator+=' ... 'const std::string'`](#no-match-for-operator--const-stdstring)
   - [`'int Box::size' is private within this context`](#int-boxsize-is-private-within-this-context)
+  - [`lvalue required as left operand of assignment`](#lvalue-required-as-left-operand-of-assignment)
+  - [`invalid operands of types 'const char [15]' and 'const char [7]' to binary 'operator+'`](#invalid-operands-of-types-const-char-15-and-const-char-7-to-binary-operator)
 - **[Страшные ошибки на пол-экрана](#страшные-ошибки-на-пол-экрана)**
 - **[Предупреждения, которые нельзя игнорировать](#предупреждения-которые-нельзя-игнорировать)**
   - [`'count' is used uninitialized`](#count-is-used-uninitialized)
@@ -111,6 +118,51 @@ error: 'sort' is not a member of 'std'; did you mean 'qsort'?
 
 `qsort` — это старая функция из C. Она **не** то, что тебе нужно: подключи `<algorithm>` и пиши `std::sort`.
 
+### `'string' does not name a type`
+
+```
+error: 'string' does not name a type; did you mean 'stdin'?
+    2 | string name = "Аня";
+      | ^~~~~~
+```
+
+Компилятор встретил слово там, где ждал **тип** (`int`, `std::string`, имя своей `struct`), и такого типа не знает. Причины по частоте:
+
+1. Забыт `std::` — пиши `std::string`, `std::vector<int>`.
+2. Не подключён заголовок: `<string>`, `<vector>`, `<map>`.
+3. Опечатка в имени своей структуры (`Studnet` вместо `Student`) или структура объявлена **ниже** места, где её используют.
+
+```cpp
+string name = "Аня";          // ❌ нет std::
+std::string name = "Аня";     // ✅ и #include <string> в начале файла
+```
+
+Подсказка `did you mean 'stdin'` здесь мимо: компилятор просто ищет похожее по буквам имя.
+
+Та же ошибка бывает, когда **обычный код стоит вне функции**: `count = 5;` прямо в файле, а не внутри `main` — снаружи функций можно только объявлять.
+
+### `request for member 'size' in 'n', which is of non-class type 'int'`
+
+```
+error: request for member 'size' in 'n', which is of non-class type 'int'
+    4 |   std::cout << n.size();
+      |                  ^~~~
+```
+
+Точка `.` — это «достать что-то изнутри объекта». Она работает у `std::string`, `std::vector`, своей `struct`. У `int`, `double`, `char` ничего внутри нет — точке не за что зацепиться.
+
+```cpp
+int n = 5;
+std::cout << n.size();         // ❌ у числа нет .size()
+
+std::string s = "кот";
+std::cout << s.size();         // ✅ у строки есть
+```
+
+Чаще всего это значит, что переменная **не того типа**, который ты думал: объявил `int`, а хотел `std::string` или `std::vector<int>`. Посмотри на объявление.
+
+Если в сообщении `which is of pointer type` — слева **указатель**, и вместо точки нужна стрелка: `p->name`. Подробнее — [ссылки и указатели](22-ukazateli.md#стрелка----поле-через-указатель).
+
 ## Знаки препинания
 
 ### `expected ';' after struct definition`
@@ -167,6 +219,49 @@ case 1: {                  // ← открыли
 
 Подробнее — [раздел 7](03-logika-cikly.md#switch--выбор-из-фиксированного-списка).
 
+### `expected primary-expression before ';' token`
+
+```
+error: expected primary-expression before ';' token
+    4 |   std::cout << x << ;
+      |                     ^
+```
+
+«Primary expression» — это **значение**: число, переменная, вызов функции. Компилятор дошёл до оператора, ждал справа значение, а встретил `;` (или `)`, или `,`). Значит, в выражении дыра:
+
+```cpp
+std::cout << x << ;            // ❌ после << ничего нет
+std::cout << x << "\n";        // ✅
+
+int y = ;                      // ❌ после = пусто
+foo(1, );                      // ❌ лишняя запятая
+```
+
+Вместо `';'` в сообщении может стоять любой символ — `')'`, `'<<'`, `'else'`: это то, что компилятор увидел **на месте** пропущенного значения. Смотри на символ под `^` и на то, что стоит перед ним.
+
+Ещё одна частая причина — **имя типа там, где нужно значение**: `int x = int;` или вызов `f(int a)` вместо `f(a)`.
+
+### `extended character « is not valid in an identifier`
+
+```
+error: extended character « is not valid in an identifier
+    3 |   std::cout << «Hi»;
+      |                ^
+```
+
+В код попал символ, которого нет в C++, — почти всегда после **копирования из браузера, Word или чата**: «ёлочки» `«»`, «лапки» `“”`, длинное тире `—`, неразрывный пробел. Выглядят похоже на `"` и `-`, но для компилятора это совсем другие символы.
+
+Старые версии g++ (и сейчас — для символов вроде `@` или `` ` ``) пишут то же самое иначе:
+
+```
+error: stray '\302' in program
+error: stray '@' in program
+```
+
+`\302`, `\342` — это байты русской или «типографской» буквы в UTF-8. Сколько их в сообщении — столько байтов у одного символа, не пугайся трёх ошибок подряд.
+
+Лечение одно: **перепечатай это место руками**. Кавычки — прямые `"`, минус — обычный `-`, пробел — обычный пробел. Русские буквы допустимы только внутри кавычек `"…"` и в комментариях.
+
 ## Функции
 
 ### `too many arguments to function`
@@ -178,6 +273,35 @@ error: too many arguments to function 'int square(int)'
 Вызвал с большим числом аргументов, чем принимает функция. Компилятор тут же показывает её настоящую сигнатуру — сверься с ней.
 
 Бывает и наоборот: `too few arguments to function`.
+
+### `no matching function for call to 'max(int&, double&)'`
+
+```
+error: no matching function for call to 'max(int&, double&)'
+    5 |   auto m = std::max(a, b);
+      |            ~~~~~~~~^~~~~~
+note: there are 4 candidates
+note: candidate 1: 'template<class _Tp> constexpr const _Tp& std::max(const _Tp&, const _Tp&)'
+note:   deduced conflicting types for parameter 'const _Tp' ('int' and 'double')
+note: candidate 2: '... std::max(const _Tp&, const _Tp&, _Compare)'
+note: candidate expects 3 arguments, 2 provided
+```
+
+Функция с таким именем есть, но **ни один её вариант не подходит к твоим аргументам** — по числу или по типам. В скобках сообщения — типы, которые ты передал (`int&` — это просто «переменная типа `int`»).
+
+Дальше идут строки `note: candidate` — это варианты, которые компилятор примерял. Под каждым кандидатом — строка с причиной, почему он не подошёл. У первого — `conflicting types`: `std::max` хочет **два значения одного типа**, а пришли `int` и `double`.
+
+```cpp
+int a = 3;
+double b = 2.5;
+std::max(a, b);                        // ❌ разные типы
+std::max<double>(a, b);                // ✅ явно сказать, в каком типе сравнивать
+std::max(static_cast<double>(a), b);   // ✅ или привести один аргумент
+```
+
+Для своих функций — то же самое: сравни вызов с объявлением. Частый случай: функция ждёт `std::string`, а передаёшь число, или аргументы перепутаны местами.
+
+Если функция твоя, а ошибка `could not convert '3' from 'int' to 'std::string'` — это та же беда, только вариант у функции один, и компилятор сразу показывает, какой аргумент не подошёл.
 
 ### `undefined reference to 'calc(int)'`
 
@@ -209,7 +333,7 @@ collect2.exe: error: ld returned 1 exit status
 
 Собираются сразу два файла, и в каждом свой `main`. В программе он должен быть один.
 
-Обычная причина — сборка целой папки (`Ctrl+K B`) вместо одного файла. Запускай через `Ctrl+Alt+R`.
+Обычная причина — собрали целую папку («Build Folder», `Ctrl+K B`) вместо одного файла. Запускай один файл: кнопка ▶ в правом верхнем углу редактора → «C/C++ Runner: Run File» (или `Ctrl+Alt+R`).
 
 ### `control reaches end of non-void function`
 
@@ -314,6 +438,43 @@ error: 'int Box::size' is private within this context
 
 Поле спрятано внутри класса. У `class` всё приватно по умолчанию, у `struct` — открыто. Для учебных задач достаточно писать `struct`.
 
+### `lvalue required as left operand of assignment`
+
+```
+error: lvalue required as left operand of assignment
+    3 |   if (x + 1 = 5) { }
+      |       ~~^~~
+```
+
+Слева от `=` должно стоять **место, куда можно записать** — переменная, элемент массива, поле структуры. Это место и называется *lvalue*. А `x + 1` — просто временное число, записать в него нельзя.
+
+Почти всегда это **перепутанные `=` и `==`** в условии:
+
+```cpp
+if (x + 1 = 5)  { }     // ❌ присваивание во временное значение
+if (x + 1 == 5) { }     // ✅ сравнение
+```
+
+Другие варианты той же ошибки: `5 = x;` (перепутаны стороны), `f() = 3;` (результат функции — не переменная).
+
+### `invalid operands of types 'const char [15]' and 'const char [7]' to binary 'operator+'`
+
+```
+error: invalid operands of types 'const char [15]' and 'const char [7]' to binary 'operator+'
+    3 |   std::string s = "Привет, " + "мир";
+      |                   ~~~~~~~~~~ ^ ~~~~~
+```
+
+Операция (`+`, `-`, `<`, …) применена к типам, для которых она не определена. Самый частый случай — **склеивание двух литералов в кавычках**. `"текст"` — это не `std::string`, а массив символов (`const char [N]`, где N — длина в байтах вместе с завершающим нулём; русская буква занимает два байта). Складывать массивы C++ не умеет.
+
+```cpp
+std::string s = "Привет, " + "мир";                  // ❌ оба — литералы
+std::string s = std::string("Привет, ") + "мир";     // ✅ хотя бы один — string
+std::string s = "Привет, " + name;                   // ✅ если name — std::string
+```
+
+В clang и в подсказках VS Code та же ошибка звучит как `invalid operands to binary expression`. Если в сообщении вместо `const char` стоят твои типы (`Point`, `std::string` и `int`) — для них просто нет такой операции: структуры сравнивай по полям, число в строку превращай через `std::to_string(x)`.
+
 ## Страшные ошибки на пол-экрана
 
 Иногда одна строка твоего кода порождает простыню из системных заголовков:
@@ -409,4 +570,4 @@ warning: unused variable 'unused' [-Wunused-variable]
 
 ---
 
-[← Начни отсюда](../00-НАЧНИ-ОТСЮДА.md) · [← Словарь терминов](10-slovar.md) · [Как ловить баги →](12-lovim-bagi.md) · [Примеры программ](../examples/README.md)
+[← Начни отсюда](../00-НАЧНИ-ОТСЮДА.md) · [← Словарь функций](10a-slovar-funkcij.md) · [Как ловить баги →](12-lovim-bagi.md) · [Примеры программ](../examples/README.md)

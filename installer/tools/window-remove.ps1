@@ -8,11 +8,7 @@ $START = "<!-- CPPDOCS-WINDOW-START -->"
 $END   = "<!-- CPPDOCS-WINDOW-END -->"
 function Line($t) { Write-Host $t }
 
-Line ""
-Line "  ============================================"
-Line "    Плавающее окно: отключение"
-Line "  ============================================"
-Line ""
+# Заголовок окна рисует батник (tools/common.cmd), здесь — только шаги.
 
 $root = $null
 try {

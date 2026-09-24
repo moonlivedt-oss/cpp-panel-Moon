@@ -25,6 +25,11 @@
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": "limited",
+      "restrictedConfigurations": [
+        "cppDocs.path",
+        "cppDocs.localRun",
+        "cppDocs.compiler"
+      ],
       "description": "В недоверенной папке показывается только встроенная документация; папка docs проекта и настройка cppDocs.path игнорируются, чтобы чужой контент не попал в плавающее окно."
     }
   },
@@ -87,6 +92,23 @@
           "type": "boolean",
           "default": true,
           "description": "Открывать файлы в режиме чтения (превью Markdown)"
+        },
+        "cppDocs.editorBridge": {
+          "type": "boolean",
+          "default": true,
+          "description": "Мост доки↔редактор: когда курсор стоит на слове в C/C++-файле, плавающее окно показывает подсказку по этому слову и кнопку «Открыть в справочнике». Выключите, если подсказка мешает."
+        },
+        "cppDocs.localRun": {
+          "type": "boolean",
+          "scope": "machine",
+          "default": false,
+          "description": "Разрешить кнопку «Запустить» в ката ```challenge @type run: расширение скомпилирует ваш код локальным компилятором C++ и прогонит по тестам. По умолчанию выключено (расширение работает офлайн без зависимостей). Включайте, только если вам нужен запуск и у вас установлен g++/clang++/MSVC."
+        },
+        "cppDocs.compiler": {
+          "type": "string",
+          "scope": "machine",
+          "default": "",
+          "description": "Команда или путь к компилятору C++ для «Запустить» (например g++, clang++, или полный путь). Пусто — автопоиск в PATH (g++ → clang++ → cl). Действует при включённой cppDocs.localRun."
         }
       }
     },
@@ -136,6 +158,11 @@
       {
         "command": "cppDocs.showLog",
         "title": "Документация C++: показать журнал"
+      },
+      {
+        "command": "cppDocs.lookupInDocs",
+        "title": "Найти в справочнике C++",
+        "category": "Документация C++"
       }
     ],
     "keybindings": [
@@ -171,6 +198,19 @@
           "command": "cppDocs.refresh",
           "when": "view == cppDocsPanel",
           "group": "navigation@3"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "cppDocs.lookupInDocs",
+          "when": "editorLangId =~ /^(c|cpp|cuda-cpp|objective-c|objective-cpp)$/",
+          "group": "cppdocs@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "cppDocs.lookupInDocs",
+          "when": "editorLangId =~ /^(c|cpp|cuda-cpp|objective-c|objective-cpp)$/"
         }
       ]
     }

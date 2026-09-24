@@ -1,47 +1,43 @@
 @echo off
-chcp 866 >nul
 setlocal enableextensions
-title è‡Æ¢•‡™†: ÑÆ™„¨•≠‚†Ê®Ô C++
+set "T=%~dp0tools\common.cmd"
+call "%T%" init
+title –ü—Ä–æ–≤–µ—Ä–∫–∞ ‚Äî –î–æ–∫—É–º–µ–Ω—Ç–∞—Ü–∏—è C++
+call "%T%" header "–ü—Ä–æ–≤–µ—Ä–∫–∞ —É—Å—Ç–∞–Ω–æ–≤–∫–∏"
 
-echo.
-echo   ============================================
-echo     è‡Æ¢•‡™† „·‚†≠Æ¢™® "ÑÆ™„¨•≠‚†Ê®Ô C++"
-echo   ============================================
-echo.
+set "EXTID=moonlivedt.cpp-docs-panel"
 
-set "LIST=%TEMP%\cppdocs_check.txt"
-if exist "%LIST%" del "%LIST%" >nul 2>nul
-
-where code >nul 2>nul
-if %errorlevel%==0 (
-  call code --list-extensions --show-versions > "%LIST%" 2>nul
-  goto :have
+call "%T%" step "1/2" "VS Code"
+call "%T%" findcode
+if errorlevel 1 (
+  call "%T%" err "VS Code –Ω–µ –Ω–∞–π–¥–µ–Ω. –°–Ω–∞—á–∞–ª–∞ —É—Å—Ç–∞–Ω–æ–≤–∏—Ç–µ VS Code, –ø–æ—Ç–æ–º –£—Å—Ç–∞–Ω–æ–≤–∏—Ç—å.bat."
+  goto :fail
 )
-set "CODE1=%LOCALAPPDATA%\Programs\Microsoft VS Code\bin\code.cmd"
-set "CODE2=%ProgramFiles%\Microsoft VS Code\bin\code.cmd"
-set "CODE3=%ProgramFiles(x86)%\Microsoft VS Code\bin\code.cmd"
-if exist "%CODE1%" ( call "%CODE1%" --list-extensions --show-versions > "%LIST%" 2>nul & goto :have )
-if exist "%CODE2%" ( call "%CODE2%" --list-extensions --show-versions > "%LIST%" 2>nul & goto :have )
-if exist "%CODE3%" ( call "%CODE3%" --list-extensions --show-versions > "%LIST%" 2>nul & goto :have )
+set "CODEVER="
+for /f "delims=" %%V in ('call "%CODE%" --version 2^>nul') do if not defined CODEVER set "CODEVER=%%V"
+call "%T%" ok "VS Code –Ω–∞–π–¥–µ–Ω, –≤–µ—Ä—Å–∏—è %CODEVER%."
 
-echo   [èêéÇÄã] VS Code ≠• ≠†©§•≠ ≠† Ì‚Æ¨ èä.
-echo            ë≠†Á†´† „·‚†≠Æ¢®‚• VS Code, ß†‚•¨ ß†Ø„·‚®‚• ì·‚†≠Æ¢®‚Ï.bat
-goto :end
-
-:have
-echo   [OK] VS Code ≠†©§•≠.
-findstr /i "moonlivedt.cpp-docs-panel" "%LIST%" >nul
-if %errorlevel%==0 (
-  echo   [OK] ê†·Ë®‡•≠®• „·‚†≠Æ¢´•≠Æ:
-  findstr /i "moonlivedt.cpp-docs-panel" "%LIST%"
-  echo.
-  echo   àíéÉ: ¢·Ò £Æ‚Æ¢Æ. é‚™‡Æ©‚• VS Code ® ≠†¶¨®‚• ®™Æ≠™„ ™≠®£® ·´•¢†.
-) else (
-  echo   [èêéÇÄã] ê†·Ë®‡•≠®• çÖ „·‚†≠Æ¢´•≠Æ.
-  echo            á†Ø„·‚®‚• ì·‚†≠Æ¢®‚Ï.bat, ß†‚•¨ ØÆ¢‚Æ‡®‚• Ø‡Æ¢•‡™„.
+call "%T%" step "2/2" "–†–∞—Å—à–∏—Ä–µ–Ω–∏–µ ¬´–î–æ–∫—É–º–µ–Ω—Ç–∞—Ü–∏—è C++¬ª"
+set "GOT="
+for /f "delims=" %%L in ('call "%CODE%" --list-extensions --show-versions 2^>nul ^| findstr /i /b "%EXTID%@"') do set "GOT=%%L"
+if not defined GOT (
+  call "%T%" err "–†–∞—Å—à–∏—Ä–µ–Ω–∏–µ –Ω–µ —É—Å—Ç–∞–Ω–æ–≤–ª–µ–Ω–æ. –ó–∞–ø—É—Å—Ç–∏—Ç–µ –£—Å—Ç–∞–Ω–æ–≤–∏—Ç—å.bat."
+  goto :fail
 )
-if exist "%LIST%" del "%LIST%" >nul 2>nul
+set "INST=%GOT:*@=%"
+call "%T%" ok "–£—Å—Ç–∞–Ω–æ–≤–ª–µ–Ω–æ, –≤–µ—Ä—Å–∏—è %INST%."
 
-:end
+rem –ï—Å—Ç—å –ª–∏ –≤ –ø–∞–ø–∫–µ –≤–µ—Ä—Å–∏—è –Ω–æ–≤–µ–µ —É—Å—Ç–∞–Ω–æ–≤–ª–µ–Ω–Ω–æ–π?
+set "NEW="
+for /f "delims=" %%F in ('dir /b /o:d "%~dp0cpp-docs-panel-*.vsix" 2^>nul') do set "NEW=%%~nF"
+if defined NEW set "NEW=%NEW:cpp-docs-panel-=%"
+if defined NEW if not "%NEW%"=="%INST%" call "%T%" warn "–í —ç—Ç–æ–π –ø–∞–ø–∫–µ –ª–µ–∂–∏—Ç –≤–µ—Ä—Å–∏—è %NEW% ‚Äî —á—Ç–æ–±—ã –æ–±–Ω–æ–≤–∏—Ç—å—Å—è, –∑–∞–ø—É—Å—Ç–∏—Ç–µ –£—Å—Ç–∞–Ω–æ–≤–∏—Ç—å.bat."
+
 echo.
-pause
+echo   %C_OK%–í—Å—ë –≥–æ—Ç–æ–≤–æ.%C_0% –û—Ç–∫—Ä–æ–π—Ç–µ VS Code –∏ –Ω–∞–∂–º–∏—Ç–µ –∑–Ω–∞—á–æ–∫ –∫–Ω–∏–≥–∏ —Å–ª–µ–≤–∞.
+call "%T%" finish 0
+exit /b 0
+
+:fail
+call "%T%" finish 1
+exit /b 1

@@ -9,6 +9,13 @@
 *.svg text eol=lf
 *.yml text eol=lf
 
+# Батники и PowerShell — CRLF: cmd с LF-строками промахивается мимо меток goto/call :метка
+# (читает файл кусками и теряет позицию), а Блокнот старых Windows показывает LF одной строкой.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+installer/*.txt text eol=crlf
+
 # Бинарники — не трогать переводы строк, не показывать в diff как текст.
 *.png binary
 *.jpg binary

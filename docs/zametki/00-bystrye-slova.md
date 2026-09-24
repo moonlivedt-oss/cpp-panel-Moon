@@ -1,6 +1,6 @@
 # Быстрые слова
 
-> Все сниппеты C++: напечатай слово из колонки «Печатай» и нажми **Tab**. Значок ⌄ — при вставке появится меню выбора.
+> Все сниппеты C++: напечатай слово из колонки «Печатай» и нажми **Tab**. Значок ⌄ — при вставке появится меню выбора. **Нажми на строку — раскроется её код.**
 
 Слова живут в `%APPDATA%\Code\User\snippets\cpp.json`. После вставки `Tab` прыгает по местам для заполнения, а `⌄` открывает список вариантов (стрелки + Enter).
 
@@ -12,94 +12,94 @@
 
 ## Каркас
 
-| Печатай | Что вставит |
-| --- | --- |
-| `main` | Скелет программы: UTF-8 для русского в консоли, готовая зона для кода |
-| `maininput` | Каркас с готовым readInt внутри: сразу можно спрашивать числа. Всё включено |
-| `func` ⌄ | Заготовка функции: вынести кусок кода из main. У void убери return |
+```snippets
+main	0	Скелет программы: UTF-8 для русского в консоли, готовая зона для кода	I2luY2x1ZGUgPHdpbmRvd3MuaD4gICAvLyBXaW5kb3dzOiBVVEYtOCDQsiDQutC+0L3RgdC+0LvQuCAo0LjQvdCw0YfQtSDQutGA0LDQutC+0LfRj9Cx0YDRiykKCiNpbmNsdWRlIDxpb3N0cmVhbT4KI2luY2x1ZGUgPHN0cmluZz4KCmludCBtYWluKCkgewogIFNldENvbnNvbGVDUChDUF9VVEY4KTsgICAgICAgIC8vINC60L7QvdGB0L7Qu9GMINCf0KDQmNCd0JjQnNCQ0JXQoiDQstCy0L7QtCDQutCw0LogVVRGLTgKICBTZXRDb25zb2xlT3V0cHV0Q1AoQ1BfVVRGOCk7ICAvLyDQutC+0L3RgdC+0LvRjCDQn9CV0KfQkNCi0JDQldCiINCy0YvQstC+0LQg0LrQsNC6IFVURi04CgogIC8vIOKUgOKUgCDRgtCy0L7QuSDQutC+0LQg0L3QuNC20LUg4pSA4pSACgogIHJldHVybiAwOyAgIC8vIDAgPSDQv9GA0L7Qs9GA0LDQvNC80LAg0LfQsNCy0LXRgNGI0LjQu9Cw0YHRjCDQsdC10Lcg0L7RiNC40LHQvtC6Cn0=
+maininput	0	Каркас с готовым readInt внутри: сразу можно спрашивать числа. Всё включено	I2luY2x1ZGUgPHdpbmRvd3MuaD4gICAvLyBXaW5kb3dzOiBVVEYtOCDQsiDQutC+0L3RgdC+0LvQuCAo0LjQvdCw0YfQtSDQutGA0LDQutC+0LfRj9Cx0YDRiykKCiNpbmNsdWRlIDxpb3N0cmVhbT4KI2luY2x1ZGUgPHN0cmluZz4KI2luY2x1ZGUgPGxpbWl0cz4gICAgICAvLyDQtNC70Y8gcmVhZEludDogbnVtZXJpY19saW1pdHMKI2luY2x1ZGUgPGNzdGRsaWI+ICAgICAvLyDQtNC70Y8gcmVhZEludDogc3RkOjpleGl0CgppbnQgcmVhZEludChjb25zdCBzdGQ6OnN0cmluZyAmcHJvbXB0KSB7CiAgaW50IHZhbHVlID0gMDsKICB3aGlsZSAodHJ1ZSkgewogICAgc3RkOjpjb3V0IDw8IHByb21wdDsKICAgIGlmIChzdGQ6OmNpbiA+PiB2YWx1ZSkgewogICAgICBzdGQ6OmNpbi5pZ25vcmUoc3RkOjpudW1lcmljX2xpbWl0czxzdGQ6OnN0cmVhbXNpemU+OjptYXgoKSwgJ1xcbicpOwogICAgICByZXR1cm4gdmFsdWU7CiAgICB9CiAgICBpZiAoc3RkOjpjaW4uZW9mKCkpIHsgICAgICAgICAgICAgICAgICAgIC8vINCy0LLQvtC0INC60L7QvdGH0LjQu9GB0Y8g4oCUINC40L3QsNGH0LUg0LLQtdGH0L3Ri9C5INGG0LjQutC7CiAgICAgIHN0ZDo6Y291dCA8PCAiXFxu0JLQstC+0LQg0LfQsNC60L7QvdGH0LjQu9GB0Y8uXFxuIjsKICAgICAgc3RkOjpleGl0KDApOwogICAgfQogICAgc3RkOjpjaW4uY2xlYXIoKTsKICAgIHN0ZDo6Y2luLmlnbm9yZShzdGQ6Om51bWVyaWNfbGltaXRzPHN0ZDo6c3RyZWFtc2l6ZT46Om1heCgpLCAnXFxuJyk7CiAgICBzdGQ6OmNvdXQgPDwgItCd0YPQttC90L4g0YbQtdC70L7QtSDRh9C40YHQu9C+LlxcbiI7CiAgfQp9CgppbnQgbWFpbigpIHsKICBTZXRDb25zb2xlQ1AoQ1BfVVRGOCk7ICAgICAgICAvLyDQutC+0L3RgdC+0LvRjCDQn9Cg0JjQndCY0JzQkNCV0KIg0LLQstC+0LQg0LrQsNC6IFVURi04CiAgU2V0Q29uc29sZU91dHB1dENQKENQX1VURjgpOyAgLy8g0LrQvtC90YHQvtC70Ywg0J/QldCn0JDQotCQ0JXQoiDQstGL0LLQvtC0INC60LDQuiBVVEYtOAoKICBpbnQgbiA9IHJlYWRJbnQoItCS0LLQtdC00LjRgtC1INGH0LjRgdC70L46ICIpOwoKICByZXR1cm4gMDsKfQ==
+func	1	Заготовка функции: вынести кусок кода из main. У void убери return	aW50IGRvV29yayhpbnQgeCkgewoKICByZXR1cm4gMDsKfQ==
+```
 
 ## Ввод
 
-| Печатай | Что вставит |
-| --- | --- |
-| `readint` | readInt: спрашивает, пока не введут целое. Нужны `<limits>` и `<cstdlib>` |
-| `readline` | readLine: читает всю строку с пробелами. Нужен `<cstdlib>` |
-| `readintrange` | readIntRange + readInt внутри: число строго в [lo; hi]. Нужны `<limits>` и `<cstdlib>` |
-| `readdouble` | readDouble: как readInt, но для дробей. Нужны `<limits>` и `<cstdlib>` |
-| `readyesno` | readYesNo + readLine внутри: y/да -> true, иначе false. Нужен `<cstdlib>` |
-| `inputloop` | Читать поток чисел, пока они идут |
-| `readvec` ⌄ | Спросить количество и заполнить вектор. Нужен `<vector>` |
+```snippets
+readint	0	readInt: спрашивает, пока не введут целое. Нужны `<limits>` и `<cstdlib>`	aW50IHJlYWRJbnQoY29uc3Qgc3RkOjpzdHJpbmcgJnByb21wdCkgewogIGludCB2YWx1ZSA9IDA7CiAgd2hpbGUgKHRydWUpIHsKICAgIHN0ZDo6Y291dCA8PCBwcm9tcHQ7CiAgICBpZiAoc3RkOjpjaW4gPj4gdmFsdWUpIHsKICAgICAgc3RkOjpjaW4uaWdub3JlKHN0ZDo6bnVtZXJpY19saW1pdHM8c3RkOjpzdHJlYW1zaXplPjo6bWF4KCksICdcXG4nKTsKICAgICAgcmV0dXJuIHZhbHVlOwogICAgfQogICAgaWYgKHN0ZDo6Y2luLmVvZigpKSB7ICAgICAgICAgICAgICAgICAgICAvLyDQstCy0L7QtCDQutC+0L3Rh9C40LvRgdGPIOKAlCDQuNC90LDRh9C1INCy0LXRh9C90YvQuSDRhtC40LrQuwogICAgICBzdGQ6OmNvdXQgPDwgIlxcbtCS0LLQvtC0INC30LDQutC+0L3Rh9C40LvRgdGPLlxcbiI7CiAgICAgIHN0ZDo6ZXhpdCgwKTsKICAgIH0KICAgIHN0ZDo6Y2luLmNsZWFyKCk7CiAgICBzdGQ6OmNpbi5pZ25vcmUoc3RkOjpudW1lcmljX2xpbWl0czxzdGQ6OnN0cmVhbXNpemU+OjptYXgoKSwgJ1xcbicpOwogICAgc3RkOjpjb3V0IDw8ICLQndGD0LbQvdC+INGG0LXQu9C+0LUg0YfQuNGB0LvQvi5cXG4iOwogIH0KfQ==
+readline	0	readLine: читает всю строку с пробелами. Нужен `<cstdlib>`	c3RkOjpzdHJpbmcgcmVhZExpbmUoY29uc3Qgc3RkOjpzdHJpbmcgJnByb21wdCkgewogIHN0ZDo6Y291dCA8PCBwcm9tcHQ7CiAgc3RkOjpzdHJpbmcgbGluZTsKICBpZiAoIXN0ZDo6Z2V0bGluZShzdGQ6OmNpbiwgbGluZSkpIHsKICAgIHN0ZDo6Y291dCA8PCAiXFxu0JLQstC+0LQg0LfQsNC60L7QvdGH0LjQu9GB0Y8uXFxuIjsKICAgIHN0ZDo6ZXhpdCgwKTsKICB9CiAgcmV0dXJuIGxpbmU7Cn0=
+readintrange	0	readIntRange + readInt внутри: число строго в [lo; hi]. Нужны `<limits>` и `<cstdlib>`	aW50IHJlYWRJbnQoY29uc3Qgc3RkOjpzdHJpbmcgJnByb21wdCkgewogIGludCB2YWx1ZSA9IDA7CiAgd2hpbGUgKHRydWUpIHsKICAgIHN0ZDo6Y291dCA8PCBwcm9tcHQ7CiAgICBpZiAoc3RkOjpjaW4gPj4gdmFsdWUpIHsKICAgICAgc3RkOjpjaW4uaWdub3JlKHN0ZDo6bnVtZXJpY19saW1pdHM8c3RkOjpzdHJlYW1zaXplPjo6bWF4KCksICdcXG4nKTsKICAgICAgcmV0dXJuIHZhbHVlOwogICAgfQogICAgaWYgKHN0ZDo6Y2luLmVvZigpKSB7ICAgICAgICAgICAgICAgICAgICAvLyDQstCy0L7QtCDQutC+0L3Rh9C40LvRgdGPIOKAlCDQuNC90LDRh9C1INCy0LXRh9C90YvQuSDRhtC40LrQuwogICAgICBzdGQ6OmNvdXQgPDwgIlxcbtCS0LLQvtC0INC30LDQutC+0L3Rh9C40LvRgdGPLlxcbiI7CiAgICAgIHN0ZDo6ZXhpdCgwKTsKICAgIH0KICAgIHN0ZDo6Y2luLmNsZWFyKCk7CiAgICBzdGQ6OmNpbi5pZ25vcmUoc3RkOjpudW1lcmljX2xpbWl0czxzdGQ6OnN0cmVhbXNpemU+OjptYXgoKSwgJ1xcbicpOwogICAgc3RkOjpjb3V0IDw8ICLQndGD0LbQvdC+INGG0LXQu9C+0LUg0YfQuNGB0LvQvi5cXG4iOwogIH0KfQoKaW50IHJlYWRJbnRSYW5nZShjb25zdCBzdGQ6OnN0cmluZyAmcHJvbXB0LCBpbnQgbG8sIGludCBoaSkgewogIGlmIChsbyA+IGhpKSB7CiAgICBzdGQ6OnN3YXAobG8sIGhpKTsgICAgICAgICAgICAgICAgICAgICAgLy8g0LLQtNGA0YPQsyDQv9C10YDQtdC/0YPRgtCw0LvQuCDQvNC10YHRgtCw0LzQuAogIH0KICB3aGlsZSAodHJ1ZSkgewogICAgaW50IHZhbHVlID0gcmVhZEludChwcm9tcHQpOwogICAgaWYgKHZhbHVlID49IGxvICYmIHZhbHVlIDw9IGhpKSB7CiAgICAgIHJldHVybiB2YWx1ZTsKICAgIH0KICAgIHN0ZDo6Y291dCA8PCAi0J3Rg9C20L3QviDRh9C40YHQu9C+INC+0YIgIiA8PCBsbyA8PCAiINC00L4gIiA8PCBoaSA8PCAiXFxuIjsKICB9Cn0=
+readdouble	0	readDouble: как readInt, но для дробей. Нужны `<limits>` и `<cstdlib>`	ZG91YmxlIHJlYWREb3VibGUoY29uc3Qgc3RkOjpzdHJpbmcgJnByb21wdCkgewogIGRvdWJsZSB2YWx1ZSA9IDAuMDsKICB3aGlsZSAodHJ1ZSkgewogICAgc3RkOjpjb3V0IDw8IHByb21wdDsKICAgIGlmIChzdGQ6OmNpbiA+PiB2YWx1ZSkgewogICAgICBzdGQ6OmNpbi5pZ25vcmUoc3RkOjpudW1lcmljX2xpbWl0czxzdGQ6OnN0cmVhbXNpemU+OjptYXgoKSwgJ1xcbicpOwogICAgICByZXR1cm4gdmFsdWU7CiAgICB9CiAgICBpZiAoc3RkOjpjaW4uZW9mKCkpIHsgICAgICAgICAgICAgICAgICAgIC8vINCy0LLQvtC0INC60L7QvdGH0LjQu9GB0Y8g4oCUINC40L3QsNGH0LUg0LLQtdGH0L3Ri9C5INGG0LjQutC7CiAgICAgIHN0ZDo6Y291dCA8PCAiXFxu0JLQstC+0LQg0LfQsNC60L7QvdGH0LjQu9GB0Y8uXFxuIjsKICAgICAgc3RkOjpleGl0KDApOwogICAgfQogICAgc3RkOjpjaW4uY2xlYXIoKTsKICAgIHN0ZDo6Y2luLmlnbm9yZShzdGQ6Om51bWVyaWNfbGltaXRzPHN0ZDo6c3RyZWFtc2l6ZT46Om1heCgpLCAnXFxuJyk7CiAgICBzdGQ6OmNvdXQgPDwgItCd0YPQttC90L4g0YfQuNGB0LvQviAo0LzQvtC20L3QviDRgSDRgtC+0YfQutC+0LkpLlxcbiI7CiAgfQp9
+readyesno	0	readYesNo + readLine внутри: y/да -> true, иначе false. Нужен `<cstdlib>`	c3RkOjpzdHJpbmcgcmVhZExpbmUoY29uc3Qgc3RkOjpzdHJpbmcgJnByb21wdCkgewogIHN0ZDo6Y291dCA8PCBwcm9tcHQ7CiAgc3RkOjpzdHJpbmcgbGluZTsKICBpZiAoIXN0ZDo6Z2V0bGluZShzdGQ6OmNpbiwgbGluZSkpIHsKICAgIHN0ZDo6Y291dCA8PCAiXFxu0JLQstC+0LQg0LfQsNC60L7QvdGH0LjQu9GB0Y8uXFxuIjsKICAgIHN0ZDo6ZXhpdCgwKTsKICB9CiAgcmV0dXJuIGxpbmU7Cn0KCmJvb2wgcmVhZFllc05vKGNvbnN0IHN0ZDo6c3RyaW5nICZwcm9tcHQpIHsKICBzdGQ6OnN0cmluZyBhbnN3ZXIgPSByZWFkTGluZShwcm9tcHQpOwogIHJldHVybiBhbnN3ZXIgPT0gInkiIHx8IGFuc3dlciA9PSAiWSIgfHwgYW5zd2VyID09ICLQtNCwIiB8fCBhbnN3ZXIgPT0gItCU0LAiOwp9
+inputloop	0	Читать поток чисел, пока они идут	aW50IHg7CndoaWxlIChzdGQ6OmNpbiA+PiB4KSB7ICAgICAgICAgICAgICAvLyDRgdGC0L7QvyDQvdCwINCx0YPQutCy0LDRhSDQuNC70Lgg0LrQvtC90YbQtSDQstCy0L7QtNCwCgp9
+readvec	1	Спросить количество и заполнить вектор. Нужен `<vector>`	aW50IG4gPSByZWFkSW50KCLQodC60L7Qu9GM0LrQviDRh9C40YHQtdC7OiAiKTsgICAvLyDQvdGD0LbQvdGLIHJlYWRJbnQgLyByZWFkRG91YmxlCnN0ZDo6dmVjdG9yPGludD4gdihuKTsKZm9yIChzdGQ6OnNpemVfdCBpID0gMDsgaSA8IHYuc2l6ZSgpOyArK2kpIHsKICB2W2ldID0gcmVhZEludCgi0KfQuNGB0LvQvjogIik7Cn0=
+```
 
 ## Объявления
 
-| Печатай | Что вставит |
-| --- | --- |
-| `vec` ⌄ | Объявить вектор. Нужен `<vector>` |
-| `mapd` ⌄ | Объявить map (поиск по ключу, отсортирован). Нужен `<map>` |
-| `setd` ⌄ | Объявить set (только уникальные). Нужен `<set>` |
-| `struct` | struct с полями и значениями по умолчанию |
-| `enumclass` | enum class: именованные варианты вместо чисел |
-| `grid` ⌄ | Двумерный вектор rows×cols (карта/поле/сетка). Нужен `<vector>` |
+```snippets
+vec	1	Объявить вектор. Нужен `<vector>`	c3RkOjp2ZWN0b3I8aW50PiB2Ow==
+mapd	1	Объявить map (поиск по ключу, отсортирован). Нужен `<map>`	c3RkOjptYXA8c3RkOjpzdHJpbmcsIGludD4gbTs=
+setd	1	Объявить set (только уникальные). Нужен `<set>`	c3RkOjpzZXQ8aW50PiBzZWVuOw==
+struct	0	struct с полями и значениями по умолчанию	c3RydWN0IFN0dWRlbnQgewogIHN0ZDo6c3RyaW5nIG5hbWU7CiAgaW50IHNjb3JlID0gMDsgICAgLy8g0LfQvdCw0YfQtdC90LjRjyDQv9C+INGD0LzQvtC70YfQsNC90LjRjiDigJQg0YfRgtC+0LHRiyDQvdC1INCx0YvQu9C+INC80YPRgdC+0YDQsAp9Ow==
+enumclass	0	enum class: именованные варианты вместо чисел	ZW51bSBjbGFzcyBDb2xvciB7IFJlZCwgR3JlZW4sIEJsdWUgfTs=
+grid	1	Двумерный вектор rows×cols (карта/поле/сетка). Нужен `<vector>`	aW50IHJvd3MgPSAzLCBjb2xzID0gMzsKc3RkOjp2ZWN0b3I8c3RkOjp2ZWN0b3I8aW50Pj4gZ3JpZChyb3dzLCBzdGQ6OnZlY3RvcjxpbnQ+KGNvbHMpKTs=
+```
 
 ## Циклы
 
-| Печатай | Что вставит |
-| --- | --- |
-| `fore` | range-for без копирования (строки, структуры, векторы) |
-| `fori` | Цикл, когда нужен номер элемента (size_t, а не int) |
-| `form` | Перебор map: сразу ключ и значение |
+```snippets
+fore	0	range-for без копирования (строки, структуры, векторы)	Zm9yIChjb25zdCBhdXRvICZpdGVtIDogdikgewoKfQ==
+fori	0	Цикл, когда нужен номер элемента (size_t, а не int)	Zm9yIChzdGQ6OnNpemVfdCBpID0gMDsgaSA8IHYuc2l6ZSgpOyArK2kpIHsKCn0=
+form	0	Перебор map: сразу ключ и значение	Zm9yIChjb25zdCBhdXRvICZba2V5LCB2YWx1ZV0gOiBtKSB7Cgp9
+```
 
 ## Алгоритмы
 
-| Печатай | Что вставит |
-| --- | --- |
-| `sort` ⌄ | Сортировка вектора: возрастание/убывание. Нужны `<algorithm>` и `<functional>` |
-| `sortby` ⌄ | Сортировка вектора структур по полю (> убывание, < возрастание). Нужен `<algorithm>` |
-| `countif` | Сколько элементов подходит под условие. Нужен `<algorithm>` |
-| `findv` | Поиск в векторе (end() = не нашли). Нужен `<algorithm>` |
-| `sumv` | Сумма элементов (0LL, чтобы не переполнить). Нужен `<numeric>` |
-| `maxv` ⌄ | Наибольший/наименьший элемент. Нужен `<algorithm>` |
-| `eraseif` | Убрать из вектора все элементы по условию (C++20) |
-| `countmap` ⌄ | Посчитать, сколько раз что встретилось. Нужен `<map>` |
+```snippets
+sort	1	Сортировка вектора: возрастание/убывание. Нужны `<algorithm>` и `<functional>`	c3RkOjpzb3J0KHYuYmVnaW4oKSwgdi5lbmQoKSwgc3RkOjpsZXNzPD4oKSk7ICAgLy8gbGVzcyA9INC/0L4g0LLQvtC30YDQsNGB0YLQsNC90LjRjiwgZ3JlYXRlciA9INC/0L4g0YPQsdGL0LLQsNC90LjRjg==
+sortby	1	Сортировка вектора структур по полю (> убывание, < возрастание). Нужен `<algorithm>`	c3RkOjpzb3J0KGdyb3VwLmJlZ2luKCksIGdyb3VwLmVuZCgpLAogICAgICAgICAgW10oY29uc3QgU3R1ZGVudCAmYSwgY29uc3QgU3R1ZGVudCAmYikgeyByZXR1cm4gYS5zY29yZSA+IGIuc2NvcmU7IH0pOw==
+countif	0	Сколько элементов подходит под условие. Нужен `<algorithm>`	YXV0byBjb3VudCA9IHN0ZDo6Y291bnRfaWYodi5iZWdpbigpLCB2LmVuZCgpLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFtdKGNvbnN0IGF1dG8gJngpIHsgcmV0dXJuIHggPiA0OyB9KTs=
+findv	0	Поиск в векторе (end() = не нашли). Нужен `<algorithm>`	YXV0byBpdCA9IHN0ZDo6ZmluZCh2LmJlZ2luKCksIHYuZW5kKCksIHZhbHVlKTsKaWYgKGl0ICE9IHYuZW5kKCkpIHsgICAgICAgICAgICAgIC8vINC90LDRiNC70Lg7INC40L3QsNGH0LUgaXQgPT0gZW5kKCkKCn0=
+sumv	0	Сумма элементов (0LL, чтобы не переполнить). Нужен `<numeric>`	bG9uZyBsb25nIHN1bSA9IHN0ZDo6YWNjdW11bGF0ZSh2LmJlZ2luKCksIHYuZW5kKCksIDBMTCk7ICAgLy8gMExMLCDQvdC1IDAh
+maxv	1	Наибольший/наименьший элемент. Нужен `<algorithm>`	aWYgKCF2LmVtcHR5KCkpIHsgICAgICAgICAgICAgICAgICAgICAgIC8vINC90LAg0L/Rg9GB0YLQvtC8INC90LXQu9GM0LfRjyDRgNCw0LfRi9C80LXQvdC+0LLQsNGC0YwKICBhdXRvIGJlc3QgPSAqc3RkOjptYXhfZWxlbWVudCh2LmJlZ2luKCksIHYuZW5kKCkpOyAgIC8vINC30LLRkdC30LTQvtGH0LrQsCEKCn0=
+eraseif	0	Убрать из вектора все элементы по условию (C++20)	c3RkOjplcmFzZV9pZih2LCBbXShjb25zdCBhdXRvICZ4KSB7IHJldHVybiB4IDwgMDsgfSk7
+countmap	1	Посчитать, сколько раз что встретилось. Нужен `<map>`	c3RkOjptYXA8c3RkOjpzdHJpbmcsIGludD4gY291bnRlcjsKZm9yIChjb25zdCBhdXRvICZpdGVtIDogaXRlbXMpIHsKICArK2NvdW50ZXJbaXRlbV07ICAgIC8vINC90LXRgiDQutC70Y7Rh9CwIC0+INGB0L7Qt9C00LDRgdGC0YHRjyAwIC0+INGB0YLQsNC90LXRgiAxCn0=
+```
 
 ## Файлы
 
-| Печатай | Что вставит |
-| --- | --- |
-| `readfile` | Открыть файл и пройти по строкам. Нужен `<fstream>` |
-| `writefile` | Создать файл и записать в него. Нужен `<fstream>` |
+```snippets
+readfile	0	Открыть файл и пройти по строкам. Нужен `<fstream>`	c3RkOjppZnN0cmVhbSBpbigiZGF0YS50eHQiKTsKaWYgKCFpbi5pc19vcGVuKCkpIHsgICAgICAgICAgICAgICAgICAgIC8vINC40LzQtdC90L3QviBpc19vcGVuKCksINCwINC90LUgKCFpbikKICBzdGQ6OmNvdXQgPDwgItCk0LDQudC7INC90LUg0L3QsNC50LTQtdC9XFxuIjsKICByZXR1cm4gMTsKfQpzdGQ6OnN0cmluZyBsaW5lOwp3aGlsZSAoc3RkOjpnZXRsaW5lKGluLCBsaW5lKSkgewoKfQ==
+writefile	0	Создать файл и записать в него. Нужен `<fstream>`	c3RkOjpvZnN0cmVhbSBvdXQoInJlc3VsdC50eHQiKTsgICAgLy8g0YHRgtCw0YDQvtC1INGB0L7QtNC10YDQttC40LzQvtC1INGB0YLQuNGA0LDQtdGC0YHRjwppZiAoIW91dC5pc19vcGVuKCkpIHsKICBzdGQ6OmNvdXQgPDwgItCd0LUg0YPQtNCw0LvQvtGB0Ywg0LfQsNC/0LjRgdCw0YLRjCDRhNCw0LnQu1xcbiI7CiAgcmV0dXJuIDE7Cn0Kb3V0IDw8IDs=
+```
 
 ## Вывод и дроби
 
-| Печатай | Что вставит |
-| --- | --- |
-| `fmt` | Печать через std::format ({} — подстановка). Нужен `<format>` |
-| `fmtf` | Дробь с 2 знаками после точки. Нужен `<format>` |
-| `table` | Ровная таблица (format считает символы, а не байты). Нужен `<format>` |
-| `avg` | Среднее: оба static_cast и проверка на пустоту |
-| `dbleq` | Сравнение double через abs() < 1e-9. Нужен `<cmath>` |
+```snippets
+fmt	0	Печать через std::format ({} — подстановка). Нужен `<format>`	c3RkOjpjb3V0IDw8IHN0ZDo6Zm9ybWF0KCJ7fSA9IHt9XFxuIiwgYSwgYik7
+fmtf	0	Дробь с 2 знаками после точки. Нужен `<format>`	c3RkOjpjb3V0IDw8IHN0ZDo6Zm9ybWF0KCJ7Oi4yZn1cXG4iLCB2YWx1ZSk7
+table	0	Ровная таблица (format считает символы, а не байты). Нужен `<format>`	c3RkOjpjb3V0IDw8IHN0ZDo6Zm9ybWF0KCJ7OjwxMn17Oj42fVxcbiIsICLQmNC80Y8iLCAi0JHQsNC70LsiKTsKZm9yIChjb25zdCBhdXRvICZzIDogZ3JvdXApIHsKICBzdGQ6OmNvdXQgPDwgc3RkOjpmb3JtYXQoIns6PDEyfXs6PjZ9XFxuIiwgcy5uYW1lLCBzLnNjb3JlKTsKfQ==
+avg	0	Среднее: оба static_cast и проверка на пустоту	ZG91YmxlIGF2ZyA9IHYuZW1wdHkoKQogICAgPyAwLjAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgLy8g0LfQsNGJ0LjRgtCwOiDQtNC10LvQuNGC0Ywg0L3QsCDQvdC+0LvRjCDQvdC10LvRjNC30Y8KICAgIDogc3RhdGljX2Nhc3Q8ZG91YmxlPihzdW0pIC8gc3RhdGljX2Nhc3Q8ZG91YmxlPih2LnNpemUoKSk7
+dbleq	0	Сравнение double через abs() < 1e-9. Нужен `<cmath>`	aWYgKHN0ZDo6YWJzKGEgLSBiKSA8IDFlLTkpIHsgICAgIC8vINC00YDQvtCx0L3Ri9C1INC90LUg0YHRgNCw0LLQvdC40LLQsNGO0YIg0YfQtdGA0LXQtyA9PQoKfQ==
+```
 
 ## Строки
 
-| Печатай | Что вставит |
-| --- | --- |
-| `strconv` | Перевод строка ↔ число (stoi / to_string). Нужен `<string>` |
-| `strcase` ⌄ | Сменить регистр строки (работает для латиницы). Нужен `<cctype>` |
-| `split` | Разбить строку на слова по пробелам. Нужны `<sstream>` и `<vector>` |
+```snippets
+strconv	0	Перевод строка ↔ число (stoi / to_string). Нужен `<string>`	aW50IG51bWJlciA9IHN0ZDo6c3RvaSh0ZXh0KTsgICAgICAgICAgICAgICAgIC8vINGB0YLRgNC+0LrQsCAtPiDRh9C40YHQu9C+ICjQsdGA0L7RgdC40YIg0LjRgdC60LvRjtGH0LXQvdC40LUsINC10YHQu9C4INC90LUg0YfQuNGB0LvQvikKc3RkOjpzdHJpbmcgdGV4dDIgPSBzdGQ6OnRvX3N0cmluZyhudW1iZXIpOyAgIC8vINGH0LjRgdC70L4gLT4g0YHRgtGA0L7QutCw
+strcase	1	Сменить регистр строки (работает для латиницы). Нужен `<cctype>`	Zm9yIChjaGFyICZjIDogdGV4dCkgewogIGMgPSBzdGF0aWNfY2FzdDxjaGFyPihzdGQ6OnRvbG93ZXIoc3RhdGljX2Nhc3Q8dW5zaWduZWQgY2hhcj4oYykpKTsKfQ==
+split	0	Разбить строку на слова по пробелам. Нужны `<sstream>` и `<vector>`	c3RkOjppc3RyaW5nc3RyZWFtIHN0cmVhbShsaW5lKTsKc3RkOjpzdHJpbmcgd29yZDsKc3RkOjp2ZWN0b3I8c3RkOjpzdHJpbmc+IHdvcmRzOwp3aGlsZSAoc3RyZWFtID4+IHdvcmQpIHsKICB3b3Jkcy5wdXNoX2JhY2sod29yZCk7Cn0=
+```
 
 ## Числа и случайность
 
-| Печатай | Что вставит |
-| --- | --- |
-| `rnd` | Случайное целое в диапазоне (mt19937). Нужен `<random>` |
-| `clampv` | Ограничить число диапазоном [lo; hi] (C++17). Нужен `<algorithm>` |
+```snippets
+rnd	0	Случайное целое в диапазоне (mt19937). Нужен `<random>`	c3RhdGljIHN0ZDo6bXQxOTkzNyBybmcoc3RkOjpyYW5kb21fZGV2aWNle30oKSk7ICAgICAgICAvLyDQvtC00LjQvSDQs9C10L3QtdGA0LDRgtC+0YAg0L3QsCDQstGB0Y4g0L/RgNC+0LPRgNCw0LzQvNGDCnN0ZDo6dW5pZm9ybV9pbnRfZGlzdHJpYnV0aW9uPGludD4gZGlzdCgxLCA2KTsgICAvLyDQtNC40LDQv9Cw0LfQvtC9IFsxOyA2XSwg0L7QsdCwINC60L7QvdGG0LAg0LLQutC70Y7Rh9C10L3RiwppbnQgcm9sbCA9IGRpc3Qocm5nKTs=
+clampv	0	Ограничить число диапазоном [lo; hi] (C++17). Нужен `<algorithm>`	dmFsdWUgPSBzdGQ6OmNsYW1wKHZhbHVlLCAwLCAxMDApOyAgIC8vINC80LXQvdGM0YjQtSBsbyAtPiDRgdGC0LDQvdC10YIgbG8sINCx0L7Qu9GM0YjQtSBoaSAtPiDRgdGC0LDQvdC10YIgaGk=
+```
 
 ## Управление
 
-| Печатай | Что вставит |
-| --- | --- |
-| `inrange` | Отвергнуть значение вне диапазона [lo; hi] |
-| `menu` | Меню через switch: разветвление по номеру пункта |
+```snippets
+inrange	0	Отвергнуть значение вне диапазона [lo; hi]	aWYgKHZhbHVlIDwgMSB8fCB2YWx1ZSA+IDEwMCkgewogIHN0ZDo6Y291dCA8PCAi0J3Rg9C20L3QviDRh9C40YHQu9C+INC+0YIgMSDQtNC+IDEwMFxcbiI7Cgp9
+menu	0	Меню через switch: разветвление по номеру пункта	aW50IGNob2ljZSA9IHJlYWRJbnQoItCS0YvQsdC10YDQuNGC0LUg0L/Rg9C90LrRgjogIik7ICAgLy8g0L3Rg9C20LXQvSByZWFkSW50CnN3aXRjaCAoY2hvaWNlKSB7CiAgY2FzZSAxOgoKICAgIGJyZWFrOwogIGNhc2UgMjoKICAgIGJyZWFrOwogIGRlZmF1bHQ6CiAgICBzdGQ6OmNvdXQgPDwgItCd0LXRgiDRgtCw0LrQvtCz0L4g0L/Rg9C90LrRgtCwXFxuIjsKfQ==
+```
 
 ---
 
