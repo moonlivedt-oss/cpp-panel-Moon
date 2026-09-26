@@ -1,9 +1,11 @@
 // ============================================================
 //  Действия окна → хост: «в редактор» (вставить пример кода), «заготовка» (новый .cpp с каркасом
-//  задачи) и «в заметки» (цитата в личный
-//  блокнот). Тот же файловый канал, что у запуска: окно пишет cpp-docs-action.json, хост
-//  выполняет и кладёт ответ в cpp-docs-action-res.json. Оба действия безвредны (вставка текста,
-//  дописывание в один фиксированный файл), поэтому отдельной настройки не требуют.
+//  задачи), «в заметки» (цитата в личный блокнот), копия/загрузка прогресса.
+//
+//  Окно присылает запрос мосту (POST /action) или вкладке (сообщение «rpc») и сразу получает ответ.
+//  Действия безвредны (вставка текста, дописывание в один фиксированный файл, диалоги) — отдельной
+//  настройки не требуют. Здесь же — слежение за общими файлами хранилища (контекст редактора,
+//  метка свежести данных): их изменения рассылаются окнам событиями.
 // ============================================================
 
 const vscode = require('vscode');
@@ -11,14 +13,20 @@ const fs = require('fs');
 const path = require('path');
 const { log } = require('./log');
 const { findDocsRoot, bundledDocs } = require('./docs');
-const { storageDir, actionFilePath, actionResFilePath, NOTES_REL, notesFilePath } = require('./storage');
+const { storageDir, NOTES_REL, notesFilePath } = require('./storage');
 const { writeDocsData } = require('./data');
-const { processRunReq } = require('./run');
 const { CPP_LANGS } = require('./editor-bridge');
+const { exportProgress, importProgress } = require('./progress');
+const { broadcast } = require('./bridge');
+const { EVENT_FILES } = require('./protocol');
 
-function writeActionResult(context, res) {
-  try { fs.writeFileSync(actionResFilePath(context), JSON.stringify(Object.assign({ ts: Date.now() }, res)), 'utf8'); } catch (e) { log('ответ на действие окна', e); }
+const MAX_INSERT = 100000;
+
+/** Окно этого хоста сейчас в фокусе? Нет API (тесты/старый VS Code) — считаем, что да. */
+function windowFocused() {
+  try { return !(vscode.window.state && vscode.window.state.focused === false); } catch (e) { return true; }
 }
+
 const NOTES_HEADING = '## Из справочника';
 /** Цитата → Markdown-запись: «> текст» + строка-ссылка на источник. rel/заголовки чистим от разметки. */
 function formatNoteEntry(n, dateStr) {
@@ -73,51 +81,63 @@ async function insertCodeToEditor(code) {
   await shown.edit((eb) => eb.replace(sel, text));
   return { where: 'editor', name: path.basename(ed.document.fileName || '') };
 }
-let _lastActionId = null, _actionTimer = null;
-function processActionReq(context) {
-  clearTimeout(_actionTimer);
-  _actionTimer = setTimeout(() => {
-    let req;
-    try { req = JSON.parse(fs.readFileSync(actionFilePath(context), 'utf8')); } catch (e) { return; }
-    if (!req || typeof req.id !== 'string' || req.id === _lastActionId) return;
-    try { fs.unlinkSync(actionFilePath(context)); } catch (e) {}           // одноразовый, как запрос запуска
-    if (typeof req.ts !== 'number' || Math.abs(Date.now() - req.ts) > 15000) return;   // остался с прошлой сессии
-    _lastActionId = req.id;
-    const fail = (e) => { log('действие окна ' + req.kind, e); writeActionResult(context, { id: req.id, ok: false, error: String(e && e.message || e).slice(0, 200) }); };
-    if (req.kind === 'insert' && typeof req.code === 'string' && req.code.length <= 100000) {
-      insertCodeToEditor(req.code).then((r) => writeActionResult(context, Object.assign({ id: req.id, ok: true }, r)), fail);
-    } else if (req.kind === 'newfile' && typeof req.code === 'string' && req.code.length <= 100000) {
-      // «Заготовка задачи»: всегда новый несохранённый C++-файл (открытый .cpp не трогаем)
-      Promise.resolve(vscode.workspace.openTextDocument({ language: 'cpp', content: req.code }))
-        .then((doc) => vscode.window.showTextDocument(doc))
-        .then(() => writeActionResult(context, { id: req.id, ok: true, where: 'new' }), fail);
-    } else if (req.kind === 'note' && typeof req.text === 'string' && req.text.trim() && req.text.length <= 2000) {
-      try { appendNote(context, req); writeActionResult(context, { id: req.id, ok: true }); } catch (e) { fail(e); }
-    } else {
-      writeActionResult(context, { id: req.id, ok: false, error: 'неизвестное действие' });
+
+/**
+ * Выполнить действие окна. Возвращает Promise с ответом { id, ok, … }.
+ * opts.requireFocus — мост: при нескольких окнах VS Code действие выполняет хост окна в фокусе
+ * (кнопку нажали именно там); остальные отвечают { retry: true }, и окно пробует следующий хост.
+ */
+async function handleAction(context, req, opts) {
+  const id = req && typeof req.id === 'string' ? req.id : '';
+  if (!req || !id || typeof req.kind !== 'string') return { id, ok: false, error: 'неверный запрос' };
+  if (opts && opts.requireFocus && !windowFocused()) return { id, ok: false, retry: true };
+  try {
+    if (req.kind === 'insert' && typeof req.code === 'string' && req.code.length <= MAX_INSERT) {
+      return Object.assign({ id, ok: true }, await insertCodeToEditor(req.code));
     }
-  }, 60);
+    if (req.kind === 'newfile' && typeof req.code === 'string' && req.code.length <= MAX_INSERT) {
+      // «Заготовка задачи»: всегда новый несохранённый C++-файл (открытый .cpp не трогаем)
+      const doc = await vscode.workspace.openTextDocument({ language: 'cpp', content: req.code });
+      await vscode.window.showTextDocument(doc);
+      return { id, ok: true, where: 'new' };
+    }
+    if (req.kind === 'export-progress' || req.kind === 'import-progress') {
+      // Диалог выбора файла ждёт человека дольше, чем окно ждёт ответа, — отвечаем сразу.
+      (req.kind === 'export-progress' ? exportProgress : importProgress)(context).catch((e) => log('прогресс: ' + req.kind, e));
+      return { id, ok: true };
+    }
+    if (req.kind === 'note' && typeof req.text === 'string' && req.text.trim() && req.text.length <= 2000) {
+      appendNote(context, req);
+      return { id, ok: true };
+    }
+    return { id, ok: false, error: 'неизвестное действие' };
+  } catch (e) {
+    log('действие окна ' + req.kind, e);
+    return { id, ok: false, error: String(e && e.message || e).slice(0, 200) };
+  }
 }
-// Один watch на каталог хранилища (всё, что окно пишет расширению): запросы запуска (только при localRun — проверяет processRunReq)
-// и действия окна. Пересобирается при смене настройки.
-let _runWatcher = null, _runWatcherDisposable = false;
-function setupWindowChannels(context) {
-  try { if (_runWatcher) { _runWatcher.close(); _runWatcher = null; } } catch (e) {}
+
+// Один watch на каталог хранилища: изменения общих файлов (контекст редактора, метка свежести
+// данных) рассылаются окнам событиями. Каталог общий для всех окон VS Code — поэтому поток любого
+// хоста видит изменения всех.
+let _watcher = null;
+function watchWindowEvents(context) {
+  if (_watcher) return;
   const dir = storageDir(context);
   try { fs.mkdirSync(dir, { recursive: true }); } catch (e) {}
   try {
-    _runWatcher = fs.watch(dir, (evt, fname) => {
-      const f = String(fname || '');
-      if (!fname || f.indexOf('cpp-docs-run-req') === 0) processRunReq(context);
-      if (!fname || f === 'cpp-docs-action.json') processActionReq(context);
-    });
-    if (!_runWatcherDisposable) {   // одна подписка на все пересборки канала, а не по штуке на каждую
-      _runWatcherDisposable = true;
-      context.subscriptions.push({ dispose: () => { try { _runWatcher && _runWatcher.close(); } catch (e) {} } });
-    }
-  } catch (e) { log('watch каналов окна', e); }
-  processRunReq(context);      // вдруг запрос уже лежит
-  processActionReq(context);
+    _watcher = fs.watch(dir, (evt, fname) => { const f = String(fname || ''); if (EVENT_FILES[f]) pushEvent(context, f); });
+    context.subscriptions.push({ dispose: () => { try { _watcher && _watcher.close(); } catch (e) {} _watcher = null; } });
+  } catch (e) { log('слежение за хранилищем окна', e); }
+}
+const _evtTimers = {};
+function pushEvent(context, name) {
+  clearTimeout(_evtTimers[name]);
+  _evtTimers[name] = setTimeout(() => {
+    let text;
+    try { text = fs.readFileSync(path.join(storageDir(context), name), 'utf8'); } catch (e) { return; }
+    broadcast(EVENT_FILES[name], text);
+  }, 30);
 }
 
-module.exports = { formatNoteEntry, insertNoteEntry, processActionReq, setupWindowChannels };
+module.exports = { formatNoteEntry, insertNoteEntry, handleAction, watchWindowEvents, windowFocused };

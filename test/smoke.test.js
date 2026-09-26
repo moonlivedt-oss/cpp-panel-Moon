@@ -1,0 +1,567 @@
+// ============================================================
+//  Смоук-тест панели документации.   Запуск:  npm test
+// ============================================================
+//  `node --check` проверяет только синтаксис и не видит, работает ли расширение
+//  по-настоящему: собирается ли HTML, находятся ли файлы документации, не рвётся
+//  ли разметка на кавычках в заголовках. Поэтому тест загружает extension.js
+//  с заглушкой модуля vscode (его вне редактора не существует) и проверяет:
+//
+//    - манифест расширения валиден и объявляет webview-панель;
+//    - активация проходит и регистрирует провайдера;
+//    - HTML собирается: есть поиск, группы, пункты, кнопки действий;
+//    - подписи берутся из самих файлов документации, а не захардкожены;
+//    - опасные символы в заголовках экранируются (иначе сломается разметка);
+//    - при отсутствии папки docs показывается понятная заглушка, а не пустота.
+//
+//  Тест не требует установленного VS Code и ничего не меняет на диске.
+// ============================================================
+"use strict";
+
+var fs = require("fs");
+var path = require("path");
+var Module = require("module");
+var crypto = require("crypto");
+
+var ROOT = path.join(__dirname, "..");
+var EXT = path.join(ROOT, "extension");
+// Исходник хоста расширения целиком: extension.js + модули lib/. Проверки «по исходнику»
+// ищут строки во всём коде расширения, а не в одном файле.
+function readHostSource() {
+  var lib = path.join(EXT, "lib");
+  var parts = [fs.readFileSync(path.join(EXT, "extension.js"), "utf8")];
+  if (fs.existsSync(lib)) fs.readdirSync(lib).sort().forEach(function (n) {
+    if (/\.js$/.test(n)) parts.push(fs.readFileSync(path.join(lib, n), "utf8"));
+  });
+  return parts.join("\n");
+}
+
+
+const { check, group, finish } = require("./helpers");
+var PENDING = [];   // асинхронные проверки: finish — после них
+
+// ------------------------------------------------------------
+//  Заглушка модуля vscode: расширение вне редактора его не найдёт
+// ------------------------------------------------------------
+function makeVscodeStub(options) {
+  var opts = options || {};
+  return {
+    Uri: { file: function (p) { return { fsPath: p }; } },
+    workspace: {
+      workspaceFolders: opts.folders || [],
+      getConfiguration: function () {
+        return {
+          get: function (key) {
+            if (key === "path") return opts.docsPath || "";
+            if (key === "paths") return opts.docsPaths || [];
+            return true;
+          },
+        };
+      },
+    },
+    window: {
+      registerWebviewViewProvider: function (id, provider) {
+        opts.captured.provider = provider;
+        opts.captured.viewId = id;
+        return {};
+      },
+      showWarningMessage: function () {},
+      showTextDocument: function () {},
+    },
+    commands: {
+      registerCommand: function (id) {
+        opts.captured.commands.push(id);
+        return {};
+      },
+      executeCommand: function () {},
+    },
+  };
+}
+
+/** Заглушка globalState: панель хранит в нём список недавно открытых файлов. */
+function makeState(initial) {
+  var store = initial || {};
+  return {
+    get: function (key, fallback) {
+      return Object.prototype.hasOwnProperty.call(store, key) ? store[key] : fallback;
+    },
+    update: function (key, value) {
+      store[key] = value;
+      return Promise.resolve();
+    },
+  };
+}
+
+function loadExtension(stub) {
+  var stubName = "vscode-stub-" + Math.random();
+  var orig = Module._resolveFilename;
+  Module._resolveFilename = function (request) {
+    if (request === "vscode") return stubName;
+    return orig.apply(this, arguments);
+  };
+  require.cache[stubName] = {
+    id: stubName,
+    filename: stubName,
+    loaded: true,
+    exports: stub,
+  };
+  // Сбрасываем из кэша и точку входа, и модули lib/: иначе они остались бы с прошлой заглушкой vscode.
+  Object.keys(require.cache).forEach(function (k) {
+    if (k === path.join(EXT, "extension.js") || k.indexOf(path.join(EXT, "lib") + path.sep) === 0) delete require.cache[k];
+  });
+  var ext = require(path.join(EXT, "extension.js"));
+  Module._resolveFilename = orig;
+  return ext;
+}
+
+/** Прогоняет провайдера и возвращает собранный HTML. */
+function renderHtml(captured) {
+  var html = "";
+  captured.provider.view = {
+    webview: {
+      set html(value) {
+        html = value;
+      },
+      get html() {
+        return html;
+      },
+    },
+  };
+  // задачи воркспейса (tasks.json) — как будто объявлены: кнопки показываются только тогда
+  if (captured.provider._tasks === undefined) captured.provider._tasks = ["C++: прогнать тесты", "Документация: проверить"];
+  captured.provider.render();
+  return html;
+}
+
+console.log("Смоук-тест панели документации\n");
+
+// ------------------------------------------------------------
+//  1. Манифест расширения
+// ------------------------------------------------------------
+console.log("Манифест");
+var pkg = JSON.parse(fs.readFileSync(path.join(EXT, "package.json"), "utf8"));
+check("package.json читается", !!pkg.name);
+check("объявлен вход main", pkg.main === "./extension.js");
+check("есть контейнер в панели действий", !!(pkg.contributes.viewsContainers || {}).activitybar);
+var views = (pkg.contributes.views || {}).cppDocs || [];
+check("панель объявлена как webview", views.length === 1 && views[0].type === "webview");
+check("иконка на месте", fs.existsSync(path.join(EXT, pkg.contributes.viewsContainers.activitybar[0].icon)));
+check(
+  "расширение активируется при старте (кнопка в статус-баре видна сразу)",
+  Array.isArray(pkg.activationEvents) && pkg.activationEvents.indexOf("onStartupFinished") !== -1
+);
+
+// ------------------------------------------------------------
+//  2. Активация
+// ------------------------------------------------------------
+group("Активация");
+var captured = { commands: [], provider: null, viewId: null };
+// Документация лежит в самом проекте (docs/). Если вдруг её там нет (например,
+// запуск из копии без доков), проверки интерфейса ниже просто пропустятся.
+var docsPath = path.join(ROOT, "docs");
+var ext = loadExtension(
+  makeVscodeStub({ captured: captured, docsPath: docsPath, folders: [] })
+);
+var subscriptions = [];
+ext.activate({ subscriptions: subscriptions, globalState: makeState() });
+
+check("провайдер зарегистрирован", captured.viewId === "cppDocsPanel");
+check("команды зарегистрированы", captured.commands.indexOf("cppDocs.refresh") !== -1);
+check("команда фокуса поиска", captured.commands.indexOf("cppDocs.focusSearch") !== -1);
+check("команда открытия меню отдельной панелью", captured.commands.indexOf("cppDocs.openMenu") !== -1);
+check("подписки добавлены", subscriptions.length >= 3);
+
+// ------------------------------------------------------------
+//  3. Сборка интерфейса (только если документация на месте)
+// ------------------------------------------------------------
+group("Интерфейс");
+if (!fs.existsSync(path.join(docsPath, "00-НАЧНИ-ОТСЮДА.md"))) {
+  console.log("  пропуск: папка документации не найдена (" + docsPath + ")");
+} else {
+  var html = renderHtml(captured);
+  // Скрипт вебвью собран строкой в sidebar.js — синтаксическая ошибка в нём не видна ни линтеру, ни node --check.
+  (function () {
+    var scripts = html.match(/<script nonce="[^"]*">([\s\S]*?)<\/script>/g) || [];
+    var bad = null;
+    scripts.forEach(function (tag) {
+      var body = tag.replace(/^<script[^>]*>/, "").replace(/<\/script>$/, "");
+      try { new Function(body); } catch (e) { bad = String(e && e.message); }
+    });
+    check("скрипт вебвью боковой панели синтаксически цел", scripts.length > 0 && !bad, bad);
+  })();
+  // Точечные обновления: «изучено» и закреп не пересобирают HTML, а отправляют состояние.
+  (function () {
+    var p = captured.provider, posted = [], sets = 0, h0 = "";
+    p.view = { webview: { postMessage: function (m) { posted.push(m); return true; }, set html(v) { sets++; h0 = v; }, get html() { return h0; } } };
+    var any = (html.match(/data-file="([^"]+)"/) || [])[1];
+    var file = any && any.replace(/&amp;/g, "&").replace(/&quot;/g, "\"");
+    PENDING.push(p.handleMessage({ type: "toggleRead", file: file }).then(function () {
+      check("«изучено» — состояние сообщением, без пересборки HTML", sets === 0 && posted.some(function (m) { return m.type === "state" && Array.isArray(m.read); }), { sets: sets, posted: posted.length });
+    }));
+  })();
+
+  check("html собран", html.length > 1000);
+  check("есть поле поиска", html.indexOf('id="search"') !== -1);
+  check("есть кнопка запуска тестов", html.indexOf('id="btn-tests"') !== -1);
+  check("есть кнопка проверки документации", html.indexOf('id="btn-check"') !== -1);
+
+  var groups = html.match(/class="group-label"/g) || [];
+  check("групп не меньше двух", groups.length >= 2, "найдено " + groups.length);
+
+  var items = html.match(/class="item(?: fresh)?" role="option"/g) || [];
+  check("пунктов не меньше десяти", items.length >= 10, "найдено " + items.length);
+
+  check(
+    "подписи берутся из файлов",
+    html.indexOf('data-title="Начни отсюда"') !== -1,
+    "не найден заголовок главной страницы"
+  );
+  check("у пунктов есть описания", (html.match(/data-sub="[^"]+"/g) || []).length > 5);
+  check("описания не рвутся на полуслове", html.indexOf(" не при\"") === -1);
+  check("csp выставлен", html.indexOf("Content-Security-Policy") !== -1);
+  check("скрипт с nonce", /<script nonce="[A-Za-z0-9]{32}">/.test(html));
+
+  // удобство: то, ради чего делалась вторая версия панели
+  check("группы сворачиваются", html.indexOf('class="group-head"') !== -1);
+  check("у групп есть счётчик", html.indexOf('class="group-count"') !== -1);
+  check("у групп свой цветовой маркер", html.indexOf("--accent:") !== -1);
+  check("есть кнопка очистки поиска", html.indexOf('id="clear"') !== -1);
+  check("тулбар без кнопок-иконок (чистый вид)", html.indexOf('class="icon-btn"') === -1);
+  check("у поля поиска есть иконка", html.indexOf('class="search-icon"') !== -1);
+  check("состояние панели сохраняется", html.indexOf("vscode.setState") !== -1);
+  check("состояние панели восстанавливается", html.indexOf("vscode.getState") !== -1);
+  check("есть навигация стрелками", html.indexOf("ArrowDown") !== -1 && html.indexOf("ArrowUp") !== -1);
+  check("Esc очищает поиск", html.indexOf("Escape") !== -1);
+  check("поиск ищет и по тексту файлов", html.indexOf("data-body=") !== -1);
+  check("результаты ранжируются", html.indexOf("rank") !== -1);
+  check("поиск понимает несколько слов", html.indexOf("q.split(/ +/)") !== -1);
+  check("совпадение в тексте даёт фрагмент-контекст", html.indexOf("function snippet") !== -1);
+  check("ввод в поиск с дебаунсом", html.indexOf("filterTimer") !== -1);
+  check("подсветка открытого в редакторе файла", html.indexOf("markCurrent") !== -1);
+  check("открыть как текст правым кликом", html.indexOf("contextmenu") !== -1 && html.indexOf("'openText'") !== -1);
+  check("очистка «Недавнего» из панели", html.indexOf("clearRecent") !== -1);
+  check("счётчик всего материалов в покое", html.indexOf("материал") !== -1);
+  // топ-10 идей интерфейса
+  check("закладки: кнопка на пункте", html.indexOf("pin-btn") !== -1);
+  check("оглавление материала", html.indexOf("toc-btn") !== -1 || html.indexOf("toc-link") !== -1);
+  check("метка группы в результатах", html.indexOf("item-group-tag") !== -1);
+  check("память прокрутки", html.indexOf("scroll:") !== -1);
+  check("кнопка «наверх»", html.indexOf('id="to-top"') !== -1);
+  check("нет чипов-фильтров (упрощено)", html.indexOf('id="chips"') === -1 && html.indexOf("applyChip") === -1);
+  check("индикатор «недавно изменён»", html.indexOf(".fresh") !== -1);
+  check("у пунктов нет мелких действий ⇥ и </>", html.indexOf("item-side-btn") === -1 && html.indexOf("item-text-btn") === -1);
+  check("живой счётчик для скринридеров", html.indexOf('aria-live') !== -1);
+  check("активный пункт помечается для скринридера", html.indexOf("aria-selected") !== -1);
+
+  // автосетка колонок в широком окне остаётся (она автоматическая, не кнопка)
+  check("адаптивная сетка колонок", html.indexOf("grid-template-columns") !== -1);
+  check("убраны ручные тумблеры вида", html.indexOf('id="grid-toggle"') === -1 && html.indexOf('id="density"') === -1);
+  check("убрано «открыть рядом»", html.indexOf("item-side-btn") === -1 && html.indexOf("openSide") === -1);
+  check("убран тумблер «скрыть изученное»", html.indexOf('id="hide-read"') === -1);
+  check("убрана кнопка «в сайдбар»", html.indexOf('id="to-sidebar"') === -1);
+  check("отметки «изучено»", html.indexOf("data-read=") !== -1 && html.indexOf(".item.read") !== -1);
+  check("полоса прогресса изучения", html.indexOf('id="progress-fill"') !== -1 && html.indexOf("updateProgress") !== -1);
+  check("шапка панели в широком окне", html.indexOf("panel-head") !== -1);
+  check("сброс прогресса", html.indexOf('id="progress-reset"') !== -1 && html.indexOf("resetProgress") !== -1);
+
+  // --- 15 улучшений v2.8 ---
+  check("оценка времени чтения у пунктов", html.indexOf('class="item-meta"') !== -1 && /~\d+\s*мин/.test(html));
+  check("число разделов в подписи", /\d+\s+раздел/.test(html), "нет подписи с числом разделов");
+  check("кнопка «Продолжить» (следующий неизученный)", html.indexOf('id="progress-continue"') !== -1);
+  check("процент в полосе прогресса", html.indexOf("+ '%'") !== -1 || html.indexOf('+ pct +') !== -1);
+  check("ручная отметка «изучено» кнопкой", html.indexOf('class="read-btn') !== -1 && html.indexOf("toggleRead") !== -1);
+  check("открепить всё из группы «Закреплённое»", html.indexOf("clearPins") !== -1);
+  check("убран фильтр свежести (чипы удалены)", html.indexOf("__fresh__") === -1 && html.indexOf("only-fresh") === -1);
+  check("поиск без учёта регистра и ё/е", html.indexOf("/ё/g") !== -1 && html.indexOf("function norm") !== -1);
+  check("навигация PageUp/PageDown", html.indexOf("PageDown") !== -1 && html.indexOf("PageUp") !== -1);
+  check("Ctrl+K — прыжок в поиск", html.indexOf("e.ctrlKey || e.metaKey") !== -1 && /'k' \|\| e\.key === 'K'/.test(html));
+  check("combobox для скринридера", html.indexOf('role="combobox"') !== -1 && html.indexOf("aria-activedescendant") !== -1);
+  check("уникальные id у пунктов (для aria-activedescendant)", /id="opt-\d+"/.test(html));
+  check("учёт prefers-reduced-motion", html.indexOf("prefers-reduced-motion") !== -1);
+  check("правильное окончание в объявлении находок", html.indexOf("plural(shown.length") !== -1);
+  check("внятная заглушка «ничего не нашлось»", html.indexOf('id="nothing-reset"') !== -1 && html.indexOf("nothing-text") !== -1);
+  // регрессия: свёрнутое оглавление слушается hidden, а не висит раскрытым
+  check("свёрнутое оглавление скрыто", html.indexOf(".item-toc[hidden]") !== -1 && html.indexOf("display: none") !== -1);
+
+  var src = readHostSource();
+  check("есть отдельное меню-панель (webview panel)", src.indexOf("createWebviewPanel") !== -1);
+  check("рендер общий для сайдбара и панели", src.indexOf("renderAll") !== -1 && src.indexOf("renderPanel") !== -1);
+  check("панель следит за файлами", src.indexOf("createFileSystemWatcher") !== -1);
+  check("панель реагирует на смену редактора", src.indexOf("onDidChangeActiveTextEditor") !== -1);
+  check("мост доки↔редактор: подписка на курсор", src.indexOf("onDidChangeTextEditorSelection") !== -1 && src.indexOf("writeEditorContext") !== -1);
+  check("мост доки↔редактор: настройка-тумблер объявлена", !!(pkg.contributes.configuration.properties["cppDocs.editorBridge"]));
+  check("напиши и запусти: канал компиляции в хосте", src.indexOf("runUserCode") !== -1 && src.indexOf("handleRun") !== -1 && src.indexOf("/rpc/") !== -1);
+  check("напиши и запусти: настройки localRun/compiler объявлены", !!(pkg.contributes.configuration.properties["cppDocs.localRun"] && pkg.contributes.configuration.properties["cppDocs.compiler"]));
+  check("переход к разделу оглавления", src.indexOf("openAt") !== -1);
+  check("закладки хранятся между сессиями", src.indexOf("PINS_KEY") !== -1);
+  check("прогресс изучения хранится между сессиями", src.indexOf("READ_KEY") !== -1);
+  check("горячая клавиша на панель-меню", pkg.contributes.keybindings.some(function (k) { return k.command === "cppDocs.openMenu"; }));
+
+  // --- v2.8: производительность и новые сообщения (по исходнику) ---
+  check("файл разбирается один раз и кэшируется по mtime", src.indexOf("docCache") !== -1 && src.indexOf("parsed.mtimeMs !== mtimeMs") !== -1);
+  check("оценка времени чтения считается", src.indexOf("function estimateMinutes") !== -1);
+  check("подсчёт числа разделов", src.indexOf("function countSections") !== -1);
+  check("обработка «открепить всё»", src.indexOf("msg.type === 'clearPins'") !== -1);
+  check("обработка ручной отметки «изучено»", src.indexOf("msg.type === 'toggleRead'") !== -1 && src.indexOf("toggleRead(filePath)") !== -1);
+  // Считаем только парсер доков (lib/docs.js): у окна свои законные чтения workbench.html,
+  // рантайма и файловых каналов, к кэшу парсинга они отношения не имеют.
+  check("единственное чтение файла в парсере доков",
+    (fs.readFileSync(path.join(EXT, "lib", "docs.js"), "utf8").match(/readFileSync/g) || []).length <= 3);
+
+  // --- регрессии на исправленные баги ---
+  // Свёрнутость групп привязана к имени, а не к порядковому индексу
+  // (иначе появление «Недавнего»/«Закреплённого» сдвигает индексы).
+  check(
+    "ключ группы — имя, а не индекс",
+    html.indexOf('data-group="Главное"') !== -1,
+    "группа не помечена стабильным ключом"
+  );
+  // Результаты поиска не показывают один файл дважды.
+  check("дедупликация результатов поиска", html.indexOf("seen.has(file)") !== -1);
+  // Порядок пунктов после сброса поиска восстанавливается целиком.
+  check(
+    "порядок пунктов восстанавливается",
+    html.indexOf("if (el._home) el._home.appendChild(el)") !== -1
+  );
+  // Хоткей открывает панель, даже если она была закрыта.
+  check("фокус поиска открывает закрытую панель", src.indexOf("cppDocsPanel.focus") !== -1);
+  // Путь из настройки принимается, только если это папка с доками.
+  check(
+    "путь из настройки проверяется по индексному файлу",
+    src.indexOf("fs.existsSync(path.join(configured, INDEX_FILE))") !== -1
+  );
+}
+
+// ------------------------------------------------------------
+//  4. Экранирование: кавычки и угловые скобки в заголовке
+// ------------------------------------------------------------
+group("Экранирование");
+var tmp = path.join(require("os").tmpdir(), "cpp-docs-smoke-" + Date.now());
+fs.mkdirSync(tmp, { recursive: true });
+fs.writeFileSync(
+  path.join(tmp, "00-НАЧНИ-ОТСЮДА.md"),
+  '# Заголовок с "кавычками" и <тегом>\n\n> Описание с "кавычками"\n',
+  "utf8"
+);
+var captured2 = { commands: [], provider: null, viewId: null };
+var ext2 = loadExtension(makeVscodeStub({ captured: captured2, docsPath: tmp, folders: [] }));
+ext2.activate({ subscriptions: [], globalState: makeState() });
+var html2 = renderHtml(captured2);
+
+check("кавычки экранированы", html2.indexOf("&quot;") !== -1);
+check("угловые скобки экранированы", html2.indexOf("&lt;тегом&gt;") !== -1);
+check("сырой тег не попал в разметку", html2.indexOf("<тегом>") === -1);
+fs.rmSync(tmp, { recursive: true, force: true });
+
+// ------------------------------------------------------------
+//  5. Нет документации — понятная заглушка
+// ------------------------------------------------------------
+group("Поведение без документации");
+var captured3 = { commands: [], provider: null, viewId: null };
+var ext3 = loadExtension(
+  makeVscodeStub({ captured: captured3, docsPath: path.join(tmp, "нет-такой-папки"), folders: [] })
+);
+ext3.activate({ subscriptions: [], globalState: makeState() });
+var html3 = renderHtml(captured3);
+check("показана подсказка, а не пустая панель", html3.indexOf("не найдена") !== -1);
+check("названа настройка пути", html3.indexOf("cppDocs.path") !== -1);
+check("на пустом экране есть кнопка настроек", html3.indexOf("open-settings") !== -1);
+
+// ------------------------------------------------------------
+//  5b. cppDocs.paths — берётся первый существующий путь из списка
+// ------------------------------------------------------------
+group("Несколько корней (cppDocs.paths)");
+if (fs.existsSync(path.join(docsPath, "00-НАЧНИ-ОТСЮДА.md"))) {
+  var extP = loadExtension(makeVscodeStub({
+    captured: { commands: [], provider: null, viewId: null },
+    docsPath: "", folders: [],
+    docsPaths: [path.join(tmp, "нет-такой-папки"), docsPath],   // первый не существует, второй — реальный
+  }));
+  check("cppDocs.paths: первый существующий путь найден", extP.findDocsRoot() === docsPath);
+  var extP2 = loadExtension(makeVscodeStub({
+    captured: { commands: [], provider: null, viewId: null },
+    docsPath: "", folders: [], docsPaths: [path.join(tmp, "нет-1"), path.join(tmp, "нет-2")],
+  }));
+  var rootP2 = extP2.findDocsRoot();
+  check("cppDocs.paths: все пути пусты → fallback на встроенные/нет", rootP2 === null || rootP2 !== path.join(tmp, "нет-1"));
+}
+
+// ------------------------------------------------------------
+//  6. Плавающее окно: команды, данные, рантайм
+// ------------------------------------------------------------
+group("Плавающее окно");
+check("команда подключить окно", captured.commands.indexOf("cppDocs.enableWindow") !== -1);
+check("команда отключить окно", captured.commands.indexOf("cppDocs.disableWindow") !== -1);
+check("команда проверить окно", captured.commands.indexOf("cppDocs.windowHealth") !== -1);
+check("buildDocsData экспортирован", typeof ext.buildDocsData === "function");
+
+if (typeof ext.buildDocsData === "function" && fs.existsSync(path.join(docsPath, "00-НАЧНИ-ОТСЮДА.md"))) {
+  var data = ext.buildDocsData(docsPath);
+  check("данные окна: список файлов", Array.isArray(data.files) && data.files.length >= 10, "файлов " + (data.files || []).length);
+  var f0 = data.files[0] || {};
+  check("у материала есть rel-путь", typeof f0.rel === "string" && f0.rel.length > 0);
+  check("у материала есть текст (md)", typeof f0.md === "string" && f0.md.length > 0);
+  check("у материала есть группа и цвет", !!f0.group && !!f0.groupColor);
+  check("данные знают корень доков", typeof data.root === "string" && data.root.length > 0);
+  // rel-пути на прямых слэшах (важно для сопоставления внутренних ссылок в окне)
+  check("rel-пути без обратных слэшей", data.files.every(function (f) { return f.rel.indexOf("\\") === -1; }));
+}
+
+var runtimePath = path.join(EXT, "cpp-docs-runtime.js");
+check("рантайм окна на месте", fs.existsSync(runtimePath));
+if (fs.existsSync(runtimePath)) {
+  var rt = fs.readFileSync(runtimePath, "utf8");
+  check("рантайм: рендер Markdown", rt.indexOf("function renderMarkdown") !== -1);
+  check("рантайм: подсветка C++", rt.indexOf("function highlightCpp") !== -1);
+  check("рантайм: слаги как на GitHub", rt.indexOf("function slugify") !== -1);
+  check("рантайм: перетаскивание окна", rt.indexOf("installDrag") !== -1);
+  check("рантайм: изменение размера", rt.indexOf("installResize") !== -1);
+  check("рантайм: кнопка «копировать код»", rt.indexOf("copybtn") !== -1);
+  check("рантайм: переходы по внутренним ссылкам", rt.indexOf("resolveRel") !== -1);
+  check("рантайм: защита от повторной инъекции", rt.indexOf("__CPPDOCS_RUNTIME__") !== -1);
+  check("рантайм: прогресс по задачнику (отметки «решено»)", rt.indexOf("function decorateTasks") !== -1 && rt.indexOf("function toggleSolved") !== -1 && rt.indexOf("state.solved") !== -1);
+  check("рантайм: кнопка «решено» с классом cd-solve", rt.indexOf("cd-solve") !== -1 && rt.indexOf("cd-taskbar") !== -1);
+  check("рантайм: читает данные из window.__CPPDOCS__", rt.indexOf("window.__CPPDOCS__") !== -1);
+  check("рантайм: тема светлая/тёмная", rt.indexOf("function isLight") !== -1);
+  check("рантайм: акцент под тему", rt.indexOf("function applyAccent") !== -1 && rt.indexOf("--cppdocs-ac") !== -1);
+  check("рантайм: акцент из переменных оболочки", rt.indexOf("--mlbg-accent") !== -1 && rt.indexOf("--vscode-focusBorder") !== -1);
+
+  // --- надёжность рантайма: подпорченное состояние из localStorage не ломает окно ---
+  check("рантайм: словари состояния санируются (plainMap)", rt.indexOf("function plainMap") !== -1);
+  check("рантайм: пилюлю-запуск можно перетаскивать", rt.indexOf("function installBtnDrag") !== -1 && rt.indexOf("state.btnX") !== -1);
+  check("рантайм: режим «только основное» (свернуть все разборы)", rt.indexOf("function applyExpandNotes") !== -1 && rt.indexOf("state.expandNotes") !== -1);
+  check("рантайм: подсказки-термины при наведении", rt.indexOf("function annotateTerms") !== -1 && rt.indexOf("var GLOSSARY") !== -1 && rt.indexOf("cd-term") !== -1);
+  check("рантайм: интерактивная таблица сниппетов (клик — код)", rt.indexOf("function renderSnippets") !== -1 && rt.indexOf("cd-snip-code") !== -1);
+  check("рантайм: меню «Настройки» + подсказки/анимации", rt.indexOf('"Настройки"') !== -1 && rt.indexOf("state.termHints") !== -1 && rt.indexOf("state.noAnim") !== -1);
+  check("рантайм: настройки темы и «праздника»", rt.indexOf("state.theme") !== -1 && rt.indexOf("state.noCelebrate") !== -1 && rt.indexOf('segRow("Тема"') !== -1);
+  check("рантайм: кружок прогресса у пункта виден всегда", rt.indexOf("cd-a-read") !== -1);
+  check("рантайм: чипы-фильтр навигатора", rt.indexOf("cd-filterbar") !== -1 && rt.indexOf("state.navFilter") !== -1 && rt.indexOf("function navMatch") !== -1);
+  check("рантайм: аккордеон групп + прогресс на группе", rt.indexOf("function updateGroupProgress") !== -1 && rt.indexOf("cd-gprog") !== -1);
+  check("рантайм: шапка одной полосой — крошки, кольцо, «Дальше», карточки, редактор", rt.indexOf("function syncHead") !== -1 && rt.indexOf("cd-crumbs") !== -1 &&
+    rt.indexOf("function syncLogoRing") !== -1 && rt.indexOf("function headNextTarget") !== -1 && rt.indexOf("function syncReviewBell") !== -1 &&
+    rt.indexOf("function applyEditorEnv") !== -1 && rt.indexOf("function fitHead") !== -1 && rt.indexOf("cd-rbar") === -1);
+  check("рантайм: читалка — без лигатур в коде, название темы, карточка «За 30 секунд»", rt.indexOf("font-variant-ligatures:none") !== -1 &&
+    rt.indexOf("cd-atitle") !== -1 && rt.indexOf("function wrapTldr") !== -1);
+  check("рантайм: карточки-колода и палитры окна", rt.indexOf("function deckClick") !== -1 && rt.indexOf("var PALETTES") !== -1 &&
+    rt.indexOf("function paletteCss") !== -1 && rt.indexOf("state.palette") !== -1 && rt.indexOf("cd-card-show") === -1);
+  check("рантайм: значки-наклейки ui-*, главная в две колонки, план дня, живые цифры", rt.indexOf("function emo(") !== -1 &&
+    rt.indexOf("function homeWide") !== -1 && rt.indexOf("cd-home-cols") !== -1 && rt.indexOf("cd-plan-n") !== -1 &&
+    rt.indexOf("function homeCountUp") !== -1 && rt.indexOf("function deckTilt") !== -1 && rt.indexOf("cd-dk-prog") !== -1 && rt.indexOf("cd-qa-cont\" type") === -1);
+  check("рантайм: фон — небо прогресса, сияние, зерно, тон раздела, стекло; варианты значков под палитру", rt.indexOf("function buildSky") !== -1 &&
+    rt.indexOf("cd-aur") !== -1 && rt.indexOf("cd-grain") !== -1 && rt.indexOf("backdrop-filter:blur(12px)") !== -1 && rt.indexOf('name + "@" + state.palette') !== -1);
+  check("рантайм: статичный фон-пейзаж под палитру (bg-*.webp с диска) и крупные значки", rt.indexOf("function homeBgImage") !== -1 &&
+    rt.indexOf("d.bgImages") !== -1 && rt.indexOf("state.homeBg") !== -1 && rt.indexOf(".cd-homebg-img{") !== -1 && src.indexOf("extDirUrl") !== -1);
+  check("рантайм: плотный герой — неделя активности и плитки «значок слева»", rt.indexOf("function heroWeek") !== -1 && rt.indexOf("cd-home-week") !== -1 && rt.indexOf("'ic v' 'ic l' 'bar bar'") !== -1);
+  check("мост доки↔редактор: файл, ошибки и компилятор для шапки", src.indexOf("cleanFile") !== -1 && src.indexOf("resolveCompilerAsync") !== -1 && src.indexOf("payload.cc") !== -1);
+  check("рантайм: правый клик по пункту (контекстное меню)", rt.indexOf("function showItemMenu") !== -1 && rt.indexOf("cd-ctxmenu") !== -1);
+  check("рантайм: клик по строке задачника ведёт к заданию", rt.indexOf("function decorateTaskTables") !== -1 && rt.indexOf("cd-taskrow") !== -1 && rt.indexOf("function gotoTask") !== -1);
+
+  // --- наклейки-иллюстрации (пустые состояния, приветствие, «всё изучено») ---
+  check("рантайм: слоты наклеек и SVG-заглушки", rt.indexOf("function stickerMarkup") !== -1 && rt.indexOf("STICKER_SVG") !== -1);
+  check("рантайм: маркеры для встраивания наклеек", rt.indexOf("STICKERS:start") !== -1 && rt.indexOf("STICKERS:end") !== -1);
+  check("рантайм: маскот в «ничего не найдено»", rt.indexOf('stickerMarkup("mascot-search"') !== -1);
+  check("рантайм: маскот в пустом навигаторе", rt.indexOf('stickerMarkup("mascot-sleep"') !== -1);
+  check("рантайм: поздравление наклейкой при 100%", rt.indexOf("cd-home-done") !== -1 && rt.indexOf("allDone") !== -1);
+  check("рантайм: маскот у приветствия (машет→думает→празднует)", rt.indexOf('"mascot-done"') !== -1 && rt.indexOf('"mascot-think"') !== -1 && rt.indexOf('"mascot-hi"') !== -1);
+}
+
+// каждая наклейка из списка встраивания (scripts/embed-stickers.js) лежит в extension/stickers/ как .webp
+var embSrc = fs.readFileSync(path.join(__dirname, "..", "scripts", "embed-stickers.js"), "utf8");
+var pendingStickers = (embSrc.match(/var PENDING = \[([^\]]*)\];/) || ["", ""])[1];
+(embSrc.match(/var SLOTS = \[([\s\S]*?)\];/)[1].match(/"[a-z-]+"/g) || []).forEach(function (q) {
+  var n = q.slice(1, -1);
+  if (pendingStickers.indexOf(q) !== -1) return;   // ещё не нарисована — окно обходится без неё
+  check("наклейка " + n + ".webp на месте", fs.existsSync(path.join(EXT, "stickers", n + ".webp")));
+});
+
+var srcAll = readHostSource();
+// Сторонние загрузчики (custom-ui-style / be5invis) больше не используются: окно ставится прямым
+// патчем оболочки. Их код удалён — проверяем, что он не вернулся мёртвым грузом.
+check("окно: нет мёртвого кода сторонних загрузчиков", srcAll.indexOf("function ensureWindowImport") === -1 && srcAll.indexOf("vscode_custom_css.imports") === -1);
+check("окно: генерация файла данных", srcAll.indexOf("function writeDocsData") !== -1);
+check("хост разбит на модули lib/, extension.js — только точка входа",
+  fs.existsSync(path.join(EXT, "lib", "docs.js")) && fs.readFileSync(path.join(EXT, "extension.js"), "utf8").split("\n").length < 400);
+check("окно: прямой патч оболочки без загрузчика", srcAll.indexOf("function enableWindow") !== -1 && srcAll.indexOf("function findWorkbenchFiles") !== -1);
+check("окно: команда подключения ведёт на прямой патч", srcAll.indexOf("() => enableWindow(context)") !== -1);
+check("окно: восстановление после апдейта VS Code — только по согласию", srcAll.indexOf("WINDOW_ON_KEY") !== -1 && srcAll.indexOf("function injectWindowFiles") !== -1 && srcAll.indexOf("после обновления VS Code плавающее окно пропало") !== -1);
+check("окно: команда в манифесте", pkg.contributes.commands.some(function (c) { return c.command === "cppDocs.enableWindow"; }));
+check("окно: кнопка в шапке панели", JSON.stringify(pkg.contributes.menus["view/title"]).indexOf("cppDocs.enableWindow") !== -1);
+
+// ------------------------------------------------------------
+//  7. Надёжность и защита от сбоев
+// ------------------------------------------------------------
+group("Надёжность");
+// Отметки боковой панели хранятся rel-путями: у вшитых доков в абсолютном пути есть версия расширения.
+(function () {
+  var relOf = null;
+  try { relOf = require.cache[Object.keys(require.cache).filter(function (k) { return /lib[\\/]sidebar\.js$/.test(k); })[0]].exports.relOf; } catch (e) {}
+  check("relOf: путь внутри текущих доков → rel", relOf && relOf("C:/ext/p-3.6.0/docs", "C:\\ext\\p-3.6.0\\docs\\ref\\05-stroki.md") === "ref/05-stroki.md");
+  check("relOf: старый путь из прошлой версии расширения → тот же rel", relOf && relOf("C:/ext/p-3.6.0/docs", "C:/ext/p-3.5.0/docs/ref/05-stroki.md") === "ref/05-stroki.md");
+  check("relOf: уже rel — как есть; ../ — отказ", relOf && relOf("/d", "zadachnik/01-osnovy.md") === "zadachnik/01-osnovy.md" && relOf("/d", "../x.md") === null);
+})();
+check("openDoc проверяет наличие файла", srcAll.indexOf("Файл не найден (возможно") !== -1);
+check("запасной путь, если превью Markdown недоступно", srcAll.indexOf("markdown.showPreview") !== -1 && srcAll.indexOf("расширение Markdown отключено") !== -1);
+check("openAt защищён от исчезнувшего файла", (srcAll.match(/Файл не найден \(возможно/g) || []).length >= 2);
+check("enableWindow предупреждает при провале записи данных", srcAll.indexOf("окну нечего показывать") !== -1);
+check("windowHealth показывает состояние файла данных", srcAll.indexOf("Файл данных окна:") !== -1);
+
+var pkgScript = fs.readFileSync(path.join(ROOT, "scripts", "package-extension.js"), "utf8");
+check("упаковщик: предполётная проверка перед сборкой", pkgScript.indexOf("function preflight") !== -1);
+check("упаковщик: проверяет синтаксис JS (node --check)", pkgScript.indexOf('"--check"') !== -1);
+check("упаковщик: проверяет обязательные файлы", pkgScript.indexOf("нет обязательного файла") !== -1);
+check("скрипт встраивания наклеек на месте", fs.existsSync(path.join(ROOT, "scripts", "embed-stickers.js")));
+
+// ------------------------------------------------------------
+//  8. Харденинг безопасности (топ-10 улучшений)
+// ------------------------------------------------------------
+group("Безопасность");
+var rtSec = fs.readFileSync(path.join(EXT, "cpp-docs-runtime.js"), "utf8");
+var ps1Path = path.join(ROOT, "installer", "tools", "window-inject.ps1");
+var ps1 = fs.existsSync(ps1Path) ? fs.readFileSync(ps1Path, "utf8") : "";
+
+// #1 файл данных не исполняется при перечитке
+check("#1 перечитка данных без исполнения файла (fs+JSON.parse, sanitizeData)",
+      rtSec.indexOf("sanitizeData(JSON.parse(") !== -1 && !/s\.src = url/.test(rtSec));
+// #2 PS1-установщик вооружает CSP nonce, а не снимает её целиком
+check("#2 PS1 вооружает CSP nonce (не снимает целиком)",
+      ps1.indexOf("nonce-") !== -1 && ps1.indexOf("script-src") !== -1 &&
+      ps1.indexOf("Content-Security-Policy[^>]*>', ''") === -1);
+// #3 якорь целостности рантайма + сверка при инъекции
+check("#3 SHA-256 рантайма: якорь и сверка перед инъекцией",
+      /const RUNTIME_SHA256 = '[0-9a-f]{64}';/.test(srcAll) &&
+      srcAll.indexOf("actual !== runtimeAnchor") !== -1 && srcAll.indexOf("setRuntimeAnchor(RUNTIME_SHA256)") !== -1 &&
+      fs.existsSync(path.join(ROOT, "scripts", "hash-runtime.js")));
+check("#3 якорь совпадает с фактическим SHA-256 рантайма",
+      (function () {
+        var m = srcAll.match(/const RUNTIME_SHA256 = '([0-9a-f]{64})';/);
+        if (!m) return false;
+        return m[1] === crypto.createHash("sha256").update(rtSec, "utf8").digest("hex");
+      })());
+// #4 удалённые картинки не грузятся из привилегированной оболочки
+check("#4 внешние/inline картинки блокируются в окне",
+      rtSec.indexOf("внешнее изображение (не загружено)") !== -1 &&
+      /https\?:/.test(rtSec) && rtSec.indexOf("Внешние картинки отключены") !== -1);
+// #5 запуск задач воркспейса гейтится доверием + кнопки прячутся вне проекта
+check("#5 задачи воркспейса под гейтом доверия",
+      (srcAll.match(/if \(!workspaceTrusted\(\)\)/g) || []).length >= 2 &&
+      srcAll.indexOf("const showTasks =") !== -1);
+// #6 вебвью: сужены корни ресурсов + явные img-src/font-src
+check("#6 localResourceRoots + строгий CSP вебвью",
+      (srcAll.match(/localResourceRoots/g) || []).length >= 2 &&
+      (srcAll.match(/img-src 'none'; font-src 'none'/g) || []).length >= 2);
+// #7 переинъекция после апдейта — только по согласию
+check("#7 восстановление окна только по согласию",
+      srcAll.indexOf("после обновления VS Code плавающее окно пропало") !== -1);
+// #8 armCspWithNonce не удаляет CSP при отсутствии script-src, а дополняет её nonce
+check("#8 CSP без script-src не снимается, а дополняется nonce",
+      srcAll.indexOf("script-src 'nonce-") !== -1 &&
+      srcAll.indexOf("if (!/script-src/i.test(m[0])) return html.replace(re, '')") === -1);
+// #9 самопроверка «жив ли каталог расширения»
+check("#9 окно самопроверяется на удаление расширения (extAlive)",
+      rtSec.indexOf("function extAlive") !== -1 && rtSec.indexOf("if (!extAlive()) return;") !== -1 &&
+      srcAll.indexOf("data.runtimeUrl = ") !== -1);
+// #10 строгая валидация перечитанных данных
+check("#10 sanitizeData: строгая форма + лимиты объёма",
+      rtSec.indexOf("function sanitizeData") !== -1 && rtSec.indexOf("CD_MAX_TOTAL_MD") !== -1 &&
+      rtSec.indexOf("if (!looksSafe(d)) return null;") !== -1);
+
+Promise.all(PENDING).then(function () { finish("Смоук: расширение и данные"); });

@@ -14,6 +14,21 @@ const RECENT_KEY = 'cppDocs.recent';
 const PINS_KEY = 'cppDocs.pins';
 const READ_KEY = 'cppDocs.read';        // какие материалы уже открывали — отметка «изучено»
 
+// В globalState храним пути ОТНОСИТЕЛЬНО папки docs («ref/05-stroki.md»). Абсолютные ломались:
+// у вшитых доков путь содержит версию расширения (…/moonlivedt.cpp-docs-panel-3.5.0/docs), и
+// после каждого обновления «изучено», закрепы и недавнее пропадали.
+/** Путь → rel относительно root. Старый абсолютный путь из другой версии — по последнему «/docs/». */
+function relOf(root, p) {
+  const s = String(p || '').replace(/\\/g, '/');
+  if (!s) return null;
+  if (!/^([A-Za-z]:\/|\/)/.test(s)) return /\.md$/i.test(s) && s.split('/').indexOf('..') === -1 ? s : null;   // уже rel
+  const r = String(root || '').replace(/\\/g, '/').replace(/\/+$/, '');
+  if (r && s.toLowerCase().indexOf(r.toLowerCase() + '/') === 0) return s.slice(r.length + 1);
+  const i = s.toLowerCase().lastIndexOf('/docs/');
+  return i >= 0 ? s.slice(i + 6) : null;
+}
+function absOf(root, rel) { return path.join(root, rel); }
+
 async function openDoc(filePath, forceText) {
   // Файл могли удалить/переместить после сборки списка — говорим об этом внятно.
   if (!fs.existsSync(filePath)) {
@@ -96,19 +111,47 @@ class DocsViewProvider {
     this.context.subscriptions.push(watcher);
   }
 
-  recent() {
-    return this.context.globalState.get(RECENT_KEY, []);
+  /** Список из globalState → абсолютные пути в текущей папке доков. Старые абсолютные записи
+   *  переводим в rel и сохраняем обратно (миграция один раз). */
+  list(key) {
+    const root = findDocsRoot();
+    const raw = this.context.globalState.get(key, []);
+    if (!root || !Array.isArray(raw)) return [];
+    const rels = [];
+    raw.forEach((p) => { const r = relOf(root, p); if (r && rels.indexOf(r) === -1) rels.push(r); });
+    if (rels.length !== raw.length || rels.some((r, i) => r !== raw[i])) this.context.globalState.update(key, rels);
+    return rels.map((r) => absOf(root, r));
+  }
+  /** Сохранить список абсолютных путей как rel. Путь вне папки доков отбрасываем. */
+  saveList(key, absList) {
+    const root = findDocsRoot();
+    const rels = [];
+    (absList || []).forEach((p) => { const r = relOf(root, p); if (r && rels.indexOf(r) === -1) rels.push(r); });
+    return this.context.globalState.update(key, rels);
   }
 
+  recent() { return this.list(RECENT_KEY); }
+
+  /** Запомнить открытый материал. Вернёт true, если поменялся видимый порядок «Недавнего». */
   rememberOpened(filePath) {
-    const list = this.recent().filter((p) => p !== filePath);
+    const before = this.recent();
+    const list = before.filter((p) => p !== filePath);
     list.unshift(filePath);
-    this.context.globalState.update(RECENT_KEY, list.slice(0, RECENT_LIMIT * 2));
+    this.saveList(RECENT_KEY, list.slice(0, RECENT_LIMIT * 2));
+    return before.slice(0, RECENT_LIMIT).join('\n') !== list.slice(0, RECENT_LIMIT).join('\n');
   }
 
-  pins() {
-    return this.context.globalState.get(PINS_KEY, []);
+  /** Отметки «изучено» и закрепы — точечно, без пересборки HTML (вебвью не мигает, прокрутка на месте). */
+  postState() {
+    const payload = { type: 'state', read: this.read(), pins: this.pins() };
+    [this.view && this.view.webview, this.panel && this.panel.webview].forEach((wv) => {
+      if (wv && typeof wv.postMessage === 'function') wv.postMessage(payload);
+    });
   }
+  /** После открытия материала: сменился состав «Недавнего» — пересобрать, иначе — точечно. */
+  refresh(structural) { if (structural) this.renderAll(); else this.postState(); }
+
+  pins() { return this.list(PINS_KEY); }
 
   /** Прикрепить или открепить материал. */
   togglePin(filePath) {
@@ -116,18 +159,16 @@ class DocsViewProvider {
     const next = list.includes(filePath)
       ? list.filter((p) => p !== filePath)
       : list.concat([filePath]);
-    return this.context.globalState.update(PINS_KEY, next);
+    return this.saveList(PINS_KEY, next);
   }
 
-  read() {
-    return this.context.globalState.get(READ_KEY, []);
-  }
+  read() { return this.list(READ_KEY); }
 
   /** Отметить материал изученным (открывали хотя бы раз). */
   markRead(filePath) {
     const list = this.read();
     if (list.includes(filePath)) return Promise.resolve();
-    return this.context.globalState.update(READ_KEY, list.concat([filePath]));
+    return this.saveList(READ_KEY, list.concat([filePath]));
   }
 
   /** Переключить отметку «изучено» вручную — по клику на галочку у пункта. */
@@ -136,49 +177,59 @@ class DocsViewProvider {
     const next = list.includes(filePath)
       ? list.filter((p) => p !== filePath)
       : list.concat([filePath]);
-    return this.context.globalState.update(READ_KEY, next);
+    return this.saveList(READ_KEY, next);
+  }
+
+  /** Файл из сообщения вебвью — только .md внутри текущей папки доков. */
+  docPath(file) {
+    const root = findDocsRoot();
+    const rel = root && relOf(root, file);
+    if (!rel) return null;
+    const abs = path.resolve(absOf(root, rel));
+    return abs.toLowerCase().indexOf(path.resolve(root).toLowerCase() + path.sep) === 0 ? abs : null;
   }
 
   /** Открыть файл как текст на конкретной строке (переход к разделу оглавления). */
   async openAt(filePath, line) {
     if (!fs.existsSync(filePath)) {
       vscode.window.showWarningMessage('Файл не найден (возможно, перемещён или удалён): ' + path.basename(filePath));
-      return;
+      return false;
     }
-    this.rememberOpened(filePath);
+    const moved = this.rememberOpened(filePath);
     const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(filePath));
     const editor = await vscode.window.showTextDocument(doc, { preview: false });
     const pos = new vscode.Position(Math.max(0, line | 0), 0);
     editor.selection = new vscode.Selection(pos, pos);
     editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.AtTop);
+    return moved;
   }
 
   /** Общий обработчик сообщений вебвью — одинаков и для сайдбара, и для отдельной панели. */
   async handleMessage(msg) {
-    if (msg.type === 'open') {
-      this.rememberOpened(msg.file);
+    if (!msg || typeof msg.type !== 'string') return;
+    if (typeof msg.file === 'string') {
+      msg = Object.assign({}, msg, { file: this.docPath(msg.file) });
+      if (!msg.file) return;
+    }
+    if (msg.type === 'open' || msg.type === 'openText') {
+      const moved = this.rememberOpened(msg.file);
       await this.markRead(msg.file);
-      await openDoc(msg.file, false);
-      this.renderAll();
-    } else if (msg.type === 'openText') {
-      this.rememberOpened(msg.file);
-      await this.markRead(msg.file);
-      await openDoc(msg.file, true);
-      this.renderAll();
+      await openDoc(msg.file, msg.type === 'openText');
+      this.refresh(moved);
     } else if (msg.type === 'runTests') {
       // Задача воркспейса запускается по имени — в недоверенной папке не запускаем
       // (вредоносный .vscode/tasks.json мог бы подсунуть под этим именем свою команду).
       if (!workspaceTrusted()) { vscode.window.showWarningMessage('Запуск задач доступен только в доверенной папке (Workspace Trust).'); return; }
-      await vscode.commands.executeCommand('workbench.action.tasks.runTask', 'C++: прогнать тесты');
+      await this.runTask('C++: прогнать тесты');
     } else if (msg.type === 'checkDocs') {
       if (!workspaceTrusted()) { vscode.window.showWarningMessage('Запуск задач доступен только в доверенной папке (Workspace Trust).'); return; }
-      await vscode.commands.executeCommand('workbench.action.tasks.runTask', 'Документация: проверить');
+      await this.runTask('Документация: проверить');
     } else if (msg.type === 'clearRecent') {
       await this.context.globalState.update(RECENT_KEY, []);
       this.renderAll();
     } else if (msg.type === 'resetProgress') {
       await this.context.globalState.update(READ_KEY, []);
-      this.renderAll();
+      this.postState();
     } else if (msg.type === 'togglePin') {
       await this.togglePin(msg.file);
       this.renderAll();
@@ -187,16 +238,32 @@ class DocsViewProvider {
       this.renderAll();
     } else if (msg.type === 'toggleRead') {
       await this.toggleRead(msg.file);
-      this.renderAll();
+      this.postState();
     } else if (msg.type === 'openAt') {
       await this.markRead(msg.file);
-      await this.openAt(msg.file, msg.line);
-      this.renderAll();
+      const moved = await this.openAt(msg.file, msg.line);
+      this.refresh(moved);
     } else if (msg.type === 'openSettings') {
       await vscode.commands.executeCommand('workbench.action.openSettings', 'cppDocs.path');
     } else if (msg.type === 'refresh') {
       this.renderAll();
     }
+  }
+
+  /** Задачи воркспейса по имени (tasks.json). Нет API — пустой список. */
+  async taskNames() {
+    try {
+      if (!vscode.tasks || typeof vscode.tasks.fetchTasks !== 'function') return [];
+      return (await vscode.tasks.fetchTasks()).map((t) => t.name);
+    } catch (e) { return []; }
+  }
+  async runTask(name) {
+    const names = await this.taskNames();
+    if (names.indexOf(name) === -1) {
+      vscode.window.showWarningMessage('В проекте нет задачи «' + name + '» (.vscode/tasks.json).');
+      return;
+    }
+    await vscode.commands.executeCommand('workbench.action.tasks.runTask', name);
   }
 
   /** Открыть меню отдельной панелью в области редактора (во всю ширину, не в сайдбаре). */
@@ -216,7 +283,7 @@ class DocsViewProvider {
       opts
     );
     try {
-      panel.iconPath = vscode.Uri.file(path.join(__dirname, 'icon.svg'));
+      panel.iconPath = vscode.Uri.file(path.join(__dirname, '..', 'icon.svg'));   // icon.svg лежит в extension/, модуль — в lib/
     } catch (e) { /* иконка вкладки необязательна */ }
     this.panel = panel;
     panel.webview.onDidReceiveMessage((msg) => this.handleMessage(msg));
@@ -232,7 +299,13 @@ class DocsViewProvider {
     const root = findDocsRoot();
     this.ensureWatcher(root);
     // Кнопки задач показываем только для доверенного проекта, не для встроенного fallback.
-    const showTasks = !!root && workspaceTrusted() && root !== bundledDocs();
+    // …и только если такие задачи реально объявлены в tasks.json (список берём асинхронно один раз).
+    if (this._tasks === undefined) {
+      this._tasks = null;
+      this.taskNames().then((n) => { this._tasks = n; if (n.length) this.renderAll(); });
+    }
+    const hasTasks = !!this._tasks && ['C++: прогнать тесты', 'Документация: проверить'].some((t) => this._tasks.indexOf(t) !== -1);
+    const showTasks = hasTasks && !!root && workspaceTrusted() && root !== bundledDocs();
     return root
       ? this.buildHtml(collectGroups(root, this.recent(), this.pins()), this.currentDocFile(), this.pins(), this.read(), showTasks)
       : this.buildEmptyHtml();
@@ -1110,6 +1183,7 @@ ${showTasks ? `<div class="actions">
     const msg = e.data || {};
     if (msg.type === 'current') markCurrent(msg.file);
     else if (msg.type === 'focusSearch') { search.focus(); search.select(); }
+    else if (msg.type === 'state') applyItemState(new Set(msg.read || []), new Set(msg.pins || []));
   });
 
   // ---------- прогресс изучения и «Продолжить» ----------
@@ -1117,6 +1191,25 @@ ${showTasks ? `<div class="actions">
   const progressText = document.getElementById('progress-text');
   const progressReset = document.getElementById('progress-reset');
   const continueBtn = document.getElementById('progress-continue');
+
+  // Отметки «изучено» и закрепы пришли от расширения — обновить пункты на месте.
+  function applyItemState(readSet, pinSet) {
+    items.forEach((el) => {
+      const f = el.dataset.file, isRead = readSet.has(f), pinned = pinSet.has(f);
+      el.dataset.read = isRead ? '1' : '0';
+      el.classList.toggle('read', isRead);
+      const rb = el.querySelector('.read-btn');
+      if (rb) {
+        rb.classList.toggle('is-read', isRead);
+        rb.textContent = isRead ? '✓' : '○';
+        rb.title = isRead ? 'Снять отметку «изучено»' : 'Отметить изученным';
+        rb.setAttribute('aria-pressed', isRead ? 'true' : 'false');
+      }
+      const pb = el.querySelector('.pin-btn');
+      if (pb) { pb.classList.toggle('pinned', pinned); pb.textContent = pinned ? '★' : '☆'; pb.title = pinned ? 'Открепить' : 'Закрепить'; }
+    });
+    updateProgress();
+  }
 
   // «изучено N из M» — считаем по уникальным файлам (один файл может стоять в нескольких группах)
   function updateProgress() {
@@ -1154,4 +1247,4 @@ ${showTasks ? `<div class="actions">
   }
 }
 
-module.exports = { DocsViewProvider, openDoc, RECENT_KEY };
+module.exports = { DocsViewProvider, openDoc, RECENT_KEY, relOf };

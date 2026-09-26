@@ -100,6 +100,30 @@ for (const file of mdFiles(ROOT)) {
   });
 }
 
+// Отдельные программы-файлы рядом с документацией (situacii/*.cpp, examples/code/*.cpp): их открывают
+// и запускают целиком, поэтому здесь строже — предупреждения -Wall -Wextra тоже считаются ошибкой.
+function cppFiles(dir) {
+  const out = [];
+  for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (ent.isSymbolicLink() || ent.name.startsWith('.')) continue;
+    const p = path.join(dir, ent.name);
+    if (ent.isDirectory()) out.push(...cppFiles(p));
+    else if (/\.(cpp|cc|cxx)$/i.test(ent.name)) out.push(p);
+  }
+  return out;
+}
+let files = 0;
+for (const file of cppFiles(ROOT)) {
+  const rel = path.relative(ROOT, file).replace(/\\/g, '/');
+  const r = spawnSync(CXX, ['-std=' + STD, '-fsyntax-only', '-Wall', '-Wextra', file], { encoding: 'utf8' });
+  files++; compiled++;
+  const msg = (r.stderr || r.stdout || '').trim();
+  if (r.status !== 0 || /warning:/.test(msg)) {
+    failures.push({ rel, line: 1, msg: msg.split('\n').filter((l) => l.trim()).slice(0, 8).map((l) => l.replace(file, rel)).join('\n') });
+  }
+}
+if (files) console.log('Файлы .cpp рядом с документацией: ' + files + ' (строго: без предупреждений).');
+
 try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (e) { /* не критично */ }
 
 if (failures.length === 0) {

@@ -139,6 +139,40 @@ function countSections(content) {
   return n;
 }
 
+/** Якорь заголовка — как slugify в рантайме окна (runtime/01-utils-stickers.js) и в check-links.js. */
+function slugify(text) {
+  return String(text)
+    .replace(/`([^`]*)`/g, '$1')
+    .replace(/\*\*/g, '').replace(/\*/g, '')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N} \-_]/gu, '')
+    .replace(/ /g, '-');
+}
+
+/** Индекс поиска окна: проза материала по разделам (## / ###) — без блоков кода и разметки.
+ *  → [{ s: якорь раздела ('' — до первого заголовка), t: заголовок, x: строки текста через \n }].
+ *  Считается здесь, при сборке данных, а не в окне на каждое нажатие клавиши. */
+function searchSections(md) {
+  const out = [];
+  let cur = { s: '', t: '', x: [] }, inFence = false;
+  for (const ln of String(md || '').replace(/\r\n?/g, '\n').split('\n')) {
+    if (ln.trim().slice(0, 3) === '```') { inFence = !inFence; continue; }
+    if (inFence) continue;
+    const hm = ln.match(/^(#{2,3})\s+(.+?)\s*#*\s*$/);
+    if (hm) {
+      if (cur.x.length || cur.s) out.push(cur);
+      cur = { s: slugify(hm[2]), t: hm[2].replace(/[`*]/g, '').trim(), x: [] };
+      continue;
+    }
+    // НЕ трогаем _: он важен для идентификаторов (push_back)
+    const plain = ln.replace(/<[^>]+>/g, ' ').replace(/[#>*`|[\]()]/g, ' ').replace(/\s{2,}/g, ' ').trim();
+    if (plain) cur.x.push(plain);
+  }
+  if (cur.x.length || cur.s) out.push(cur);
+  return out.map((c) => ({ s: c.s, t: c.t, x: c.x.join('\n') }));
+}
+
 /** Прикидка времени чтения: слова прозы (без блоков кода) при ~150 слов/мин. */
 function estimateMinutes(content) {
   const prose = content.replace(/```[\s\S]*?```/g, ' ');
@@ -252,6 +286,8 @@ function collectGroups(root, recent, pins) {
   const sections = [
     ['zametki', 'Мои заметки', '#4ec9b0'],
     ['ref', 'Справочник по темам', 'var(--vscode-charts-purple, #b180d7)'],
+    ['proekt', 'Сквозной проект', '#f9e2af'],
+    ['igry', 'Создание игр', '#fab387'],
     ['zadachnik', 'Задачник', 'var(--vscode-charts-red, #e06c75)'],
     ['examples', 'Примеры программ', 'var(--vscode-charts-green, #89d185)'],
     ['situacii', 'Один инструмент — разные задачи', 'var(--vscode-charts-orange, #d89a4a)'],
@@ -286,9 +322,12 @@ function buildDocsData(root) {
         if (st.isSymbolicLink()) { md = ''; }
         else if (totalBytes >= MAX_TOTAL_DOC_BYTES) { md = '\n> _Материал не показан в окне: превышен общий лимит объёма._\n'; }
         else {
-          md = fs.readFileSync(it.file, 'utf8');
-          if (md.length > MAX_DOC_BYTES) md = md.slice(0, MAX_DOC_BYTES) + '\n\n> _…материал обрезан: файл больше ' + Math.round(MAX_DOC_BYTES / 1024) + ' КБ._\n';
-          totalBytes += md.length;
+          // Лимиты — в байтах (кириллица в UTF-8 — 2 байта на букву; md.length считал бы символы).
+          const buf = fs.readFileSync(it.file);
+          md = buf.length > MAX_DOC_BYTES
+            ? buf.subarray(0, MAX_DOC_BYTES).toString('utf8').replace(/\uFFFD+$/, '') + '\n\n> _…материал обрезан: файл больше ' + Math.round(MAX_DOC_BYTES / 1024) + ' КБ._\n'
+            : buf.toString('utf8');
+          totalBytes += Math.min(buf.length, MAX_DOC_BYTES);
         }
       } catch (e) { md = ''; }
       files.push({
@@ -301,6 +340,7 @@ function buildDocsData(root) {
         minutes: it.minutes,
         sections: it.sections,
         md: md,
+        sx: searchSections(md),   // индекс поиска окна (проза по разделам)
       });
     }
   }
@@ -310,5 +350,5 @@ function buildDocsData(root) {
 module.exports = {
   INDEX_FILE, MAX_DOC_BYTES, RECENT_LIMIT,
   setBundledDocs, bundledDocs, workspaceTrusted, findDocsRoot,
-  describe, collectGroups, buildDocsData,
+  collectGroups, buildDocsData, searchSections, slugify,
 };

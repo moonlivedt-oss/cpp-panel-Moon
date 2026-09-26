@@ -76,6 +76,21 @@ int main() {
 
 > **Бонус.** Заодно замените `endl` на `"\n"` — `endl` лишний раз сбрасывает буфер.
 
+Переписал — вывод должен совпасть со старой версией:
+
+```tests
+5 => Сколько? Ввели: 5
+0 => Сколько? Ввели: 0
+```
+
+<details>
+<summary>💡 Подсказка — с чего начать</summary>
+
+Пусть подскажет компилятор: убери `using namespace std;` и собери — он перечислит все имена, которые «потерялись». Каждому из них и нужен `std::`.
+</details>
+
+> Не выходит? Ответ с разбором — [внизу страницы](#ответы-с-разбором). Открывай его после своей попытки.
+
 ---
 
 ## 10.2. `new[]` / `delete[]` → `std::vector` 🟡
@@ -111,6 +126,22 @@ int main() {
 
 > **Бонус.** Посчитайте сумму через `std::accumulate` из `<numeric>` вместо второго цикла.
 
+Переписал — вывод должен совпасть со старой версией:
+
+```tests
+4 => 14
+1 => 0
+10 => 285
+```
+
+<details>
+<summary>💡 Подсказка — с чего начать</summary>
+
+Подумай, что `std::vector<int> arr(n);` делает за тебя: выделяет `n` элементов и сам освобождает память, когда `main` заканчивается. Обращение `arr[i]` остаётся прежним.
+</details>
+
+> Не выходит? Ответ с разбором — [внизу страницы](#ответы-с-разбором). Открывай его после своей попытки.
+
 ---
 
 ## 10.3. `char[]` и `strcpy` → `std::string` 🟡
@@ -139,6 +170,14 @@ int main() {
 
 > **Бонус.** Добавьте к имени отчество через `getline` (ввод с пробелами) — с `char[]` это была бы боль.
 
+<details>
+<summary>💡 Подсказка — с чего начать</summary>
+
+У `std::string` есть замена каждой из трёх функций C: присваивание вместо `strcpy`, `+=` вместо `strcat`, `size()` вместо `strlen`. Заголовок `<cstring>` больше не нужен — нужен `<string>`.
+</details>
+
+> Не выходит? Ответ с разбором — [внизу страницы](#ответы-с-разбором). Открывай его после своей попытки.
+
 ---
 
 ## 10.4. `#define` и C-style cast 🟡
@@ -166,6 +205,14 @@ int main() {
 > **Как подступиться.** `const int SIZE = 10;` внутри `main`, и `static_cast<double>(sum)` вместо `(double)sum`.
 
 > **Бонус.** Если константа известна на этапе компиляции — попробуйте `constexpr int SIZE = 10;`.
+
+<details>
+<summary>💡 Подсказка — с чего начать</summary>
+
+Константа в C++ — переменная, которую нельзя менять: у неё есть тип и область видимости, в отличие от макроса. А из именованных приведений нужно то, что просто меняет тип числа, — `static_cast`.
+</details>
+
+> Не выходит? Ответ с разбором — [внизу страницы](#ответы-с-разбором). Открывай его после своей попытки.
 
 ---
 
@@ -196,6 +243,22 @@ int main() {
 > **Как подступиться.** Читайте `std::cin >> name >> score;` в `std::string`/`int`. Формат `%-10s` (влево, ширина 10) — это `std::left << std::setw(10)`; `%3d` — `std::right << std::setw(3)` (оба из `<iomanip>`). Не забудьте вернуть выравнивание, если оно «залипает».
 
 > **Бонус.** Соберите строку через `std::format("{:<10} | {:>3}", name, score)` из `<format>` — та же краткость, что у `printf`, но с проверкой типов.
+
+Переписал — вывод должен совпасть со старой версией:
+
+```tests
+# по одному ученику на прогон — столбцы как у printf
+1 Ann 95 => Ann        |  95
+1 Bob 7 => Bob        |   7
+```
+
+<details>
+<summary>💡 Подсказка — с чего начать</summary>
+
+Столбцы собираются манипуляторами из `<iomanip>`: `std::left` + `std::setw(10)` для имени, `std::right` + `std::setw(3)` для балла. Проверь на имени короче и длиннее 10 символов.
+</details>
+
+> Не выходит? Ответ с разбором — [внизу страницы](#ответы-с-разбором). Открывай его после своей попытки.
 
 ---
 
@@ -238,50 +301,210 @@ int main() {
 
 > **Бонус.** Посчитайте сумму через `std::accumulate`, а бросок вынесите в функцию `int roll(std::mt19937 &gen)`.
 
+<details>
+<summary>💡 Подсказка — с чего начать</summary>
+
+Сначала выпиши все старые конструкции списком (пространство имён, `rand`/`srand`, `new[]`/`delete[]`, C-приведение, `endl`) и заменяй по одной, собирая после каждой. Для кубика — `std::mt19937` и `std::uniform_int_distribution<int>(1, 6)`.
+</details>
+
+> Не выходит? Ответ с разбором — [внизу страницы](#ответы-с-разбором). Открывай его после своей попытки.
+
 ---
 
-# Подсказки
+# Ответы с разбором
 
-> **Мало подсказки?** Откройте теорию темы: [раздел справочника](../ref/09-spravka.md).
+> **Сначала — своя попытка и подсказка у задачи.** Мало разбора? Откройте теорию темы: [раздел справочника](../ref/09-spravka.md).
+
+<!-- docs:solutions:start -->
 
 <details>
-<summary>10.1 — using namespace std;</summary>
+<summary>Ответ 10.1 — using namespace std;</summary>
 
 Уберите строку `using namespace std;`. Перед каждым именем из библиотеки поставьте `std::`:
 `std::cout`, `std::cin`. `endl` — это `std::endl`, но его лучше заменить на `"\n"`.
+
+Было и стало рядом:
+
+```badgood
+Было | Стало
+#include <iostream>
+using namespace std;
+
+int main() {
+    int count;
+    cout << "Сколько? ";
+    cin >> count;
+    cout << "Ввели: " << count << endl;
+}
+---
+#include <iostream>
+
+int main() {
+    int count;
+    std::cout << "Сколько? ";
+    std::cin >> count;
+    std::cout << "Ввели: " << count << "\n";
+}
+```
 </details>
 
 <details>
-<summary>10.2 — new[] / delete[]</summary>
+<summary>Ответ 10.2 — new[] / delete[]</summary>
 
 `std::vector<int> arr(n);` создаёт вектор из `n` нулей. Дальше `arr[i]` работает как у массива.
 Строку `delete[] arr;` удалите — вектор освобождает память сам на выходе из `main`.
+
+Было и стало рядом:
+
+```badgood
+Было | Стало
+#include <iostream>
+
+int main() {
+    int n;
+    std::cin >> n;
+
+    int* arr = new int[n];          // выделили руками
+    for (int i = 0; i < n; ++i)
+        arr[i] = i * i;
+
+    long long sum = 0;
+    for (int i = 0; i < n; ++i)
+        sum += arr[i];
+
+    std::cout << sum << "\n";
+    delete[] arr;                   // забудете — утечка
+}
+---
+#include <iostream>
+#include <numeric>
+#include <vector>
+
+int main() {
+    int n;
+    std::cin >> n;
+
+    std::vector<int> arr(n);        // память освободится сама
+    for (int i = 0; i < n; ++i)
+        arr[i] = i * i;
+
+    long long sum = std::accumulate(arr.begin(), arr.end(), 0LL);
+    std::cout << sum << "\n";
+}
+```
 </details>
 
 <details>
-<summary>10.3 — char[] и strcpy</summary>
+<summary>Ответ 10.3 — char[] и strcpy</summary>
 
 `std::string name = "Аня";`, затем `name += " Иванова";`. Длина — `name.size()`.
 Заголовок `<cstring>` можно убрать. `std::string` сам следит за размером — переполнить буфер нечем.
+
+Было и стало рядом:
+
+```badgood
+Было | Стало
+#include <iostream>
+#include <cstring>
+
+int main() {
+    char name[50];
+    std::strcpy(name, "Аня");       // длина не проверяется — переполните буфер и не заметите
+    std::strcat(name, " Иванова");
+
+    std::cout << name << " (" << std::strlen(name) << " байт)\n";
+}
+---
+#include <iostream>
+#include <string>
+
+int main() {
+    std::string name = "Аня";       // длину string знает сам
+    name += " Иванова";
+
+    std::cout << name << " (" << name.size() << " байт)\n";
+}
+```
 </details>
 
 <details>
-<summary>10.4 — #define и C-cast</summary>
+<summary>Ответ 10.4 — #define и C-cast</summary>
 
 `const int SIZE = 10;` (или `constexpr`) вместо `#define`. `static_cast<double>(sum)` вместо `(double)sum`.
 `static_cast` откажется от бессмысленного преобразования, а `(тип)` сделает что угодно молча.
+
+Было и стало рядом:
+
+```badgood
+Было | Стало
+#include <iostream>
+
+#define SIZE 10                     // препроцессор: не знает типов и области видимости
+
+int main() {
+    int sum = 45;
+    double avg = (double)sum / SIZE; // C-style cast
+
+    std::cout << avg << "\n";
+}
+---
+#include <iostream>
+
+constexpr int SIZE = 10;            // константа с типом и областью видимости
+
+int main() {
+    int sum = 45;
+    double avg = static_cast<double>(sum) / SIZE;
+
+    std::cout << avg << "\n";
+}
+```
 </details>
 
 <details>
-<summary>10.5 — printf-таблица</summary>
+<summary>Ответ 10.5 — printf-таблица</summary>
 
 - Чтение: `int n; std::cin >> n;`, затем в цикле `std::string name; int score; std::cin >> name >> score;`.
 - Вывод столбцов: `std::cout << std::left << std::setw(10) << name << " | " << std::right << std::setw(3) << score << "\n";` (нужен `<iomanip>`).
 - `std::left`/`std::right` «залипают» на потоке — при желании возвращайте выравнивание обратно.
+
+Было и стало рядом:
+
+```badgood
+Было | Стало
+#include <cstdio>
+
+int main() {
+    int n;
+    scanf("%d", &n);                 // легко перепутать спецификатор и тип
+    for (int i = 0; i < n; ++i) {
+        char name[50];
+        int score;
+        scanf("%s %d", name, &score);
+        printf("%-10s | %3d\n", name, score);  // %d для double = мусор, и никто не поймает
+    }
+}
+---
+#include <iomanip>
+#include <iostream>
+#include <string>
+
+int main() {
+    int n;
+    std::cin >> n;
+    for (int i = 0; i < n; ++i) {
+        std::string name;
+        int score;
+        std::cin >> name >> score;   // тип проверяет компилятор
+        std::cout << std::left << std::setw(10) << name << " | "
+                  << std::right << std::setw(3) << score << "\n";
+    }
+}
+```
 </details>
 
 <details>
-<summary>10.6 — Полный рефакторинг</summary>
+<summary>Ответ 10.6 — Полный рефакторинг</summary>
 
 ```cpp
 #include <iostream>
@@ -307,6 +530,7 @@ int main() {
 Ни `new`/`delete`, ни `using namespace`, ни `rand()`, ни C-cast — и память освобождается сама.
 </details>
 
+<!-- docs:solutions:end -->
 ---
 
 ## Проверьте себя

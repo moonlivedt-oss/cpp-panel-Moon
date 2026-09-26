@@ -7,9 +7,9 @@
 ```bash
 git clone https://github.com/moonlivedt-oss/cpp-panel-Moon.git
 cd cpp-panel-Moon
-# зависимостей нет — npm install не требуется
-node test/smoke.js       # прогнать смоук-тест (172 проверки)
-npm run check            # node --check модулей + смоук + проверка ссылок одной командой
+npm ci                   # только dev-инструменты (eslint, typescript, playwright, test-electron) — у расширения зависимостей нет
+npm run dev              # правишь extension/runtime/ или docs/ → превью окна пересобирается и перезагружается само
+npm run check            # всё, что гоняет CI: сборка рантайма, типы, тесты, ссылки, бюджет производительности
 npm run install:vsix     # собрать .vsix и поставить в VS Code
 ```
 
@@ -23,11 +23,12 @@ npm run install:vsix     # собрать .vsix и поставить в VS Code
   |---|---|
   | `extension/extension.js` | точка входа: `activate()` регистрирует команды и связывает модули `lib/` |
   | `extension/lib/*.js` | хост-логика по модулям: `docs` (папка и .md), `sidebar` (webview), `storage` (файлы и настройки), `data` (данные окна), `window` (впечатывание окна), `editor-bridge`, `run`, `actions`, `log` |
-  | `extension/cpp-docs-runtime.js` | рантайм плавающего окна: рендер Markdown, подсветка C++/bash, drag/resize, оглавление, переходы по ссылкам, акцент из темы / custom-bg |
+  | `extension/runtime/NN-*.js` | **исходники** рантайма окна по частям (данные, разметка, стили, навигатор, главная, каналы…). Правь здесь, потом `npm run build:runtime` (склейка + якорь SHA-256) |
+  | `extension/cpp-docs-runtime.js` | **собранный** рантайм плавающего окна — одним скриптом впечатывается в оболочку; руками не правится (`npm run check` сверяет его с частями) |
   | `scripts/package-extension.js` | сборка `.vsix` |
   | `scripts/build-installer.js`, `installer/` | офлайн-установщик: батники + `tools/common.cmd` (цвета, поиск VS Code) |
   | `scripts/preview*.js` | превью панели и окна в браузер (`build/`) |
-  | `test/smoke.js` | смоук-тест без запуска VS Code |
+  | `test/*.test.js` | тесты на `node:test` (см. «Тесты» ниже); `test/vscode/` — в настоящем VS Code; `test/visual/` — снимки окна |
 
 - Стиль: осторожный, совместимый JS (расширение исполняется в разных версиях воркбенча),
   оборонительные `try/catch` вокруг работы с DOM и файловой системой, комментарии — на русском.
@@ -41,13 +42,21 @@ npm run install:vsix     # собрать .vsix и поставить в VS Code
 
 ## Тесты
 
-- **Смоук** (`node test/smoke.js`) — обязателен. Расширение вне редактора не запустить: модуля
-  `vscode` не существует. Тест подставляет заглушку, активирует расширение и проверяет собранный
-  HTML — есть ли поиск, группы и кнопки, берутся ли подписи из настоящих файлов, экранируются ли
-  кавычки и угловые скобки в заголовках, что показывается при отсутствии документации, а также
-  поведение плавающего окна. Прогоняй после любой правки в `extension/**`.
-- Добавляешь фичу — добавь и проверку в `test/smoke.js`.
-- `npm run check` = `node --check` обоих модулей + смоук + проверка ссылок; именно это гоняет CI.
+Все тесты — на встроенном `node:test` (без Mocha/Jest). Файлы `test/*.test.js`, помощник — `test/helpers.js`.
+
+| Команда | Что проверяет |
+|---|---|
+| `npm test` | все `test/*.test.js` параллельно: смоук (заглушка `vscode`), инъекция в оболочку, рантайм окна под DOM-стабом, мост, вкладка, прогресс, подсказки по стилю, загрузчик и индекс поиска, fuzz разметки; `test/run.test.js` компилирует по-настоящему (нет g++ — пропуск) |
+| `npm run test:coverage` | то же + покрытие кода хоста (порог — 75 % строк) |
+| `npm run typecheck` | `tsc --noEmit` по JSDoc для `extension/**` (TypeScript — только dev-инструмент) |
+| `npm run test:vscode` | интеграционные тесты **в настоящем VS Code** (`@vscode/test-electron`): активация, команды, вкладка, подсказки, мост |
+| `npm run test:vscode -- --window --sandbox` | ещё и настоящее плавающее окно: впечатать в **песочную копию** VS Code, перезапустить, дождаться выхода на мост (Windows; на CI — `--download`) |
+| `npm run test:visual` | визуальная регрессия окна (Playwright), эталоны — `test/visual/__screenshots__/`; после осознанной правки вида: `-- --update-snapshots` |
+| `npm run check:perf` | бюджет: размер рантайма, что впечатывается в оболочку, данные, время рендера и поиска |
+| `FUZZ_N=20000 node --test test/fuzz.test.js` | длинный fuzz-прогон разметки |
+
+- Добавляешь фичу — добавь проверку: логика окна — в `test/runtime.test.js`, хоста — в профильный файл.
+- Одна проверка: `node --test --test-name-pattern="мост" test/bridge.test.js`.
 
 ## Документация
 
@@ -88,7 +97,7 @@ npm run install:vsix     # то же + установка в VS Code
 3. Опиши, что и зачем; если менял UI — приложи скриншот.
 4. Видимый текст — по-русски, без эмодзи.
 
-CI прогонит `npm run check` на Node 18/20 и соберёт `.vsix`, чтобы упаковщик не сломался.
+CI прогонит `npm run check` на Windows, macOS и Linux, интеграционные тесты в VS Code, визуальные снимки, покрытие и соберёт `.vsix`.
 
 ## Вопросы
 

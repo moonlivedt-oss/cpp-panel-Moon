@@ -1,6 +1,25 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "preview-window", "runtimeExecutable": "python", "runtimeArgs": ["-m", "http.server", "8765", "--directory", "build"], "port": 8765 }
+    {
+      "name": "preview-window",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8765",
+        "--directory",
+        "build"
+      ],
+      "port": 8765
+    },
+    {
+      "name": "dev",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "scripts/dev.js"
+      ],
+      "port": 8766
+    }
   ]
 }

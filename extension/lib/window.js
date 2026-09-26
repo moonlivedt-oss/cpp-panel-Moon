@@ -16,102 +16,14 @@ const { writeDocsData, windowDataBody } = require('./data');
 
 const WINDOW_SETUP_KEY = 'cppDocs.windowSetupOffered';      // предложили окно один раз
 const WINDOW_ON_KEY = 'cppDocs.windowEnabled';              // окно было включено (для восстановления после апдейта)
-const WB_START = '<!-- CPPDOCS-WINDOW-START -->';
-const WB_END = '<!-- CPPDOCS-WINDOW-END -->';
+const { WB_START, escapeScript, makeNonce, armCspWithNonce, buildWindowBlock, applyWindowInjection,
+  stripWindowInjection, writeWorkbenchAtomic, restoreCspFromBackup, findWorkbenchIn, unpatchFile, injectedRuntimeSha } = require('./wb-patch');
+const { storageDir } = require('./storage');
 
 // Якорь целостности рантайма. Значение хранится в extension.js (доверенная точка) и
 // передаётся сюда при загрузке — см. setRuntimeAnchor там.
 let runtimeAnchor = '';
 function setRuntimeAnchor(sha) { runtimeAnchor = String(sha || ''); }
-
-/** Экранировать </script, чтобы инлайн-<script> не закрылся на содержимом. */
-function escapeScript(s) { return String(s).replace(/<\/script/gi, '<\\/script'); }
-
-/** Снять CSP-мету из оболочки (используется как крайний случай в armCspWithNonce). */
-function neutralizeCsp(html) {
-  return html.replace(/<meta\s+[^>]*Content-Security-Policy[^>]*>/gi, '');
-}
-
-/** Впустить наши скрипты по nonce, НЕ снимая CSP целиком (раньше вырезали её — это ослабляло
- *  защиту всего VS Code). Нет CSP-меты — ничего не навязываем; есть script-src — дописываем
- *  'nonce-…' file:; нет script-src — добавляем минимальную директиву, не снимая CSP; в style-src
- *  вешаем тот же nonce для нашего <style>. Чужие инлайн-скрипты остаются заблокированы. */
-function armCspWithNonce(html, nonce) {
-  const re = /<meta\s+[^>]*Content-Security-Policy[^>]*>/i;
-  const m = html.match(re);
-  if (!m) return html;
-  let meta = m[0];
-  if (/script-src/i.test(meta)) {
-    meta = meta.replace(/(script-src)([^;>"']*)/i, "$1$2 'nonce-" + nonce + "' file:");
-  } else {
-    meta = meta.replace(/(content\s*=\s*)(["'])/i, "$1$2script-src 'nonce-" + nonce + "' file:; ");
-  }
-  if (/style-src/i.test(meta)) meta = meta.replace(/(style-src)([^;>"']*)/i, "$1$2 'nonce-" + nonce + "'");
-  return html.replace(re, meta);
-}
-
-/** Регэксп нашего блока между маркерами. */
-function windowBlockRe() {
-  const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(esc(WB_START) + '[\\s\\S]*?' + esc(WB_END));
-}
-
-/** Готовый блок для <head>: маркеры + инлайн-данные + инлайн-рантайм. На <script> вешаем nonce
- *  (проходят CSP, когда она есть; без CSP атрибут игнорируется). */
-function buildWindowBlock(dataBody, runtimeJs, nonce) {
-  const attr = nonce ? ' nonce="' + nonce + '"' : '';
-  return WB_START + '\n<script' + attr + '>\n' + escapeScript(dataBody) + '\n</script>\n<script' + attr + '>\n' +
-         escapeScript(runtimeJs) + '\n</script>\n' + WB_END + '\n';
-}
-
-/** Одноразовый nonce для CSP (криптостойкий). */
-function makeNonce() { return crypto.randomBytes(16).toString('base64').replace(/[^A-Za-z0-9]/g, ''); }
-
-/** Вставить/обновить блок в HTML оболочки (идемпотентно). Вернёт null, если нет </head>. */
-function applyWindowInjection(html, block) {
-  html = html.replace(windowBlockRe(), '');
-  const idx = html.indexOf('</head>');
-  if (idx < 0) return null;
-  return html.slice(0, idx) + block + html.slice(idx);
-}
-
-/** Убрать наш блок из HTML оболочки. */
-function stripWindowInjection(html) { return html.replace(windowBlockRe(), ''); }
-
-/** Атомарная запись в workbench.html: пишем во временный файл и переименовываем.
- *  Прямой writeFileSync мог оставить оболочку недописанной (сбой/антивирус/выключение),
- *  и тогда VS Code не запустится. rename в пределах одной папки — атомарен. */
-function writeWorkbenchAtomic(file, data) {
-  const tmp = file + '.cppdocs-tmp';
-  fs.writeFileSync(tmp, data, 'utf8');
-  // Несколько окон VS Code могут патчить один workbench.html, а антивирус — держать файл
-  // открытым: rename тогда даёт EBUSY/EPERM транзиентно. Пара коротких повторов это переживает.
-  let lastErr;
-  for (let i = 0; i < 3; i++) {
-    try { fs.renameSync(tmp, file); return; }
-    catch (e) {
-      lastErr = e;
-      if (!(e && (e.code === 'EBUSY' || e.code === 'EPERM'))) break;
-      const until = Date.now() + 40; while (Date.now() < until) { /* короткая пауза перед повтором */ }
-    }
-  }
-  try { fs.unlinkSync(tmp); } catch (e2) {}
-  throw lastErr;
-}
-
-/** Вернуть CSP-мету из бэкапа при отключении окна (не оставляем защиту снятой навсегда).
- *  Если в оригинале CSP не было — ничего не делаем; чужие вставки не трогаем. */
-function restoreCspFromBackup(html, bakPath) {
-  const RE = /<meta\s+[^>]*Content-Security-Policy[^>]*>/i;
-  let orig;
-  try { orig = fs.readFileSync(bakPath, 'utf8'); } catch (e) { return html; }
-  const om = orig.match(RE);
-  if (!om) return html;                       // в оригинале CSP не было — добавлять не будем
-  if (RE.test(html)) return html.replace(RE, om[0]);  // вернуть ИМЕННО оригинал (снять наши nonce/file:)
-  const idx = html.indexOf('</head>');        // нашу CSP сняли ранее — впечатать оригинал заново
-  if (idx < 0) return html;
-  return html.slice(0, idx) + om[0] + '\n' + html.slice(idx);
-}
 
 /** Найти файл(ы) workbench.html в установке VS Code (через vscode.env.appRoot).
  *  Результат кешируем на сессию: пути не меняются без перезапуска VS Code (а апдейт
@@ -120,21 +32,10 @@ function restoreCspFromBackup(html, bakPath) {
 let _wbCache = null;
 function findWorkbenchFiles() {
   if (_wbCache && _wbCache.length) return _wbCache;
-  const out = [];
+  let out = [];
   try {
     const appRoot = vscode.env && vscode.env.appRoot;
-    if (!appRoot) return out;
-    const walk = (dir, depth) => {
-      if (depth > 6) return;
-      let items;
-      try { items = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return; }
-      for (const it of items) {
-        const p = path.join(dir, it.name);
-        if (it.isDirectory()) walk(p, depth + 1);
-        else if (it.name === 'workbench.html') out.push(p);
-      }
-    };
-    walk(path.join(appRoot, 'out'), 0);
+    if (appRoot) out = findWorkbenchIn(path.join(appRoot, 'out'), 6);
   } catch (e) {}
   if (out.length) _wbCache = out;   // кешируем только удачный поиск
   return out;
@@ -168,6 +69,39 @@ function cleanupLeftovers() {
   return removed;
 }
 
+/** vscode-file://-адрес файла на диске — так оболочка VS Code отдаёт свои и пользовательские файлы. */
+function appFileUrl(p) {
+  const abs = path.resolve(p).replace(/\\/g, '/').replace(/^\/+/, '');
+  return 'vscode-file://vscode-app/' + abs.split('/').map((seg) => encodeURIComponent(seg).replace(/%3A/gi, ':')).join('/');
+}
+const RUNTIME_FILE_RE = /^cpp-docs-runtime-([0-9a-f]{12})\.js$/;
+/** Положить рантайм в хранилище под именем с хэшем (cpp-docs-runtime-<sha12>.js). Имя меняется
+ *  с каждой версией: оболочка, ещё ссылающаяся на старый файл, работает до перезапуска, а
+ *  новый блок ссылается на новый. Держим два последних файла. → { path, src, integrity, sha }. */
+function stageRuntime(context, runtimeJs, sha) {
+  const dir = storageDir(context);
+  fs.mkdirSync(dir, { recursive: true });
+  const name = 'cpp-docs-runtime-' + sha.slice(0, 12) + '.js';
+  const file = path.join(dir, name);
+  let same = false;
+  try { same = fs.readFileSync(file, 'utf8') === runtimeJs; } catch (e) {}
+  if (!same) { const tmp = file + '.' + process.pid + '.tmp'; fs.writeFileSync(tmp, runtimeJs, 'utf8'); fs.renameSync(tmp, file); }
+  try {
+    fs.readdirSync(dir).filter((n) => RUNTIME_FILE_RE.test(n) && n !== name)
+      .map((n) => ({ n, t: fs.statSync(path.join(dir, n)).mtimeMs })).sort((a, b) => b.t - a.t)
+      .slice(1).forEach((x) => { try { fs.unlinkSync(path.join(dir, x.n)); } catch (e) {} });
+  } catch (e) {}
+  const integrity = 'sha256-' + crypto.createHash('sha256').update(runtimeJs, 'utf8').digest('base64');
+  return { path: file, src: appFileUrl(file), integrity, sha };
+}
+/** SHA рантайма, на который сейчас ссылается оболочка ('' — окна нет или старый инлайн-вариант). */
+function injectedSha() {
+  for (const f of findWorkbenchFiles()) {
+    try { const s = injectedRuntimeSha(fs.readFileSync(f, 'utf8')); if (s) return s; } catch (e) {}
+  }
+  return '';
+}
+
 /** Ядро инъекции без UI: патчит все workbench.html. Возвращает {ok,done,denied,reason}. */
 function injectWindowFiles(context) {
   const nonce = makeNonce();
@@ -195,7 +129,10 @@ function injectWindowFiles(context) {
       return { ok: false, done: 0, denied: false, reason: 'bad-runtime' };
     }
   }
-  const block = buildWindowBlock(dataBody, runtimeJs, nonce);
+  let staged;
+  try { staged = stageRuntime(context, runtimeJs, crypto.createHash('sha256').update(runtimeJs, 'utf8').digest('hex')); }
+  catch (e) { log('рантайм окна в хранилище', e); return { ok: false, done: 0, denied: false, reason: 'read-runtime' }; }
+  const block = buildWindowBlock(dataBody, staged, nonce);
   let done = 0, denied = false;
   for (const f of files) {
     // Пишем только в настоящий workbench.html оболочки, не в случайный файл.
@@ -206,7 +143,9 @@ function injectWindowFiles(context) {
       // Бэкап держим равным оригиналу: файл ещё без нашего маркера — значит чистая оболочка.
       if (raw.indexOf(WB_START) === -1) { try { fs.copyFileSync(f, bak); } catch (e) {} }
       else if (!fs.existsSync(bak)) { try { fs.copyFileSync(f, bak); } catch (e) {} }
-      const html = armCspWithNonce(raw, nonce);
+      // Переподключение: сперва вернуть CSP из бэкапа (armCspWithNonce ещё и сам чистит старые nonce).
+      const base = raw.indexOf(WB_START) === -1 ? raw : restoreCspFromBackup(raw, bak);
+      const html = armCspWithNonce(base, nonce);
       const next = applyWindowInjection(html, block);
       if (next == null) continue;
       writeWorkbenchAtomic(f, next);
@@ -218,6 +157,19 @@ function injectWindowFiles(context) {
   }
   if (!done) log('инъекция окна не удалась: ' + (denied ? 'нет доступа на запись' : 'не найден </head>'));
   return { ok: done > 0, done: done, denied: denied, reason: done > 0 ? 'ok' : (denied ? 'denied' : 'no-head') };
+}
+
+/** После обновления расширения оболочка ссылается на рантайм прошлой версии (или на старый
+ *  инлайн-вариант). Окно было включено — тихо обновляем ссылку: новый рантайм заработает со
+ *  следующего запуска VS Code, текущий сеанс доживает на старом файле. */
+function ensureRuntimeCurrent(context) {
+  try {
+    if (!context.globalState.get(WINDOW_ON_KEY) || !windowInjected() || !runtimeAnchor) return false;
+    if (injectedSha() === runtimeAnchor) return false;
+    const r = injectWindowFiles(context);
+    log('окно: ссылка на рантайм обновлена под новую версию расширения — ' + (r.ok ? 'готово' : 'не удалось: ' + r.reason));
+    return r.ok;
+  } catch (e) { log('обновление рантайма окна', e); return false; }
 }
 
 /** Подключить плавающее окно: прямой патч оболочки, без стороннего загрузчика. */
@@ -250,14 +202,9 @@ async function disableWindow(context) {
   let done = 0, denied = false;
   for (const f of findWorkbenchFiles()) {
     try {
-      const html = fs.readFileSync(f, 'utf8');
-      if (html.indexOf(WB_START) === -1) continue;
       // Снимаем ТОЛЬКО свой блок (полное восстановление из бэкапа затёрло бы чужие вставки,
-      // например обои custom-bg). CSP-мету, если снимали при инъекции, возвращаем.
-      let next = stripWindowInjection(html);
-      next = restoreCspFromBackup(next, f + '.cppdocs-backup');
-      writeWorkbenchAtomic(f, next);
-      done++;
+      // например обои custom-bg). CSP-мету возвращаем из бэкапа.
+      if (unpatchFile(f)) done++;
     } catch (e) { if (e && (e.code === 'EACCES' || e.code === 'EPERM')) denied = true; log('отключение окна: не удалось записать ' + f, e); }
   }
   try { cleanupLeftovers(); } catch (e) {}
@@ -278,6 +225,15 @@ async function toggleWindow(context) {
   return enableWindow(context);
 }
 
+/** Мост окно → расширение (lib/bridge.js): без него «Запустить», «в редактор», копия прогресса молчат. */
+function bridgeLine() {
+  const b = require('./bridge').bridgeStatus();
+  if (!b.running) return 'мост не запущен';
+  if (!b.lastSeen) return 'мост ждёт на порту ' + b.port + ', окно ещё не выходило на связь (открой окно и подожди пару секунд)';
+  const s = Math.round((Date.now() - b.lastSeen) / 1000);
+  return 'есть — окно выходило на связь ' + (s < 5 ? 'только что' : s + ' с назад') + ', записей: ' + b.writes +
+    ', поток событий: ' + (b.streams ? 'подключён' : 'нет (окно опрашивает файлы)');
+}
 /** Отчёт о состоянии окна с кнопками-действиями. */
 async function windowHealth(context) {
   const script = runtimeScriptPath(context);
@@ -303,10 +259,13 @@ async function windowHealth(context) {
     'Файл данных окна: ' + dataInfo,
     'Папка документации: ' + (root ? root : 'НЕ найдена (см. cppDocs.path)'),
     'Временные хвосты (.cppdocs-tmp): ' + (leftovers ? leftovers + ' — уберутся при отключении/перезапуске' : 'нет'),
+    'Связь окна с расширением: ' + bridgeLine(),
+    'Ошибок в окне за сессию: ' + require('./rpc').windowErrorCount() + ' (подробности — «Документация C++: показать журнал»)',
   ];
   const actions = patched ? ['Отключить окно', 'Переподключить'] : ['Подключить окно'];
+  // Переводы строк показывает только модальный диалог (detail); в тосте семь пунктов слились бы в строку.
   const pick = await vscode.window.showInformationMessage(
-    'Плавающее окно — состояние:\n\n• ' + L.join('\n• '), { modal: false }, ...actions);
+    'Плавающее окно — состояние', { modal: true, detail: '• ' + L.join('\n• ') }, ...actions);
   if (pick === 'Подключить окно' || pick === 'Переподключить') {
     await enableWindow(context);
   } else if (pick === 'Отключить окно') {
@@ -316,8 +275,8 @@ async function windowHealth(context) {
 
 module.exports = {
   WINDOW_ON_KEY, WINDOW_SETUP_KEY, setRuntimeAnchor,
-  escapeScript, neutralizeCsp, armCspWithNonce, makeNonce, buildWindowBlock,
+  escapeScript, armCspWithNonce, makeNonce, buildWindowBlock,
   applyWindowInjection, stripWindowInjection, writeWorkbenchAtomic, restoreCspFromBackup,
-  findWorkbenchFiles, windowInjected, cleanupLeftovers, injectWindowFiles,
+  findWorkbenchFiles, windowInjected, cleanupLeftovers, injectWindowFiles, ensureRuntimeCurrent, stageRuntime, appFileUrl, injectedSha,
   enableWindow, disableWindow, toggleWindow, windowHealth,
 };

@@ -312,6 +312,67 @@ _Ввод: 1, 2, 3 → 4, 10, 0 → 5, 2, 8 → 0_
 4. Добавь квадратный корень (`std::sqrt` из `<cmath>`) — не забудь про отрицательные числа.
 5. Сложное: сделай, чтобы при делении на ноль программа не просто ругалась, а предлагала ввести другой делитель.
 
+
+## Попробуй сам
+
+Первая идея из списка выше — остаток от деления — сразу с проверкой на тестах. Операция читается одной строкой: `число знак число`.
+
+```challenge
+@id c7yus37
+@type run
+@hint Разбери операцию через `switch (op)` — по `case` на каждый знак, а неизвестный знак уйдёт в `default`.
+@hint `%` работает только с целыми: сначала проверь `a == std::floor(a)` и `b == std::floor(b)`, потом `static_cast<long long>(a) % static_cast<long long>(b)`.
+Прочитай `a op b`, где `op` — один из `+ - * / %`, и напечатай результат. Для `/` и `%` при делителе 0 печатай `ошибка`; `%` считается только для целых чисел (оба без дробной части), иначе тоже `ошибка`.
+---
+#include <cmath>
+#include <format>
+#include <iostream>
+
+int main() {
+    double a = 0, b = 0;
+    char op = '+';
+    std::cin >> a >> op >> b;
+    // твой код: + - * / как в калькуляторе, результат — std::format("{}", x);
+    // '%' — только если a == std::floor(a) и b == std::floor(b); деление на 0 → «ошибка»
+}
+---
+# вход => ожидаемый вывод
+2 + 3 => 5
+7 / 2 => 3.5
+7 % 3 => 1
+7.5 % 2 => ошибка
+1 / 0 => ошибка
+2 * -4 => -8
+---
+#include <cmath>
+#include <format>
+#include <iostream>
+
+int main() {
+    double a = 0, b = 0;
+    char op = '+';
+    std::cin >> a >> op >> b;
+    bool bad = false;
+    double x = 0;
+    switch (op) {
+        case '+': x = a + b; break;
+        case '-': x = a - b; break;
+        case '*': x = a * b; break;
+        case '/':
+            if (b == 0) bad = true;
+            else x = a / b;
+            break;
+        case '%':
+            if (b == 0 || a != std::floor(a) || b != std::floor(b)) bad = true;
+            else x = static_cast<double>(static_cast<long long>(a) % static_cast<long long>(b));
+            break;
+        default: bad = true;
+    }
+    if (bad) std::cout << "ошибка\n";
+    else std::cout << std::format("{}", x) << "\n";
+}
+```
+
 ---
 
 [← Все примеры](README.md) · [Список дел →](02-spisok-del.md) · [Начни отсюда](../00-НАЧНИ-ОТСЮДА.md)

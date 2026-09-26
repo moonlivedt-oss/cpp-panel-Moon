@@ -13,7 +13,7 @@ full-text search · table of contents and internal-link jumps · study progress 
 
 [![CI](https://github.com/moonlivedt-oss/cpp-panel-Moon/actions/workflows/ci.yml/badge.svg)](https://github.com/moonlivedt-oss/cpp-panel-Moon/actions/workflows/ci.yml)
 ![version](https://img.shields.io/badge/version-3.5.0-cba6f7)
-![vscode](https://img.shields.io/badge/VS%20Code-%5E1.75-007ACC?logo=visualstudiocode&logoColor=white)
+![vscode](https://img.shields.io/badge/VS%20Code-%5E1.85-007ACC?logo=visualstudiocode&logoColor=white)
 ![tests](https://img.shields.io/badge/tests-251%20ok-a6e3a1)
 ![deps](https://img.shields.io/badge/dependencies-0-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-green)

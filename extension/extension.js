@@ -9,6 +9,11 @@
 //   lib/run.js            «Напиши и запусти»: компиляция и прогон по тестам
 //   lib/actions.js        действия окна: «в редактор», «в заметки»; watch каналов
 //   lib/log.js            журнал (Output → «Документация C++»)
+//   lib/panel.js          то же окно во вкладке VS Code (webview) — без правки оболочки
+//   lib/wb-patch.js       правка workbench.html (чистые функции; их же зовёт хук удаления uninstall.js)
+//   lib/bridge.js         мост окно→расширение (HTTP 127.0.0.1) и поток событий
+//   lib/progress.js       резервные копии прогресса, экспорт/импорт
+//   lib/style.js          подсказки по стилю в .cpp
 //
 // Рантайм самого окна — cpp-docs-runtime.js (один файл: впечатывается в оболочку целиком).
 
@@ -26,13 +31,17 @@ const { WINDOW_ON_KEY, WINDOW_SETUP_KEY, findWorkbenchFiles, windowInjected, cle
 const run = require('./lib/run');
 const { resetCompilerCache } = run;
 const actions = require('./lib/actions');
-const { setupWindowChannels } = actions;
-const { writeEditorContext, registerEditorBridge } = require('./lib/editor-bridge');
+const { registerProgress } = require('./lib/progress');
+const { startBridge } = require('./lib/bridge');
+const { registerStyleHints } = require('./lib/style');
+const { openWindowPanel } = require('./lib/panel');
+const { dispatch } = require('./lib/rpc');
+const { writeEditorContext, registerEditorBridge, openDocTarget } = require('./lib/editor-bridge');
 
 // Якорь целостности рантайма: перед впечатыванием сверяем SHA-256 cpp-docs-runtime.js с этим
 // значением (подмена файла на диске не пройдёт). Ставит `npm run hash:runtime`; пусто — проверку
 // пропускаем. Доверенная точка тут сам extension.js.
-const RUNTIME_SHA256 = 'fae2f4608255b11addb632d3620b6e69a6432630c590cecb0cc5fa27fb2c2000'; /* HASH:runtime — ставит scripts/hash-runtime.js */
+const RUNTIME_SHA256 = '95fffb18b041f681fcb9972ad36de0091bb6ecacdd0dc223a7684332d1c6a4ca'; /* HASH:runtime — ставит scripts/hash-runtime.js */
 win.setRuntimeAnchor(RUNTIME_SHA256);
 
 function activate(context) {
@@ -62,10 +71,18 @@ function activate(context) {
     vscode.commands.registerCommand('cppDocs.disableWindow', () => disableWindow(context)),
     vscode.commands.registerCommand('cppDocs.toggleWindow', () => toggleWindow(context)),
     vscode.commands.registerCommand('cppDocs.windowHealth', () => windowHealth(context)),
-    vscode.commands.registerCommand('cppDocs.showLog', showLog)
+    vscode.commands.registerCommand('cppDocs.showLog', showLog),
+    // То же окно во вкладке VS Code — без правки оболочки (безопасный режим).
+    vscode.commands.registerCommand('cppDocs.openWindowTab', () => openWindowPanel(context, rpcFor(context)))
   );
-  if (logChannel()) context.subscriptions.push(logChannel());
-  try { cleanupLeftovers(context); } catch (e) { log('уборка хвостов', e); }
+  // Канал журнала создаётся лениво (при первой записи) — освобождаем его при выгрузке, когда бы он ни появился.
+  context.subscriptions.push({ dispose: () => { const c = logChannel(); if (c) c.dispose(); } });
+  try { startBridge(context, rpcFor(context)); } catch (e) { log('мост окна', e); }
+  try { actions.watchWindowEvents(context); } catch (e) { log('события окна', e); }
+  try { registerProgress(context); } catch (e) { log('резервная копия прогресса', e); }
+  try { registerStyleHints(context, (rel, hash) => openDocTarget(context, rel, hash)); } catch (e) { log('подсказки по стилю', e); }
+  try { cleanupLeftovers(); } catch (e) { log('уборка хвостов', e); }
+  try { win.ensureRuntimeCurrent(context); } catch (e) { log('обновление рантайма окна', e); }
 
   try {
   // Держим файл данных окна свежим при запуске (нужен окну и авто-инъектору).
@@ -105,9 +122,12 @@ function activate(context) {
       if (findDocsRoot() && findWorkbenchFiles().length && !windowInjected()) {
         setTimeout(() => {
           vscode.window.showInformationMessage(
-            'Документация C++: можно открыть плавающее окно поверх редактора. Это разово изменит оболочку VS Code (появится баннер «…corrupt», его можно закрыть). Включить?',
-            'Включить окно', 'Позже'
-          ).then((pick) => { if (pick === 'Включить окно') enableWindow(context); });
+            'Документация C++: можно открыть плавающее окно поверх редактора. Это разово изменит оболочку VS Code (появится баннер «…corrupt», его можно закрыть). Или откройте то же окно во вкладке — без правки VS Code.',
+            'Включить окно', 'Во вкладке', 'Позже'
+          ).then((pick) => {
+            if (pick === 'Включить окно') enableWindow(context);
+            else if (pick === 'Во вкладке') openWindowPanel(context, rpcFor(context));
+          });
         }, 3500);
       }
     }
@@ -137,34 +157,41 @@ function activate(context) {
       if (aff('cppDocs.compiler')) resetCompilerCache();                 // перепроверить компилятор
       if (aff('cppDocs.localRun') || aff('cppDocs.compiler')) {
         try { writeDocsData(context); } catch (e2) {}                     // окно узнает про доступность «Запустить»
-        try { setupWindowChannels(context); } catch (e2) {}
       }
     }));
   }
-  try { setupWindowChannels(context); } catch (e) {}   // запросы окна: «Запустить», «в редактор», «в заметки»
   } catch (e) {
     // Сбой активации не должен ронять хост расширений и другие расширения — гасим и логируем.
     log('сбой активации расширения', e);
   }
+  // API для интеграционных тестов в настоящем VS Code (test/vscode/): состояние моста и окна,
+  // ручная инъекция в тестовую копию VS Code. Пользователю не видно — это возвращаемое значение activate.
+  return {
+    _e2e: {
+      status: () => ({ bridge: require('./lib/bridge').bridgeStatus(), errors: require('./lib/rpc').windowErrorCount(),
+        injectedSha: win.injectedSha(), anchor: RUNTIME_SHA256, storage: storage.storageDir(context) }),
+      inject: () => injectWindowFiles(context),
+      disable: () => disableWindow(context),
+    },
+  };
 }
+
+/** Обработчик запросов окна для моста и вкладки: (method, body, opts) → Promise<ответ>. */
+function rpcFor(context) { return (method, body, opts) => dispatch(context, method, body, opts); }
 
 function deactivate() {}
 
 module.exports = {
   activate, deactivate, buildDocsData, findDocsRoot,
   // чистые хелперы инъекции — покрыты test/inject.js
-  escapeScript: win.escapeScript, safeJsonForScript, neutralizeCsp: win.neutralizeCsp,
+  escapeScript: win.escapeScript, safeJsonForScript,
   armCspWithNonce: win.armCspWithNonce, makeNonce: win.makeNonce,
   buildWindowBlock: win.buildWindowBlock, applyWindowInjection: win.applyWindowInjection,
   stripWindowInjection: win.stripWindowInjection,
   writeWorkbenchAtomic: win.writeWorkbenchAtomic, restoreCspFromBackup: win.restoreCspFromBackup,
-  // «напиши и запусти» — для теста end-to-end компиляции/прогона
-  _run: { runUserCode: run.runUserCode, processRunReq: run.processRunReq,
-    runReqFilePath: storage.runReqFilePath, runResFilePath: storage.runResFilePath,
-    resolveCompilerAsync: run.resolveCompilerAsync, normRunOut: run.normRunOut,
-    writeEditorContext, editorFilePath: storage.editorFilePath },
-  // действия окна: блокнот «в заметки»
-  _actions: { formatNoteEntry: actions.formatNoteEntry, insertNoteEntry: actions.insertNoteEntry,
-    processActionReq: actions.processActionReq,
-    actionFilePath: storage.actionFilePath, actionResFilePath: storage.actionResFilePath },
+  // «напиши и запусти» и действия окна — для тестов
+  _run: { runUserCode: run.runUserCode, handleRun: run.handleRun, resolveCompilerAsync: run.resolveCompilerAsync,
+    normRunOut: run.normRunOut, writeEditorContext, editorFilePath: storage.editorFilePath },
+  _actions: { formatNoteEntry: actions.formatNoteEntry, insertNoteEntry: actions.insertNoteEntry, handleAction: actions.handleAction },
+  _rpc: { dispatch },
 };

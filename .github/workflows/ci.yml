@@ -7,31 +7,95 @@ on:
     branches: [main]
 
 jobs:
-  # Проверка модулей, смоук-тест и целостность ссылок. Зависимостей нет (npm ci не нужен) —
-  # node --check ловит синтаксис в каждом файле, смоук ловит рантайм после активации
-  # расширения в заглушке vscode, check-links ловит битые внутренние ссылки в docs/.
-  # Всё прогоняется одной командой npm run check.
+  # Всё, что проверяет `npm run check`: сборка рантайма из частей и якорь SHA-256, типы (tsc по
+  # JSDoc), тесты node:test (смоук, инъекция, рантайм, мост, вкладка, прогресс, стиль, fuzz, загрузчик),
+  # ссылки, согласованность, @id и бюджет производительности. На трёх ОС: пути file:///, поиск
+  # workbench.html, хук удаления и закрепление окна устроены на них по-разному.
   check:
-    runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        node: [18, 20]
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: [22]
+        include:
+          - os: ubuntu-latest
+            node: 24
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Node ${{ matrix.node }}
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-      - name: Синтаксис модулей + смоук + ссылки
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Проверки (npm run check)
         run: npm run check
+      - name: Линт
+        if: matrix.os == 'ubuntu-latest' && matrix.node == 22
+        run: npm run lint
 
-  # Компиляция примеров кода из docs/. Самодостаточные блоки C++ (в блоке есть #include и
-  # int main) собираются синтаксически (-fsyntax-only, без .exe) — ловит примеры, которые
-  # перестали собираться. Метка <!-- docs:no-compile --> исключает намеренно-ошибочные блоки.
-  #
-  # Раннер — Windows + MSYS2 UCRT64, тот же тулчейн, что у пользователя: примеры включают
-  # <windows.h> (SetConsoleCP для русской консоли), которого на Linux нет. Node ставим из msys2,
-  # чтобы node и g++ были в одном окружении, а шаги идут в шелле msys2.
+  # Покрытие кода хоста расширения тестами (встроенное в node:test).
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Покрытие
+        run: npm run test:coverage | tee coverage.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.txt
+
+  # Интеграционные тесты в настоящем VS Code (@vscode/test-electron): скачанный stable, фазы
+  # basic → inject → window (окно впечатывается в ЭТУ копию VS Code и должно выйти на мост).
+  vscode:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    # macOS: правка ресурсов внутри .app может задеть подпись — фаза окна там «мягкая».
+    continue-on-error: ${{ matrix.os == 'macos-latest' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: VS Code (Linux, виртуальный экран)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run test:vscode -- --window --download
+      - name: VS Code
+        if: runner.os != 'Linux'
+        run: npm run test:vscode -- --window --download
+
+  # Визуальная регрессия окна (Playwright): эталоны снимков коммитятся для Windows.
+  visual:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npx playwright install chromium
+      - name: Снимки окна
+        run: npm run test:visual
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: visual-diff
+          path: test-results/
+
+  # Компиляция примеров кода из docs/. Раннер — Windows + MSYS2 UCRT64, тот же тулчейн, что у
+  # пользователя: примеры включают <windows.h> (SetConsoleCP для русской консоли). Node — из msys2.
   docs-code:
     runs-on: windows-latest
     defaults:
@@ -49,31 +113,24 @@ jobs:
         run: g++ --version && node --version
       - name: Компиляция примеров кода
         run: npm run check:code
+      # «предскажи вывод» и шаги «По шагам» сверяются с настоящим выводом, эталоны test/solutions/
+      # проходят тесты «напиши и запусти».
+      - name: Ответы интерактивных заданий
+        run: npm run check:challenges
+      - name: Решения задачника
+        run: npm run check:zadachnik
+      # «Напиши и запусти» по-настоящему: компиляция, очередь, кэш сборки, зависшая программа.
+      - name: Запуск кода (node:test)
+        run: node --test test/run.test.js
 
-  # Линт: eslint — dev-зависимость (рантайм по-прежнему ноль зависимостей). Ставим и гоняем.
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Node 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: Установить eslint
-        run: npm install --no-audit --no-fund
-      - name: ESLint
-        run: npm run lint
-
-  # Упаковщик .vsix — свой ZIP-writer поверх zlib. Отдельным джобом проверяем, что пакет
-  # собирается и в dist/ появляется непустой .vsix (иначе установка бы сломалась молча).
+  # Упаковщик .vsix — свой ZIP-writer поверх zlib: пакет собирается, в dist/ — непустой .vsix.
   package:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Node 20
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - name: Собрать пакет
         run: node scripts/package-extension.js
       - name: Проверить, что .vsix собран

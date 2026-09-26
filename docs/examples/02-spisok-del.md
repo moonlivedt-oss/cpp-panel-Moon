@@ -244,6 +244,86 @@ _Добавили два дела, отметили одно, убрали вы�
 4. Покажи, сколько дел добавлено сегодня: заведи поле с датой (строкой) и считай по нему.
 5. Сложное: добавь редактирование названия. Подумай, как быть, если пользователь ввёл пустую строку — оставить старое или считать это отменой?
 
+
+## Попробуй сам
+
+Сначала — как `printTasks` считает выполненные дела. Жми «Шаг ▶» и следи за счётчиком:
+
+```steps
+@id cdy6xss
+# Сколько дел выполнено
+std::vector<bool> done = {true, false, true};
+int doneCount = 0;
+for (bool d : done)
+    if (d)
+        ++doneCount;
+std::cout << doneCount << " из " << done.size();
+---
+1 | done=[true, false, true] | Три дела: первое и третье уже отмечены.
+2 | doneCount=0 | Счётчик начинаем с нуля.
+3 | d=true | Берём первое дело.
+4 | | `d` истинно — заходим в тело `if`.
+5 | doneCount=1 | Выполненных стало одно.
+3 | d=false | Второе дело.
+4 | | `d` ложно — `++doneCount` пропускаем.
+3 | d=true | Третье дело.
+?5 | doneCount=2 | Снова истина — счётчик растёт.
+6 | | Дела кончились, печатаем итог. | 2 из 3
+```
+
+Теперь первая идея из списка — приоритеты:
+
+```challenge
+@id c94104j
+@type run
+@hint Лямбда сортировки отвечает на один вопрос: «должен ли `a` стоять раньше `b`?»
+@hint Больший приоритет — раньше: `return a.priority > b.priority;`. Порядок равных `stable_sort` сохранит сам.
+Вход — до конца ввода пары `приоритет название` (название одним словом). Напечатай названия через пробел от самого важного (больший приоритет) к менее важному; при равном приоритете сохраняй порядок ввода — понадобится `std::stable_sort` с лямбдой.
+---
+#include <algorithm>
+#include <iostream>
+#include <string>
+#include <vector>
+
+struct Task {
+    int priority = 0;
+    std::string title;
+};
+
+int main() {
+    std::vector<Task> tasks;
+    Task t;
+    while (std::cin >> t.priority >> t.title) tasks.push_back(t);
+    // твой код: std::stable_sort(tasks.begin(), tasks.end(), [](const Task &a, const Task &b) { ... });
+    for (const auto &x : tasks) std::cout << x.title << " ";
+}
+---
+# вход => ожидаемый вывод
+1 купить 3 сдать 2 позвонить => сдать позвонить купить
+5 a 5 b 1 c => a b c
+2 x => x
+---
+#include <algorithm>
+#include <iostream>
+#include <string>
+#include <vector>
+
+struct Task {
+    int priority = 0;
+    std::string title;
+};
+
+int main() {
+    std::vector<Task> tasks;
+    Task t;
+    while (std::cin >> t.priority >> t.title) tasks.push_back(t);
+    std::stable_sort(tasks.begin(), tasks.end(), [](const Task &a, const Task &b) {
+        return a.priority > b.priority;
+    });
+    for (const auto &x : tasks) std::cout << x.title << " ";
+}
+```
+
 ---
 
 [← Все примеры](README.md) · [← Калькулятор](01-kalkulyator.md) · [Анализ текста →](03-analiz-teksta.md) · [Начни отсюда](../00-НАЧНИ-ОТСЮДА.md)

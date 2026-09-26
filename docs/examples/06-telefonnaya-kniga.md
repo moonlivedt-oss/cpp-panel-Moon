@@ -276,6 +276,84 @@ _Добавили два контакта, показали все, нашли �
 4. Добавь пункт «сколько контактов начинается на букву» — пригодится `name.front()`.
 5. Сложное: замени `map` на `vector<Contact>` и сравни, что стало неудобнее. Это лучший способ понять, зачем нужны словари.
 
+
+## Попробуй сам
+
+Сначала — почему в книге не бывает двух одинаковых имён: `book[name] = phone` находит или создаёт запись.
+
+```steps
+@id c14q39zz
+# Повторное имя перезаписывает номер
+std::map<std::string, std::string> book;
+book["Аня"] = "111";
+book["Боря"] = "222";
+book["Аня"] = "333";
+std::cout << book.size() << " " << book["Аня"];
+---
+1 | size=0 | Пустой словарь.
+2 | Аня=111, size=1 | Ключа «Аня» не было — `[]` создал запись.
+3 | Боря=222, size=2 | Второй ключ — вторая запись.
+?4 | Аня=333, size=2 | Ключ уже есть — `[]` нашёл его, присваивание перезаписало номер. Размер не вырос.
+5 | | | 2 333
+```
+
+Теперь вторая идея из списка — поиск по номеру:
+
+```challenge
+@id c15vxnw6
+@type run
+@hint Обходи словарь `for (const auto &[name, phone] : book)` и сравнивай `phone` с искомым номером.
+@hint `map` идёт по алфавиту, поэтому первое совпадение — нужный ответ: напечатай и `return 0;`. После цикла — `нет`.
+Вход: `n`, затем n пар `имя телефон` (имя одним словом), затем номер для поиска. Словарь устроен «имя → телефон», поэтому по номеру ищем циклом. Напечатай имя владельца (если их несколько — первое по алфавиту, в таком порядке и идёт `map`) или `нет`.
+---
+#include <iostream>
+#include <map>
+#include <string>
+
+int main() {
+    int n = 0;
+    std::cin >> n;
+    std::map<std::string, std::string> book;
+    for (int i = 0; i < n; ++i) {
+        std::string name, phone;
+        std::cin >> name >> phone;
+        book[name] = phone;
+    }
+    std::string wanted;
+    std::cin >> wanted;
+    // твой код: for (const auto &[name, phone] : book) ...
+}
+---
+# вход => ожидаемый вывод
+3 anna 111 boris 222 vera 333 222 => boris
+2 a 1 b 2 5 => нет
+3 zoe 7 adam 7 kim 8 7 => adam
+---
+#include <iostream>
+#include <map>
+#include <string>
+
+int main() {
+    int n = 0;
+    std::cin >> n;
+    std::map<std::string, std::string> book;
+    for (int i = 0; i < n; ++i) {
+        std::string name, phone;
+        std::cin >> name >> phone;
+        book[name] = phone;
+    }
+    std::string wanted;
+    std::cin >> wanted;
+    for (const auto &[name, phone] : book) {
+        if (phone == wanted) {
+            std::cout << name << "\n";
+            return 0;
+        }
+    }
+    std::cout << "нет\n";
+}
+```
+
 ---
 
 [← Все примеры](README.md) · [← Расходы из файла (CSV)](05-raskhody-csv.md) · [Крестики-нолики →](07-krestiki-noliki.md) · [Начни отсюда](../00-НАЧНИ-ОТСЮДА.md)

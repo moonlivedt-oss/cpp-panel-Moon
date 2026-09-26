@@ -180,6 +180,105 @@ on               1
 4. Посчитай среднюю длину слова — сумма длин делить на количество (не забудь `static_cast<double>` с обеих сторон).
 5. Сложное: читай текст не с клавиатуры, а из файла — понадобится `std::ifstream` и проверка `is_open()` ([раздел 21](../ref/08-struct-fayly.md#21-файлы)).
 
+
+## Попробуй сам
+
+Сначала — как `normalize` чистит слово: знаки препинания выбрасывает, буквы делает строчными.
+
+```steps
+@id c54ru9x
+# normalize("Hi!")
+std::string word = "Hi!";
+std::string result;
+for (char c : word) {
+    if (std::ispunct(static_cast<unsigned char>(c)))
+        continue;
+    result += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+}
+std::cout << result;
+---
+1 | word="Hi!" | Слово прямо из текста — со знаком препинания.
+2 | result="" | Сюда соберём чистое слово.
+3 | c='H' | Первый символ.
+4 | | `H` — не знак препинания, идём дальше.
+6 | result="h" | `tolower` делает букву строчной и дописывает её.
+3 | c='i' | Второй символ.
+4 | | Тоже не знак препинания.
+?6 | result="hi" | Строчная `i` — без изменений.
+3 | c='!' | Третий символ.
+4 | | `!` — знак препинания.
+5 | | `continue`: остаток тела пропускаем, `result` не меняется.
+8 | | Символы кончились — печатаем. | hi
+```
+
+Теперь четвёртая идея из списка — средняя длина слова:
+
+```challenge
+@id c6yq744
+@type run
+@hint `while (std::cin >> w)` читает слово за словом до конца ввода; пустое после `normalize` — `continue`.
+@hint Средняя длина — `static_cast<double>(totalLen) / count`, иначе деление целых съест дробь. И не дели на ноль.
+Прочитай текст до конца ввода по словам (`>>`), очисти каждое как `normalize` (без знаков препинания, строчными). Слова, от которых ничего не осталось, пропускай. Напечатай число слов и среднюю длину с двумя знаками после запятой.
+---
+#include <cctype>
+#include <format>
+#include <iostream>
+#include <string>
+
+std::string normalize(const std::string &word) {
+    std::string result;
+    for (char c : word) {
+        unsigned char uc = static_cast<unsigned char>(c);
+        if (std::ispunct(uc)) continue;
+        result += static_cast<char>(std::tolower(uc));
+    }
+    return result;
+}
+
+int main() {
+    std::string w;
+    int count = 0;
+    int totalLen = 0;
+    // твой код: читаем слова, чистим, пустые пропускаем, копим count и totalLen
+    // вывод: std::format("{} {:.2f}", count, среднее)  — не забудь static_cast<double>
+}
+---
+# вход => ожидаемый вывод
+Hello, world! => 2 5.00
+a bb ccc => 3 2.00
+Hi ... there => 2 3.50
+x => 1 1.00
+---
+#include <cctype>
+#include <format>
+#include <iostream>
+#include <string>
+
+std::string normalize(const std::string &word) {
+    std::string result;
+    for (char c : word) {
+        unsigned char uc = static_cast<unsigned char>(c);
+        if (std::ispunct(uc)) continue;
+        result += static_cast<char>(std::tolower(uc));
+    }
+    return result;
+}
+
+int main() {
+    std::string w;
+    int count = 0;
+    int totalLen = 0;
+    while (std::cin >> w) {
+        std::string clean = normalize(w);
+        if (clean.empty()) continue;
+        ++count;
+        totalLen += static_cast<int>(clean.size());
+    }
+    double average = count > 0 ? static_cast<double>(totalLen) / count : 0.0;
+    std::cout << std::format("{} {:.2f}", count, average) << "\n";
+}
+```
+
 ---
 
 [← Все примеры](README.md) · [← Список дел](02-spisok-del.md) · [Угадай число →](04-ugaday-chislo.md) · [Начни отсюда](../00-НАЧНИ-ОТСЮДА.md)

@@ -17,13 +17,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node 20
+      - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
+          cache: npm
 
-      # Полная проверка перед выпуском: синтаксис модулей + смоук. Зависимостей нет.
+      # Полная проверка перед выпуском (dev-зависимости: eslint, typescript — для tsc в check).
       # Релиз со сломанной сборкой хуже отсутствия релиза.
+      - run: npm ci --no-audit --no-fund
       - name: Проверки
         run: npm run check
 

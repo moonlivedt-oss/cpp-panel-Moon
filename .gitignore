@@ -29,3 +29,10 @@ build/
 # в репозитории им не место): ремонт вставки в workbench и его бэкап.
 fix-window.js
 workbench.backup.html
+
+# Кэш Python (scripts/*.py)
+__pycache__/
+
+# Playwright: результаты визуальных тестов (эталоны — в test/visual/__screenshots__/)
+test-results/
+playwright-report/

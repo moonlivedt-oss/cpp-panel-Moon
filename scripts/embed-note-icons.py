@@ -22,7 +22,11 @@ from PIL import Image
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(HERE, "note-icons")
-RT = os.path.join(HERE, "..", "extension", "cpp-docs-runtime.js")
+# Рантайм собирается из частей extension/runtime/*.js (scripts/build-runtime.js) — правим ту часть,
+# где лежат иконки заметок; собранный файл пересобирается командой npm run build:runtime.
+_PARTS = os.path.join(HERE, "..", "extension", "runtime")
+RT = next(os.path.join(_PARTS, f) for f in sorted(os.listdir(_PARTS))
+          if f.endswith(".js") and "function calloutColorByLabel" in open(os.path.join(_PARTS, f), encoding="utf-8").read())
 NAMES = ["book", "play", "bulb", "attention", "star", "magnifier"]
 SIZE = 64
 

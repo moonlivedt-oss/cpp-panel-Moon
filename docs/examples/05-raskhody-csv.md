@@ -241,6 +241,93 @@ _Первый запуск: файла не было, программа соз�
 4. Сделай, чтобы программа спрашивала имя файла, а не брала жёстко `expenses.csv`.
 5. Сложное: поддержи разделитель-запятую и точку с запятой одновременно — и подумай, что делать с числом `1,50`.
 
+
+## Попробуй сам
+
+Сначала — как `parseLine` режет строку CSV на части через `getline` с разделителем:
+
+```steps
+@id c1c9a0p8
+# parseLine("2025-09-01;кафе;350.5")
+std::istringstream stream("2025-09-01;кафе;350.5");
+std::string date, category, amountText;
+std::getline(stream, date, ';');
+std::getline(stream, category, ';');
+std::getline(stream, amountText);
+double amount = std::stod(amountText);
+std::cout << category << " " << amount;
+---
+1 | | Поток читает строку так же, как файл.
+2 | date="", category="", amountText="" | Три пустые строки под части записи.
+3 | date="2025-09-01" | `getline` с `';'` читает до первой точки с запятой, а её саму выбрасывает.
+?4 | category="кафе" | Следующий кусок — до второй `;`.
+5 | amountText="350.5" | Без третьего аргумента — до конца строки.
+6 | amount=350.5 | `stod`: строка → число. На «абв» бросил бы исключение — поэтому в программе он в `try`.
+7 | | | кафе 350.5
+```
+
+Теперь вторая идея — самая дорогая покупка:
+
+```challenge
+@id ccvdevn
+@type run
+@hint `std::getline(stream, category, ';')` читает до разделителя — три вызова подряд дают три поля записи.
+@hint `std::stod` бросает исключение на «abc»: оберни его в `try { ... } catch (const std::exception &) {}`. «Первая при равенстве» — сравнивай строго `>`.
+Вход — записи `дата;категория;сумма` через пробел (внутри записи пробелов нет). Разбери каждую как `parseLine`; записи с неверной суммой пропускай. Напечатай категорию и сумму самой дорогой покупки (при равенстве — первой).
+---
+#include <format>
+#include <iostream>
+#include <sstream>
+#include <string>
+
+int main() {
+    std::string record;
+    std::string bestCategory;
+    double best = -1;
+    while (std::cin >> record) {
+        std::istringstream stream(record);
+        std::string date, category, amountText;
+        // твой код: getline по ';' три раза, stod в try, обновить максимум
+    }
+    std::cout << std::format("{} {}", bestCategory, best);
+}
+---
+# вход => ожидаемый вывод
+2025-09-01;cafe;350 2025-09-02;taxi;420 2025-09-02;book;99.5 => taxi 420
+2025-01-01;x;1.5 => x 1.5
+d;a;10 d;b;10 => a 10
+d;a;abc d;b;5 => b 5
+---
+#include <format>
+#include <iostream>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+
+int main() {
+    std::string record;
+    std::string bestCategory;
+    double best = -1;
+    while (std::cin >> record) {
+        std::istringstream stream(record);
+        std::string date, category, amountText;
+        std::getline(stream, date, ';');
+        std::getline(stream, category, ';');
+        std::getline(stream, amountText);
+        try {
+            double amount = std::stod(amountText);
+            if (amount > best) {
+                best = amount;
+                bestCategory = category;
+            }
+        } catch (const std::exception &) {
+            // неверная сумма — запись пропускаем
+        }
+    }
+    std::cout << std::format("{} {}", bestCategory, best);
+}
+```
+
 ---
 
 [← Все примеры](README.md) · [← Угадай число](04-ugaday-chislo.md) · [Телефонная книга →](06-telefonnaya-kniga.md) · [Начни отсюда](../00-НАЧНИ-ОТСЮДА.md)

@@ -220,6 +220,92 @@ _Ввод: `abc` → `my pass 12A` → `mypassword1` → `MyPass12`_
 4. Запрети три одинаковых символа подряд (`aaa`). Понадобится в цикле помнить предыдущий символ и счётчик повторов.
 5. Сложное: вынеси каждое правило в `struct Rule { std::string имя; bool (*проверка)(const std::string&); }` и сложи их в `std::vector<Rule>`. Тогда новое правило добавляется одной строкой, а `check` просто идёт по списку — см. [функции](../ref/04-funkcii.md) и [строки](../ref/05-stroki.md).
 
+
+## Попробуй сам
+
+Сначала — как `check` за один проход замечает цифру, заглавную и строчную букву:
+
+```steps
+@id cg9wher
+# Что есть в пароле "aB3"
+std::string password = "aB3";
+bool digit = false, upper = false, lower = false;
+for (char c : password) {
+    if (c >= '0' && c <= '9') digit = true;
+    else if (c >= 'A' && c <= 'Z') upper = true;
+    else if (c >= 'a' && c <= 'z') lower = true;
+}
+std::cout << digit << upper << lower;
+---
+1 | password="aB3" | Проверяем короткий пароль.
+2 | digit=false, upper=false, lower=false | Флаги: пока ничего не встретили.
+3 | c='a' | Первый символ.
+6 | lower=true | Не цифра и не заглавная — строчная.
+3 | c='B' | Второй символ.
+?5 | upper=true | Заглавная латинская буква.
+3 | c='3' | Третий символ.
+4 | digit=true | Цифра.
+8 | | `bool` печатается как `1` или `0`. | 111
+```
+
+Теперь четвёртая идея — три одинаковых символа подряд, вместе с основными правилами:
+
+```challenge
+@id c15mqgm4
+@type run
+@hint Заведи три флага (`hasDigit`, `hasUpper`, `hasLower`) и проверяй символ через `std::isdigit` / `std::isupper` / `std::islower` — с `static_cast<unsigned char>`.
+@hint Для «трёх подряд» храни предыдущий символ и длину текущей серии: совпал — `++run`, иначе `run = 1`.
+Проверь пароль: длина не меньше 8, есть цифра, есть заглавная и строчная латинская буква, нет трёх одинаковых символов подряд. Напечатай `ok` или через пробел нарушения в таком порядке: `short digit upper lower repeat`.
+---
+#include <iostream>
+#include <string>
+
+int main() {
+    std::string p;
+    std::cin >> p;
+    // твой код: флаги digit/upper/lower; для repeat — помни предыдущий символ и длину серии
+}
+---
+# вход => ожидаемый вывод
+Abcdefg1 => ok
+abc => short digit upper
+AAAbbb111 => repeat
+Password => digit
+aaaa => short digit upper repeat
+---
+#include <cctype>
+#include <iostream>
+#include <string>
+
+int main() {
+    std::string p;
+    std::cin >> p;
+    bool hasDigit = false, hasUpper = false, hasLower = false, repeat = false;
+    int run = 0;
+    char prev = '\0';
+    for (char c : p) {
+        unsigned char u = static_cast<unsigned char>(c);
+        if (std::isdigit(u)) hasDigit = true;
+        if (std::isupper(u)) hasUpper = true;
+        if (std::islower(u)) hasLower = true;
+        run = (c == prev) ? run + 1 : 1;
+        prev = c;
+        if (run >= 3) repeat = true;
+    }
+    std::string out;
+    auto add = [&out](const std::string &word) {
+        if (!out.empty()) out += ' ';
+        out += word;
+    };
+    if (p.size() < 8) add("short");
+    if (!hasDigit) add("digit");
+    if (!hasUpper) add("upper");
+    if (!hasLower) add("lower");
+    if (repeat) add("repeat");
+    std::cout << (out.empty() ? "ok" : out) << "\n";
+}
+```
+
 ---
 
 [← Все примеры](README.md) · [← Журнал оценок](08-zhurnal-ocenok.md) · [Начни отсюда](../00-НАЧНИ-ОТСЮДА.md)

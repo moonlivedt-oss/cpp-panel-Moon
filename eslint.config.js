@@ -9,13 +9,14 @@ var NODE_GLOBALS = {
   require: "readonly", module: "writable", exports: "writable", process: "readonly",
   __dirname: "readonly", __filename: "readonly", console: "readonly", Buffer: "readonly",
   setTimeout: "readonly", clearTimeout: "readonly", setInterval: "readonly", clearInterval: "readonly",
+  setImmediate: "readonly", clearImmediate: "readonly", URL: "readonly",
 };
 
 var BROWSER_GLOBALS = {
   window: "readonly", document: "readonly", localStorage: "readonly", navigator: "readonly",
   setTimeout: "readonly", clearTimeout: "readonly", setInterval: "readonly", clearInterval: "readonly",
   console: "readonly", MutationObserver: "readonly", getComputedStyle: "readonly",
-  requestAnimationFrame: "readonly", XMLHttpRequest: "readonly", atob: "readonly", NodeFilter: "readonly",
+  requestAnimationFrame: "readonly", XMLHttpRequest: "readonly", fetch: "readonly", location: "readonly", atob: "readonly", NodeFilter: "readonly", EventSource: "readonly", Blob: "readonly", Event: "readonly", acquireVsCodeApi: "readonly",
   // В оболочке VS Code (electron-browser) доступен Node require — рантайм читает файлы напрямую.
   require: "readonly",
 };
@@ -31,9 +32,10 @@ var COMMON_RULES = {
 function merge(a, b) { var o = {}; for (var k in a) o[k] = a[k]; for (var j in b) o[j] = b[j]; return o; }
 
 module.exports = [
-  { ignores: ["node_modules/**", "dist/**", "**/.ruff_cache/**", "**/*.min.js"] },
+  // Части рантайма (extension/runtime/) — куски одной функции-обёртки, по отдельности не JS-модули; линтуется собранный файл.
+  { ignores: ["node_modules/**", "dist/**", "**/.ruff_cache/**", "**/*.min.js", "extension/runtime/**"] },
   {
-    files: ["extension/extension.js", "extension/lib/**/*.js", "scripts/**/*.js", "test/**/*.js", "eslint.config.js"],
+    files: ["extension/extension.js", "extension/uninstall.js", "extension/lib/**/*.js", "scripts/**/*.js", "test/**/*.js", "eslint.config.js"],
     languageOptions: { ecmaVersion: 2021, sourceType: "commonjs", globals: NODE_GLOBALS },
     rules: COMMON_RULES,
   },
@@ -46,6 +48,17 @@ module.exports = [
   {
     files: ["extension/cpp-docs-runtime.js"],
     languageOptions: { ecmaVersion: 2021, sourceType: "script", globals: BROWSER_GLOBALS },
-    rules: COMMON_RULES,
+    // Разметка в DOM — только через setHTML (Trusted Types + чистка): прямые HTML-приёмники,
+    // eval и new Function в окне, которое живёт в привилегированной оболочке, запрещены.
+    rules: merge(COMMON_RULES, {
+      "no-restricted-syntax": ["error",
+        { selector: "AssignmentExpression[left.property.name=/^(innerHTML|outerHTML)$/]", message: "Разметку вставляй через setHTML(узел, html)." },
+        { selector: "CallExpression[callee.property.name='insertAdjacentHTML']", message: "Разметку вставляй через setHTML(узел, html)." },
+        { selector: "CallExpression[callee.property.name='write'][callee.object.name='document']", message: "document.write запрещён." },
+        { selector: "CallExpression[callee.name='eval']", message: "eval в окне запрещён." },
+        { selector: "NewExpression[callee.name='Function']", message: "new Function в окне запрещён." },
+      ],
+      "no-implied-eval": "error",
+    }),
   },
 ];

@@ -267,7 +267,7 @@ function preflight(pkg) {
   });
 
   // 3. Синтаксис JS (node --check) — не пакуем заведомо сломанный код
-  ["extension.js", "cpp-docs-runtime.js"].concat(libFiles()).forEach(function (name) {
+  ["extension.js", "cpp-docs-runtime.js", "uninstall.js"].concat(libFiles()).forEach(function (name) {
     var full = path.join(EXT, name);
     if (!fs.existsSync(full)) return;
     try {
@@ -348,14 +348,25 @@ function bundledDocsFiles() {
 }
 
 /**
- * Убрать из задачника блоки «Полное решение с разбором …» (свёрнутые <details> с готовым кодом).
- * Подсказки (в т.ч. «Подсказка посильнее» и нумерованные блоки в «# Подсказки») НЕ трогаем.
+ * Убрать из задачника решения и ответы: раздел внизу страницы («# Решения с разбором» / «# Ответы с
+ * разбором») целиком — от заголовка до метки <!-- docs:solutions:end -->, — и на всякий случай любые
+ * отдельные блоки «Полное решение …». Подсказки у задач НЕ трогаем.
  * Используется для варианта .vsix «без решений» (флаг --no-solutions) — исходные docs остаются как есть.
  */
 function stripSolutions(md) {
-  return String(md)
+  return String(md).replace(/\r\n/g, "\n")
+    .replace(/^# (?:Решения|Ответы) с разбором\n[\s\S]*?<!-- docs:solutions:end -->[ \t]*\n?/gm, "")
+    .replace(/^> [^\n]*\]\(#(?:решения|ответы)-с-разбором\)[^\n]*\n?/gm, "")   // ссылки «внизу страницы» ведут в пустоту
     .replace(/[ \t]*<details>\s*<summary>\s*Полное решение[\s\S]*?<\/details>[ \t]*\n?/g, "")
     .replace(/\n{3,}/g, "\n\n");
+}
+
+/** Страницы знакомства: walkthrough/*.md (пути относительно extension/). */
+function walkthroughFiles() {
+  var dir = path.join(EXT, "walkthrough");
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir).filter(function (n) { return /\.md$/i.test(n); }).sort()
+    .map(function (n) { return "walkthrough/" + n; });
 }
 
 /** Модули хоста расширения: lib/*.js (пути относительно extension/, прямые слэши). */
@@ -388,7 +399,8 @@ function main() {
       }
     });
   // Модули расширения (extension/lib/*.js) — extension.js подключает их через require.
-  libFiles().forEach(function (rel) {
+  // Плюс страницы пошагового знакомства (extension/walkthrough/*.md, contributes.walkthroughs).
+  libFiles().concat(walkthroughFiles()).forEach(function (rel) {
     entries.push({ name: "extension/" + rel, data: fs.readFileSync(path.join(EXT, rel)) });
   });
 
@@ -451,6 +463,10 @@ function main() {
     fs.rmSync(path.join(dest, "lib"), { recursive: true, force: true });
     libFiles().forEach(function (rel) {
       fs.mkdirSync(path.join(dest, "lib"), { recursive: true });
+      fs.copyFileSync(path.join(EXT, rel), path.join(dest, rel));
+    });
+    walkthroughFiles().forEach(function (rel) {
+      fs.mkdirSync(path.join(dest, "walkthrough"), { recursive: true });
       fs.copyFileSync(path.join(EXT, rel), path.join(dest, rel));
     });
     // и вшитую документацию (dest/docs) — тем же фильтром

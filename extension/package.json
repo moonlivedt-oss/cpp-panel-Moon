@@ -20,7 +20,7 @@
     "theme": "dark"
   },
   "engines": {
-    "vscode": "^1.75.0"
+    "vscode": "^1.85.0"
   },
   "capabilities": {
     "untrustedWorkspaces": {
@@ -50,6 +50,9 @@
     "русский"
   ],
   "main": "./extension.js",
+  "scripts": {
+    "vscode:uninstall": "node ./uninstall.js"
+  },
   "activationEvents": [
     "onStartupFinished"
   ],
@@ -98,6 +101,11 @@
           "default": true,
           "description": "Мост доки↔редактор: когда курсор стоит на слове в C/C++-файле, плавающее окно показывает подсказку по этому слову и кнопку «Открыть в справочнике». Выключите, если подсказка мешает."
         },
+        "cppDocs.styleHints": {
+          "type": "boolean",
+          "default": true,
+          "description": "Подсказки по правилам курса в открытом .cpp: using namespace std, rand(), std::endl в цикле, переменная без значения, C-приведение, new/delete, NULL, printf. Показываются синей волной (не ошибка) с действием «📘 Почему так» и, где можно, быстрым исправлением."
+        },
         "cppDocs.localRun": {
           "type": "boolean",
           "scope": "machine",
@@ -143,6 +151,11 @@
         "icon": "$(window)"
       },
       {
+        "command": "cppDocs.openWindowTab",
+        "title": "Документация C++: открыть окно во вкладке (без правки VS Code)",
+        "icon": "$(book)"
+      },
+      {
         "command": "cppDocs.disableWindow",
         "title": "Документация C++: отключить плавающее окно"
       },
@@ -158,6 +171,18 @@
       {
         "command": "cppDocs.showLog",
         "title": "Документация C++: показать журнал"
+      },
+      {
+        "command": "cppDocs.openStyleDoc",
+        "title": "Документация C++: открыть раздел справочника"
+      },
+      {
+        "command": "cppDocs.exportProgress",
+        "title": "Документация C++: сохранить копию прогресса…"
+      },
+      {
+        "command": "cppDocs.importProgress",
+        "title": "Документация C++: загрузить прогресс из файла…"
       },
       {
         "command": "cppDocs.lookupInDocs",
@@ -213,6 +238,72 @@
           "when": "editorLangId =~ /^(c|cpp|cuda-cpp|objective-c|objective-cpp)$/"
         }
       ]
-    }
+    },
+    "walkthroughs": [
+      {
+        "id": "cppDocs.start",
+        "title": "Документация C++: первые шаги",
+        "description": "Окно со справочником рядом с кодом, справка по слову, запуск задач и подсказки по стилю — за пять шагов.",
+        "steps": [
+          {
+            "id": "window",
+            "title": "Открой окно документации",
+            "description": "Справочник, задачник и примеры — рядом с кодом.\n[Открыть во вкладке](command:cppDocs.openWindowTab)\n[Плавающее окно поверх редактора](command:cppDocs.enableWindow)",
+            "media": {
+              "markdown": "walkthrough/01-okno.md"
+            },
+            "completionEvents": [
+              "onCommand:cppDocs.openWindowTab",
+              "onCommand:cppDocs.enableWindow"
+            ]
+          },
+          {
+            "id": "lookup",
+            "title": "Найди слово из своего кода",
+            "description": "Курсор на слове в .cpp → правая кнопка → «Найти в справочнике C++». На строке с ошибкой — разбор ошибки.\n[Попробовать](command:cppDocs.lookupInDocs)",
+            "media": {
+              "markdown": "walkthrough/02-slovo.md"
+            },
+            "completionEvents": [
+              "onCommand:cppDocs.lookupInDocs"
+            ]
+          },
+          {
+            "id": "run",
+            "title": "Включи «Напиши и запусти»",
+            "description": "Код задачи соберётся твоим компилятором и пройдёт тесты прямо в окне.\n[Открыть настройку](command:workbench.action.openSettings?%5B%22cppDocs.localRun%22%5D)",
+            "media": {
+              "markdown": "walkthrough/03-zapusk.md"
+            },
+            "completionEvents": [
+              "onSettingChanged:cppDocs.localRun"
+            ]
+          },
+          {
+            "id": "style",
+            "title": "Подсказки по правилам курса",
+            "description": "Синяя волна в .cpp — не ошибка, а совет с кнопкой «📘 Почему так».\n[Настройка подсказок](command:workbench.action.openSettings?%5B%22cppDocs.styleHints%22%5D)",
+            "media": {
+              "markdown": "walkthrough/04-stil.md"
+            },
+            "completionEvents": [
+              "onSettingChanged:cppDocs.styleHints",
+              "onCommand:cppDocs.openStyleDoc"
+            ]
+          },
+          {
+            "id": "progress",
+            "title": "Сохрани прогресс",
+            "description": "Копия делается сама раз в день; перед переустановкой сохрани её в файл.\n[Сохранить копию прогресса](command:cppDocs.exportProgress)",
+            "media": {
+              "markdown": "walkthrough/05-progress.md"
+            },
+            "completionEvents": [
+              "onCommand:cppDocs.exportProgress"
+            ]
+          }
+        ]
+      }
+    ]
   }
 }

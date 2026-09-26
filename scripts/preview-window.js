@@ -63,6 +63,8 @@ var data = ext.buildDocsData(docsPath);
 data.dataUrl = ""; // в браузере перечитать по сети нельзя — окно пересоберёт из загруженных данных
 
 var runtime = fs.readFileSync(path.join(EXT, "cpp-docs-runtime.js"), "utf8");
+var stickersFile = path.join(EXT, "stickers.json");
+var stickersJson = fs.existsSync(stickersFile) ? fs.readFileSync(stickersFile, "utf8") : "null";
 
 // Экранируем </script> в данных и рантайме, чтобы не разорвать теги.
 function safe(s) { return String(s).replace(/<\/script>/gi, "<\\/script>"); }
@@ -88,6 +90,8 @@ var html =
   "  <div class=\"fake-edit\">// имитация редактора VS Code\nint main() {\n  std::cout << \"Документация C++\";\n  return 0;\n}</div>\n" +
   "</div>\n" +
   "<script>window.__CPPDOCS__ = " + safe(JSON.stringify(data)) + ";</script>\n" +
+  // наклейки лежат отдельным файлом (в VS Code окно читает его с диска) — в браузере подкладываем готовыми
+  "<script>window.__CPPDOCS_STICKERS__ = " + safe(stickersJson) + ";</script>\n" +
   "<script>\n" + safe(runtime) + "\n</script>\n" +
   "<script>window.addEventListener('load', function(){ setTimeout(function(){ try{ window.__cppDocs.open(); }catch(e){} }, 100); });</script>\n" +
   "</body></html>\n";

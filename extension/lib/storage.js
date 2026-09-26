@@ -24,12 +24,6 @@ function dataFilePath(context) { return path.join(storageDir(context), 'cpp-docs
 function stampFilePath(context) { return path.join(storageDir(context), 'cpp-docs-stamp.js'); }
 /** Что под курсором в редакторе (мост доки↔редактор). */
 function editorFilePath(context) { return path.join(storageDir(context), 'cpp-docs-editor.js'); }
-/** «Напиши и запусти»: запрос окна и ответ расширения. */
-function runReqFilePath(context) { return path.join(storageDir(context), 'cpp-docs-run-req.json'); }
-function runResFilePath(context) { return path.join(storageDir(context), 'cpp-docs-run-res.json'); }
-/** Действия окна («в редактор», «в заметки»): запрос и ответ. */
-function actionFilePath(context) { return path.join(storageDir(context), 'cpp-docs-action.json'); }
-function actionResFilePath(context) { return path.join(storageDir(context), 'cpp-docs-action-res.json'); }
 
 const NOTES_REL = 'zametki/01-moi-zametki.md';
 /** Где лежит блокнот. Во вшитых доках (каталог расширения стирается при обновлении) — в globalStorage. */
@@ -45,6 +39,7 @@ function notesFilePath(context, root) {
 function userSetting(key) {
   const conf = vscode.workspace.getConfiguration('cppDocs');
   if (typeof conf.inspect !== 'function') return conf.get(key);
+  /** @type {{globalValue?: any, defaultValue?: any}} */
   const i = conf.inspect(key) || {};
   return i.globalValue !== undefined ? i.globalValue : i.defaultValue;
 }
@@ -54,6 +49,5 @@ function localRunEnabled() {
 
 module.exports = {
   fileUrl, storageDir, runtimeScriptPath, dataFilePath, stampFilePath, editorFilePath,
-  runReqFilePath, runResFilePath, actionFilePath, actionResFilePath,
   NOTES_REL, notesFilePath, userSetting, localRunEnabled,
 };

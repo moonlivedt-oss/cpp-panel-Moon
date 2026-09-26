@@ -258,6 +258,91 @@ _Ввод: 3 студента — Аня 95, Борис 70, Вика 88_
 
 ---
 
+
+## Попробуй сам
+
+Сначала — как `averageScore` считает среднее и зачем там `static_cast<double>`:
+
+```steps
+@id c3kak9x
+# Средний балл трёх оценок
+std::vector<int> scores = {5, 4, 4};
+int sum = 0;
+for (int s : scores)
+    sum += s;
+double avg = static_cast<double>(sum) / static_cast<double>(scores.size());
+std::cout << avg;
+---
+1 | scores=[5, 4, 4] | Три оценки.
+2 | sum=0 | Сумму копим в целом числе.
+3 | s=5 | Первая оценка.
+4 | sum=5 |
+3 | s=4 | Вторая.
+4 | sum=9 |
+3 | s=4 | Третья.
+?4 | sum=13 |
+5 | avg=4.33333 | Делим в `double`. Без приведения вышло бы 13 / 3 = 4 — целочисленное деление.
+6 | | | 4.33333
+```
+
+Теперь сам — средний балл и лучший ученик:
+
+```challenge
+@id cq0b5ir
+@type run
+@hint Лучшего обновляй только при **строго** большем балле — так при равенстве останется первый.
+@hint Среднее — `static_cast<double>(sum) / n`, иначе `{:.1f}` покажет уже обрезанное целое.
+Вход: `n`, затем n пар `имя балл` (балл от 0 до 100). Напечатай средний балл с одной цифрой после запятой и имя лучшего ученика (при равенстве — первого).
+---
+#include <format>
+#include <iostream>
+#include <string>
+
+int main() {
+    int n = 0;
+    std::cin >> n;
+    int sum = 0;
+    int bestScore = -1;
+    std::string bestName;
+    for (int i = 0; i < n; ++i) {
+        std::string name;
+        int score = 0;
+        std::cin >> name >> score;
+        // твой код: копим сумму, обновляем лучшего
+    }
+    // вывод: std::format("{:.1f} {}", среднее, bestName)
+}
+---
+# вход => ожидаемый вывод
+3 ann 90 bob 75 kim 90 => 85.0 ann
+1 x 50 => 50.0 x
+2 a 0 b 1 => 0.5 b
+---
+#include <format>
+#include <iostream>
+#include <string>
+
+int main() {
+    int n = 0;
+    std::cin >> n;
+    int sum = 0;
+    int bestScore = -1;
+    std::string bestName;
+    for (int i = 0; i < n; ++i) {
+        std::string name;
+        int score = 0;
+        std::cin >> name >> score;
+        sum += score;
+        if (score > bestScore) {
+            bestScore = score;
+            bestName = name;
+        }
+    }
+    double average = n > 0 ? static_cast<double>(sum) / n : 0.0;
+    std::cout << std::format("{:.1f} {}", average, bestName) << "\n";
+}
+```
+
 ---
 
 [← Все примеры](README.md) · [← Крестики-нолики](07-krestiki-noliki.md) · [Проверка пароля →](09-parol.md) · [Начни отсюда](../00-НАЧНИ-ОТСЮДА.md)

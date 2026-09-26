@@ -4,6 +4,8 @@
 >
 > Это **раздел 35** справочника — вершина «на вырост». Собирает вместе [классы (раздел 22)](13-klassy.md), виртуальные методы и [умные указатели (раздел 33)](18-umnye-ukazateli.md). Полный список — в [оглавлении](../00-НАЧНИ-ОТСЮДА.md).
 
+**Уровень:** 🔴 продвинутая тема · **Опирается на:** [Классы](13-klassy.md), [Умные указатели](18-umnye-ukazateli.md)
+
 [← Начни отсюда](../00-НАЧНИ-ОТСЮДА.md) · [Маршрут изучения](../00-marshrut.md) · [← Классы](13-klassy.md) · [Игра в консоли →](21-igra-v-konsoli.md)
 
 ---
@@ -133,6 +135,24 @@ class Shape {
   virtual double area() const = 0;   // чисто виртуальный: у «просто фигуры» площади нет
 };
 Shape s;                             // ❌ error: нельзя создать абстрактный класс
+```
+
+Какая версия `area` вызовется — по шагам. Последний шаг особенно коварный:
+
+```steps
+@id c1lk2p9w
+# Какой area() вызовется?
+Circle circle(2.0);
+Shape &s = circle;
+double a = s.area();
+Shape copy = circle;
+double b = copy.area();
+---
+1 | circle=Circle, радиус=2 | Создали круг. Внутри у него скрытая ссылка на таблицу виртуальных методов **Circle**.
+2 | s=→ circle (как Shape&) | Ссылка типа «базовый класс», но смотрит на настоящий `Circle`.
+3 | a=12.5664 | `area` виртуальный → версия выбирается по **настоящему** объекту, а не по типу ссылки. Вызвана `Circle::area`.
+4 | copy=Shape (срезан) | Копия в переменную типа `Shape` — «срезка»: от круга скопирована только часть `Shape`, радиус потерян.
+?5 | b=0 | Чему равно `b`? Теперь объект **действительно** `Shape` → вызывается `Shape::area()`. Полиморфизм работает только через ссылки и указатели.
 ```
 
 ### Виртуальный деструктор — обязателен
@@ -268,6 +288,28 @@ Shape base = c;                   // ❌ в base влезла только Shape
 
 > Наследование — мощный, но не первый инструмент. В учебных задачах чаще выручают `struct`, `vector` и свободные функции. Берись за него, когда появляется **семейство типов с общим поведением**, которое надо перебирать единообразно, — и тогда обязательно `virtual`-методы, `override` и `virtual`-деструктор. Что дальше — [раздел 26](09-spravka.md#26-что-учить-дальше) и [cppreference](https://en.cppreference.com/).
 
+> **Сквозной проект «Подземелье», квест 10:** [Зверинец](../proekt/04-glava-3-klassy-i-karta.md#квест-10-зверинец) — добавьте в свою игру то, что выучили в этой теме.
+
+## Босс темы
+
+```boss
+# Отряд героев
+@id c1nmrnmy
+Базовый класс `Unit` и три наследника — и **один** цикл, который управляет всеми.
+
+1. `Unit`: имя, здоровье, `virtual int attack() const = 0;`, `virtual std::string kind() const`, виртуальный деструктор.
+2. `Warrior` — атака 8; `Archer` — 5, но каждый третий выстрел двойной; `Mage` — 12, но теряет 2 HP за заклинание.
+3. `std::vector<std::unique_ptr<Unit>>` — отряд; цикл печатает `kind()` и `attack()` каждого.
+4. Никаких `if (тип == ...)` в цикле — выбор версии делает `virtual`.
+
+<details>
+<summary>Подсказка</summary>
+
+Метод, который меняет состояние (счётчик выстрелов у лучника), не может быть `const` — либо уберите `const` у `attack` во всей иерархии, либо сделайте счётчик `mutable`.
+
+</details>
+```
+
 ## Проверь себя
 
 Небольшой разбор по теме. Нажми вариант — сразу увидишь, верно или нет; можно и просто «Показать ответ».
@@ -317,6 +359,127 @@ std::cout << s.area();       // печатает 0
 **Исправление:** `double area() const override { … }` — `override` заставит компилятор проверить совпадение сигнатуры.
 ```
 
+И «заполни пропуск» — впиши недостающее и нажми «Проверить»:
+
+```fillcode
+struct Shape {
+    [[virtual]] double area() const = 0;
+    virtual ~Shape() = default;
+};
+struct Square : [[public]] Shape {
+    double side = 1;
+    double area() const [[override]] { return side * side; }
+};
+```
+
+Предскажи вывод — какой метод вызовется через ссылку на базу:
+
+```challenge
+@id c1jsl7lo
+@type predict
+Что напечатает программа?
+---
+struct Animal {
+    virtual std::string sound() const { return "..."; }
+    std::string name() const { return "animal"; }
+    virtual ~Animal() = default;
+};
+struct Cat : Animal {
+    std::string sound() const override { return "meow"; }
+    std::string name() const { return "cat"; }
+};
+
+int main() {
+    Cat c;
+    const Animal &a = c;
+    std::cout << a.sound() << " " << a.name();
+}
+---
+meow animal
+```
+
+Напиши сам и запусти:
+
+```challenge
+@id c1eaiugp
+@type run
+@hint Каждый наследник хранит свои размеры и переопределяет `double area() const override`.
+@hint В цикле: для `circle` прочитай `r` и сделай `shapes.push_back(std::make_unique<Circle>(r));`, для `rect` — так же с `w` и `h`.
+Фигуры. Вход — до конца ввода записи `circle r` или `rect w h`. Сделай наследников `Shape` с виртуальным `area()`, сложи площади всех фигур и напечатай сумму с двумя знаками после запятой (π = 3.14159265).
+---
+#include <format>
+#include <iostream>
+#include <memory>
+#include <string>
+#include <vector>
+
+struct Shape {
+    virtual double area() const = 0;
+    virtual ~Shape() = default;
+};
+
+// твой код: struct Circle : Shape { ... };  struct Rect : Shape { ... };
+
+int main() {
+    std::vector<std::unique_ptr<Shape>> shapes;
+    std::string kind;
+    while (std::cin >> kind) {
+        // твой код: circle → прочитать r; rect → прочитать w и h; shapes.push_back(std::make_unique<...>(...));
+    }
+    double total = 0;
+    for (const auto &s : shapes) total += s->area();
+    std::cout << std::format("{:.2f}", total);
+}
+---
+# вход => ожидаемый вывод
+rect 2 3 => 6.00
+circle 1 => 3.14
+rect 1 1 circle 2 rect 2 5 => 23.57
+circle 0.5 circle 0.5 => 1.57
+---
+#include <format>
+#include <iostream>
+#include <memory>
+#include <string>
+#include <vector>
+
+struct Shape {
+    virtual double area() const = 0;
+    virtual ~Shape() = default;
+};
+
+struct Circle : Shape {
+    double r = 0;
+    explicit Circle(double radius) : r(radius) {}
+    double area() const override { return 3.14159265 * r * r; }
+};
+
+struct Rect : Shape {
+    double w = 0, h = 0;
+    Rect(double width, double height) : w(width), h(height) {}
+    double area() const override { return w * h; }
+};
+
+int main() {
+    std::vector<std::unique_ptr<Shape>> shapes;
+    std::string kind;
+    while (std::cin >> kind) {
+        if (kind == "circle") {
+            double r = 0;
+            std::cin >> r;
+            shapes.push_back(std::make_unique<Circle>(r));
+        } else if (kind == "rect") {
+            double w = 0, h = 0;
+            std::cin >> w >> h;
+            shapes.push_back(std::make_unique<Rect>(w, h));
+        }
+    }
+    double total = 0;
+    for (const auto &s : shapes) total += s->area();
+    std::cout << std::format("{:.2f}", total);
+}
+```
+
 Карточки на повторение:
 
 ```cards
@@ -331,6 +494,49 @@ A: Через `Base::method()` — например `Base::draw();` внутри
 
 Q: Наследование или композиция — как выбрать?
 A: Наследование — это «является частным случаем» (is-a). Композиция — «содержит/использует» (has-a). Сомневаешься — обычно бери композицию; наследование оправдано при настоящей is-a связи и полиморфизме.
+
+Q: Зачем писать `override`?
+A: Это пометка «переопределяю виртуальный метод базы». Если сигнатура не совпала (опечатка, забыт `const`), будет ошибка компиляции, а не тихий новый метод.
+
+Q: Что такое чисто виртуальная функция?
+A: `virtual void draw() = 0;` — метод без реализации в базе. Класс с ним абстрактный: создать его объект нельзя, только объекты наследников.
+
+Q: Что такое «срезка» (slicing)?
+A: Копирование наследника в объект базового типа по значению: лишние поля отрезаются, виртуальные вызовы идут к базе. Храни через ссылку или указатель.
+H: Представь, что `Orc` положили в переменную типа `Enemy`.
+
+Q: Что значит `final` у класса или метода?
+A: Класс с `final` нельзя наследовать, метод с `final` нельзя переопределить дальше.
+
+Q: В каком порядке вызываются конструкторы базы и наследника?
+A: Сначала базовый, потом наследника. Деструкторы — в обратном порядке.
+
+Q: Чем `protected` отличается от `private`?
+A: `protected` члены видны наследникам, `private` — только самому классу.
+```
+
+## Закрепление прошлых тем
+
+Три вопроса из тем 13, 18 и 19:
+
+```quiz
+В: Тема 13. Как пометить метод, который не меняет объект?
++ `const` после скобок: `int hp() const`
+- `const` перед типом: `const int hp()`
+- `static int hp()`
+= Такой метод можно вызвать у константного объекта и по `const &` — это важно, когда объекты передают по ссылке.
+
+В: Тема 18. `auto a = std::make_unique<Hero>(); auto b = a;` — что будет?
++ Ошибка компиляции: `unique_ptr` нельзя копировать, только перемещать
+- `b` и `a` будут указывать на одного героя
+- `b` получит копию героя
+= Владелец у объекта один. Передать владение — `auto b = std::move(a);`. В этой теме так хранят монстров разных видов.
+
+В: Тема 19. Зачем в заголовке `#pragma once`?
++ Чтобы при повторном `#include` содержимое не вставилось дважды
+- Чтобы файл собирался быстрее
+- Чтобы заголовок нельзя было подключить из другой папки
+= Без защиты два `#include` одного файла дают «повторное определение класса».
 ```
 
 ---

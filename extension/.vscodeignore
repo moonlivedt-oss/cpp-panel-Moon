@@ -8,3 +8,5 @@ stickers/**
 docs/.ruff_cache/**
 docs/proverka.py
 docs/**/__pycache__/**
+runtime/**
+walkthrough/**/*.bak

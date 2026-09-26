@@ -16,7 +16,8 @@ var path = require("path");
 
 var ROOT = path.join(__dirname, "..");
 var LOGO = path.join(ROOT, "docs", "screenshots", "logo-embed.png");
-var RUNTIME = path.join(ROOT, "extension", "cpp-docs-runtime.js");
+var RT = require("./build-runtime");      // рантайм собирается из частей extension/runtime/
+var RUNTIME = RT.partWith(/var LOGO_URI = "/);
 
 if (!fs.existsSync(LOGO)) {
   console.error("Нет файла логотипа: " + LOGO);
@@ -36,5 +37,6 @@ if (!re.test(src)) {
 
 src = src.replace(re, 'var LOGO_URI = "' + uri + '";');
 fs.writeFileSync(RUNTIME, src, "utf8");
+RT.write();
 
 console.log("Логотип встроен в рантайм: " + Math.round(b64.length / 1024) + "KB base64");
