@@ -111,6 +111,7 @@
   // Идёт на КАЖДУЮ мутацию workbench, поэтому здесь НЕТ ни диска (extAlive), ни getComputedStyle
   // (applyAccent) — только один getElementById; тяжёлое обслуживание делает heal() на тикере 3с.
   function healCheap() {
+    if (_cdStopped) return;
     try {
       if (!document.getElementById(BTN_ID)) { ensureStyle(); ensureButton(); syncBadge(); }
     } catch (e) {}
@@ -123,6 +124,7 @@
   }
 
   function heal() {
+    if (_cdStopped) return;                  // модуль выключен в Moon Core — ничего не возвращаем
     // Расширение удалено — убираем кнопку и больше ничего не подрисовываем.
     try { if (!extAlive()) { var ob = document.getElementById(BTN_ID); if (ob) ob.remove(); return; } } catch (e) {}
     try { applyAccent(); } catch (e) {}   // акцент под тему/обои — до отрисовки стиля и кнопки
@@ -178,17 +180,15 @@
     try { pollStamp(); } catch (e) {}
     try { pollEditor(); } catch (e) {}
     // маркер по тексту: показ кнопки «Выделить» после выделения, скрытие при прокрутке
-    try {
-      document.addEventListener("mouseup", function () { setTimeout(onArticleSelect, 0); });
-      document.addEventListener("scroll", hideHlPop, true);
-    } catch (e) {}
+    cdOnGlobal(document, "mouseup", function () { setTimeout(onArticleSelect, 0); });
+    cdOnGlobal(document, "scroll", hideHlPop, true);
     // Один тикер на всё: возврат кнопки после перестройки DOM редактором (как у vscode-bg) плюс
     // опрос метки свежести для автообновления и слова под курсором. Оба дела спят, пока вкладка скрыта.
     // Тик раз в секунду: контекст редактора (крошечный файл) — каждый тик, чтобы «Найти в
     // справочнике» из меню открывалось сразу; лечение DOM и метка — каждый третий, как раньше.
     var tick = 0;
-    setInterval(function () {
-      if (document.hidden) return;
+    var tickTimer = setInterval(function () {
+      if (document.hidden || _cdStopped) return;
       ++tick;
       if (!_esLive && tick % 2 === 0) { try { pollEditor(); } catch (e) {} }   // поток событий не подключён — запасной опрос
       if (tick % 3) return;
@@ -199,10 +199,15 @@
       if (!_esLive) { try { pollStamp(); } catch (e) {} try { bridgeInfo(); } catch (e) {} }
       else if (tick % 30 === 0) { try { bridgeInfo(); } catch (e) {} }        // освежить список хостов
     }, 1000);
+    cdTrack(function () { clearInterval(tickTimer); });
     try { bridgeInfo(); } catch (e) {}   // сразу подключиться к потоку событий
     try {
-      new MutationObserver(onWorkbenchMutation).observe(document.body || document.documentElement, { childList: true });
+      var wbMo = new MutationObserver(onWorkbenchMutation);
+      wbMo.observe(document.body || document.documentElement, { childList: true });
+      cdTrack(function () { wbMo.disconnect(); if (_healTimer) { clearTimeout(_healTimer); _healTimer = null; } });
     } catch (e) {}
+    // Новое API Moon Core: выключение модуля без перезагрузки окна, акцент фона через общую шину.
+    try { cdMoonCoreApi(); } catch (e) { reportError("moon-core-api", e); }
     console.log("[cpp-docs] плавающее окно " + VERSION + " готово, материалов: " + (DATA() ? DATA().files.length : 0));
   }
 
@@ -236,5 +241,7 @@
     diffHtml: diffHtml, codeLines: codeLines, lcsOps: lcsOps, codeNames: codeNames, exampleRefCode: exampleRefCode,
     renderCheckpoint: renderCheckpoint, renderRepeat: renderRepeat, ankiExportText: ankiExportText,
     onProgressEvent: onProgressEvent, keepRecent: keepRecent, aheadNotes: aheadNotes, renderCodeAlts: renderCodeAlts,
+    // для тестов: новое API Moon Core (выключение без перезагрузки, общая шина)
+    _mc: { api: cdMoonCoreApi, stop: cdStop, shareView: cdShareView, offCount: function () { return _cdOff.length; } },
   };
 })();

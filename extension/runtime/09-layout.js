@@ -43,7 +43,7 @@
   }
   // Окно VS Code поменяло размер — закреплённая колонка остаётся у правого края во всю высоту.
   try {
-    window.addEventListener("resize", function () {
+    cdOnGlobal(window, "resize", function () {
       if (!_docked || !winEl) return;
       var w = clamp(state.dockW || 560, 560, Math.max(560, Math.round(viewW() * 0.45)));
       setRect(viewW() - w, 0, w, window.innerHeight || 800);

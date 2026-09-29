@@ -194,9 +194,9 @@
     ctxMenu.style.top = Math.max(4, Math.min(y, vh - r.height - 6)) + "px";
   }
   function hideItemMenu() { if (ctxMenu && ctxMenu.parentNode) ctxMenu.parentNode.removeChild(ctxMenu); ctxMenu = null; }
-  document.addEventListener("mousedown", function (e) { if (ctxMenu && !ctxMenu.contains(e.target)) hideItemMenu(); }, true);
-  document.addEventListener("wheel", function () { if (ctxMenu) hideItemMenu(); }, true);
-  document.addEventListener("keydown", function (e) { if (e.key === "Escape") hideItemMenu(); });
+  cdOnGlobal(document, "mousedown", function (e) { if (ctxMenu && !ctxMenu.contains(e.target)) hideItemMenu(); }, true);
+  cdOnGlobal(document, "wheel", function () { if (ctxMenu) hideItemMenu(); }, true);
+  cdOnGlobal(document, "keydown", function (e) { if (e.key === "Escape") hideItemMenu(); });
 
   function buildItem(f, g) {
     var item = el("div", null); item.className = "cd-item";

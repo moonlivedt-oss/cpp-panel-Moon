@@ -13,6 +13,7 @@
     // запомнить позицию прокрутки в уходящем файле
     if (current && contentEl) state.scroll[current.rel] = contentEl.scrollTop;
     current = f;
+    cdShareView();
     if (!silent) {
       state.last = f.rel.toLowerCase();
       // Недавнее: свежий файл — в начало, без дублей, не длиннее 8.

@@ -42,7 +42,7 @@ const mooncore = require('./lib/mooncore');
 // Якорь целостности рантайма: перед впечатыванием сверяем SHA-256 cpp-docs-runtime.js с этим
 // значением (подмена файла на диске не пройдёт). Ставит `npm run hash:runtime`; пусто — проверку
 // пропускаем. Доверенная точка тут сам extension.js.
-const RUNTIME_SHA256 = '6cc2e18ea777b390d5d1150ea269fb46e7cce3acc6555d4dbffa1033c4b362e6'; /* HASH:runtime — ставит scripts/hash-runtime.js */
+const RUNTIME_SHA256 = '5b5c7911ebd517452a3ad17b31f352566af40f2456be1be68cae7a4d8e98756e'; /* HASH:runtime — ставит scripts/hash-runtime.js */
 win.setRuntimeAnchor(RUNTIME_SHA256);
 
 function activate(context) {

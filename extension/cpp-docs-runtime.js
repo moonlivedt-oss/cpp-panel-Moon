@@ -44,6 +44,16 @@
   if (MCM && !window.__CPPDOCS__) {
     try { var mcd = MCM.data(); if (mcd && mcd.toc && typeof mcd.toc === "object") window.__CPPDOCS__ = mcd.toc; } catch (e) {}
   }
+  // Подписки на окно и документ, которые снимаются, когда Moon Core выключает модуль без
+  // перезагрузки окна (15-mooncore.js, cdStop). Без Moon Core просто addEventListener.
+  var _cdOff = [];
+  function cdOnGlobal(target, ev, fn, opt) {
+    try {
+      target.addEventListener(ev, fn, opt);
+      _cdOff.push(function () { try { target.removeEventListener(ev, fn, opt); } catch (e) {} });
+    } catch (e) {}
+  }
+  function cdTrack(fn) { if (typeof fn === "function") _cdOff.push(fn); }
 
   var WIN_ID = "cppdocs-window";
   var BTN_ID = "cppdocs-launch";
@@ -384,7 +394,7 @@
     try { localStorage.setItem(LS_KEY, text); } catch (e) {}
     if (!_mirrorTimer) _mirrorTimer = setTimeout(writeMirror, 1500);   // зеркало — пачкой, не на каждый клик
   }
-  try { window.addEventListener("beforeunload", flushMirror); } catch (e) {}
+  cdOnGlobal(window, "beforeunload", flushMirror);
 
   // Несколько окон VS Code делят один localStorage, но у каждого своё `state` в памяти: без
   // синхронизации окно B при сохранении затёрло бы отметки, сделанные в окне A. Событие storage
@@ -399,7 +409,7 @@
     state._savedAt = Math.max(savedAtOf(state), savedAtOf(other));
   }
   try {
-    window.addEventListener("storage", function (e) {
+    cdOnGlobal(window, "storage", function (e) {
       if (!e || e.key !== LS_KEY || !e.newValue) return;
       var other = null;
       try { other = JSON.parse(e.newValue); } catch (x) { return; }
@@ -2309,7 +2319,7 @@
   var _lastAccent = "", _accentSig = "";
   // MoonLight custom-bg сообщает о смене акцента событием — перекрашиваемся сразу, не ждём
   // тикера heal (иначе окно отставало от смены обоев на секунду-две).
-  try { window.addEventListener("mlbg-accent", function () { _accentSig = ""; applyAccent(); }); } catch (e) {}
+  cdOnGlobal(window, "mlbg-accent", function () { _accentSig = ""; applyAccent(); });
   function applyAccent() {
     try {
       // Дешёвая сигнатура «могло ли что-то поменяться»: тема-класс оболочки + ручная тема +
@@ -5054,9 +5064,9 @@
     ctxMenu.style.top = Math.max(4, Math.min(y, vh - r.height - 6)) + "px";
   }
   function hideItemMenu() { if (ctxMenu && ctxMenu.parentNode) ctxMenu.parentNode.removeChild(ctxMenu); ctxMenu = null; }
-  document.addEventListener("mousedown", function (e) { if (ctxMenu && !ctxMenu.contains(e.target)) hideItemMenu(); }, true);
-  document.addEventListener("wheel", function () { if (ctxMenu) hideItemMenu(); }, true);
-  document.addEventListener("keydown", function (e) { if (e.key === "Escape") hideItemMenu(); });
+  cdOnGlobal(document, "mousedown", function (e) { if (ctxMenu && !ctxMenu.contains(e.target)) hideItemMenu(); }, true);
+  cdOnGlobal(document, "wheel", function () { if (ctxMenu) hideItemMenu(); }, true);
+  cdOnGlobal(document, "keydown", function (e) { if (e.key === "Escape") hideItemMenu(); });
 
   function buildItem(f, g) {
     var item = el("div", null); item.className = "cd-item";
@@ -6261,7 +6271,7 @@
   }
   // Окно VS Code поменяло размер — закреплённая колонка остаётся у правого края во всю высоту.
   try {
-    window.addEventListener("resize", function () {
+    cdOnGlobal(window, "resize", function () {
       if (!_docked || !winEl) return;
       var w = clamp(state.dockW || 560, 560, Math.max(560, Math.round(viewW() * 0.45)));
       setRect(viewW() - w, 0, w, window.innerHeight || 800);
@@ -7315,6 +7325,7 @@
     // запомнить позицию прокрутки в уходящем файле
     if (current && contentEl) state.scroll[current.rel] = contentEl.scrollTop;
     current = f;
+    cdShareView();
     if (!silent) {
       state.last = f.rel.toLowerCase();
       // Недавнее: свежий файл — в начало, без дублей, не длиннее 8.
@@ -10345,6 +10356,7 @@
     }
     if (state.docked && !_docked) applyDock(true);
     setBtnVisible(false);
+    cdShareView();
   }
   function closeWindow() {
     if (IN_PANEL) return;
@@ -10353,6 +10365,7 @@
     winOpen = false;
     try { hideHlPop(); hideItemMenu(); } catch (e) {}
     setBtnVisible(true);
+    cdShareView();
   }
   function toggleWindow() { if (isOpen()) closeWindow(); else openWindow(); }
 
@@ -10578,14 +10591,14 @@
   try {
     // Только ошибки НАШЕГО скрипта: он встроен в workbench.html, значит, у его ошибок filename —
     // адрес самой страницы (скрипты VS Code — отдельные .js). Во вкладке страница целиком наша.
-    window.addEventListener("error", function (ev) {
+    cdOnGlobal(window, "error", function (ev) {
       if (!ev) return;
       var fn = String(ev.filename || "").split("?")[0];
       var mine = IN_PANEL || (fn && typeof location !== "undefined" && fn === String(location.href).split("?")[0]) ||
         /mooncore-mod-cppdocs\.js$/.test(fn);   // файл модуля Moon Core рядом с оболочкой
       if (mine) reportError("window.onerror", ev.error || ev.message);
     });
-    if (IN_PANEL) window.addEventListener("unhandledrejection", function (ev) { reportError("promise", ev && ev.reason); });
+    if (IN_PANEL) cdOnGlobal(window, "unhandledrejection", function (ev) { reportError("promise", ev && ev.reason); });
   } catch (e) {}
   // Прочитать файл хранилища/расширения (vscode-file://; во вкладке — только зеркало прогресса).
   function fileRead(u) {
@@ -11165,6 +11178,60 @@
     if (url) applyStampText(fileRead(url));
   }
 
+  // ==== runtime/15-mooncore.js — новое API Moon Core: выключение без перезагрузки, общая шина ====
+  // ---------------------------------------------------------------------------
+  //  Moon Core умеет выключить модуль без перезагрузки окна и снова включить его (тот же файл
+  //  выполняется заново). Поэтому всё, что окно заводит глобально, снимается в cdStop():
+  //  подписки (cdOnGlobal / cdTrack в 00-core.js), тикер, наблюдатели, поток событий моста,
+  //  пилюля, окно, стиль. Прогресс перед этим сохраняется.
+  //
+  //  Общая шина модулей: акцент фона MoonLight BG приходит ключом «mlbg.accent» (раньше — только
+  //  событием окна «mlbg-accent», оно тоже осталось для старого фона), а своё состояние окно
+  //  публикует ключом «cppdocs.view» { open, title } — соседям видно, открыта ли документация.
+  //  Со старым Moon Core (без onDispose / share) всё это молча пропускается.
+  // ---------------------------------------------------------------------------
+  var _cdStopped = false;
+
+  function cdStop() {
+    if (_cdStopped) return;
+    try { flushMirror(); } catch (e) {}                 // отметки и прогресс — на диск до ухода
+    _cdStopped = true;
+    var off = _cdOff.splice(0);
+    for (var i = off.length - 1; i >= 0; i--) { try { off[i](); } catch (e) {} }
+    try { document.removeEventListener("keydown", onKey, true); } catch (e) {}
+    try { if (_docked) applyDock(false); } catch (e) {}
+    try { hideHlPop(); hideItemMenu(); hideBridge(); } catch (e) {}
+    try { if (_es) { _es.close(); _es = null; } } catch (e) {}
+    [WIN_ID, BTN_ID, STYLE_ID].forEach(function (id) {
+      try { var n = document.getElementById(id); if (n) n.remove(); } catch (e) {}
+    });
+    try { if (winEl && winEl.parentNode) winEl.parentNode.removeChild(winEl); } catch (e) {}
+    winEl = null; winOpen = false;
+    try { if (MCM && typeof MCM.share === "function") MCM.share("cppdocs.view", undefined); } catch (e) {}
+    // Повторное включение выполнит файл заново — защита «один рантайм на окно» не должна мешать.
+    window.__CPPDOCS_RUNTIME__ = false;
+    try { delete window.__cppDocs; } catch (e) { window.__cppDocs = undefined; }
+  }
+
+  var _cdViewSig = "";
+  function cdShareView() {
+    if (!MCM || typeof MCM.share !== "function" || _cdStopped) return;
+    var open = false, title = "";
+    try { open = !!isOpen(); } catch (e) {}
+    try { title = current ? String(current.title || current.rel || "").slice(0, 120) : ""; } catch (e) {}
+    var sig = open + "|" + title;
+    if (sig === _cdViewSig) return;
+    try { if (MCM.share("cppdocs.view", { open: open, title: title })) _cdViewSig = sig; } catch (e) {}
+  }
+
+  function cdMoonCoreApi() {
+    if (!MCM) return;
+    if (typeof MCM.onDispose === "function") MCM.onDispose(cdStop);
+    if (typeof MCM.shared === "function") {
+      cdTrack(MCM.shared("mlbg.accent", function () { _accentSig = ""; try { applyAccent(); } catch (e) {} }));
+    }
+    cdShareView();
+  }
   // ==== runtime/16-boot.js — кнопка-запуск, самолечение, старт ====
   // ---------------------------------------------------------------------------
   //  Плавающая кнопка-запуск + самолечение (VS Code пересобирает DOM).
@@ -11278,6 +11345,7 @@
   // Идёт на КАЖДУЮ мутацию workbench, поэтому здесь НЕТ ни диска (extAlive), ни getComputedStyle
   // (applyAccent) — только один getElementById; тяжёлое обслуживание делает heal() на тикере 3с.
   function healCheap() {
+    if (_cdStopped) return;
     try {
       if (!document.getElementById(BTN_ID)) { ensureStyle(); ensureButton(); syncBadge(); }
     } catch (e) {}
@@ -11290,6 +11358,7 @@
   }
 
   function heal() {
+    if (_cdStopped) return;                  // модуль выключен в Moon Core — ничего не возвращаем
     // Расширение удалено — убираем кнопку и больше ничего не подрисовываем.
     try { if (!extAlive()) { var ob = document.getElementById(BTN_ID); if (ob) ob.remove(); return; } } catch (e) {}
     try { applyAccent(); } catch (e) {}   // акцент под тему/обои — до отрисовки стиля и кнопки
@@ -11345,17 +11414,15 @@
     try { pollStamp(); } catch (e) {}
     try { pollEditor(); } catch (e) {}
     // маркер по тексту: показ кнопки «Выделить» после выделения, скрытие при прокрутке
-    try {
-      document.addEventListener("mouseup", function () { setTimeout(onArticleSelect, 0); });
-      document.addEventListener("scroll", hideHlPop, true);
-    } catch (e) {}
+    cdOnGlobal(document, "mouseup", function () { setTimeout(onArticleSelect, 0); });
+    cdOnGlobal(document, "scroll", hideHlPop, true);
     // Один тикер на всё: возврат кнопки после перестройки DOM редактором (как у vscode-bg) плюс
     // опрос метки свежести для автообновления и слова под курсором. Оба дела спят, пока вкладка скрыта.
     // Тик раз в секунду: контекст редактора (крошечный файл) — каждый тик, чтобы «Найти в
     // справочнике» из меню открывалось сразу; лечение DOM и метка — каждый третий, как раньше.
     var tick = 0;
-    setInterval(function () {
-      if (document.hidden) return;
+    var tickTimer = setInterval(function () {
+      if (document.hidden || _cdStopped) return;
       ++tick;
       if (!_esLive && tick % 2 === 0) { try { pollEditor(); } catch (e) {} }   // поток событий не подключён — запасной опрос
       if (tick % 3) return;
@@ -11366,10 +11433,15 @@
       if (!_esLive) { try { pollStamp(); } catch (e) {} try { bridgeInfo(); } catch (e) {} }
       else if (tick % 30 === 0) { try { bridgeInfo(); } catch (e) {} }        // освежить список хостов
     }, 1000);
+    cdTrack(function () { clearInterval(tickTimer); });
     try { bridgeInfo(); } catch (e) {}   // сразу подключиться к потоку событий
     try {
-      new MutationObserver(onWorkbenchMutation).observe(document.body || document.documentElement, { childList: true });
+      var wbMo = new MutationObserver(onWorkbenchMutation);
+      wbMo.observe(document.body || document.documentElement, { childList: true });
+      cdTrack(function () { wbMo.disconnect(); if (_healTimer) { clearTimeout(_healTimer); _healTimer = null; } });
     } catch (e) {}
+    // Новое API Moon Core: выключение модуля без перезагрузки окна, акцент фона через общую шину.
+    try { cdMoonCoreApi(); } catch (e) { reportError("moon-core-api", e); }
     console.log("[cpp-docs] плавающее окно " + VERSION + " готово, материалов: " + (DATA() ? DATA().files.length : 0));
   }
 
@@ -11403,5 +11475,7 @@
     diffHtml: diffHtml, codeLines: codeLines, lcsOps: lcsOps, codeNames: codeNames, exampleRefCode: exampleRefCode,
     renderCheckpoint: renderCheckpoint, renderRepeat: renderRepeat, ankiExportText: ankiExportText,
     onProgressEvent: onProgressEvent, keepRecent: keepRecent, aheadNotes: aheadNotes, renderCodeAlts: renderCodeAlts,
+    // для тестов: новое API Moon Core (выключение без перезагрузки, общая шина)
+    _mc: { api: cdMoonCoreApi, stop: cdStop, shareView: cdShareView, offCount: function () { return _cdOff.length; } },
   };
 })();

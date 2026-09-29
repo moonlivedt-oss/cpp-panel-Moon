@@ -44,6 +44,16 @@
   if (MCM && !window.__CPPDOCS__) {
     try { var mcd = MCM.data(); if (mcd && mcd.toc && typeof mcd.toc === "object") window.__CPPDOCS__ = mcd.toc; } catch (e) {}
   }
+  // Подписки на окно и документ, которые снимаются, когда Moon Core выключает модуль без
+  // перезагрузки окна (15-mooncore.js, cdStop). Без Moon Core просто addEventListener.
+  var _cdOff = [];
+  function cdOnGlobal(target, ev, fn, opt) {
+    try {
+      target.addEventListener(ev, fn, opt);
+      _cdOff.push(function () { try { target.removeEventListener(ev, fn, opt); } catch (e) {} });
+    } catch (e) {}
+  }
+  function cdTrack(fn) { if (typeof fn === "function") _cdOff.push(fn); }
 
   var WIN_ID = "cppdocs-window";
   var BTN_ID = "cppdocs-launch";
@@ -384,7 +394,7 @@
     try { localStorage.setItem(LS_KEY, text); } catch (e) {}
     if (!_mirrorTimer) _mirrorTimer = setTimeout(writeMirror, 1500);   // зеркало — пачкой, не на каждый клик
   }
-  try { window.addEventListener("beforeunload", flushMirror); } catch (e) {}
+  cdOnGlobal(window, "beforeunload", flushMirror);
 
   // Несколько окон VS Code делят один localStorage, но у каждого своё `state` в памяти: без
   // синхронизации окно B при сохранении затёрло бы отметки, сделанные в окне A. Событие storage
@@ -399,7 +409,7 @@
     state._savedAt = Math.max(savedAtOf(state), savedAtOf(other));
   }
   try {
-    window.addEventListener("storage", function (e) {
+    cdOnGlobal(window, "storage", function (e) {
       if (!e || e.key !== LS_KEY || !e.newValue) return;
       var other = null;
       try { other = JSON.parse(e.newValue); } catch (x) { return; }

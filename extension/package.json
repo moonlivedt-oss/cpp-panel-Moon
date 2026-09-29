@@ -316,7 +316,10 @@
         "assets": ".",
         "trustedTypes": [
           "cppdocs"
-        ]
+        ],
+        "lazy": {
+          "delay": 1500
+        }
       }
     ]
   }

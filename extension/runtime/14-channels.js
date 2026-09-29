@@ -21,6 +21,7 @@
     }
     if (state.docked && !_docked) applyDock(true);
     setBtnVisible(false);
+    cdShareView();
   }
   function closeWindow() {
     if (IN_PANEL) return;
@@ -29,6 +30,7 @@
     winOpen = false;
     try { hideHlPop(); hideItemMenu(); } catch (e) {}
     setBtnVisible(true);
+    cdShareView();
   }
   function toggleWindow() { if (isOpen()) closeWindow(); else openWindow(); }
 
@@ -254,14 +256,14 @@
   try {
     // Только ошибки НАШЕГО скрипта: он встроен в workbench.html, значит, у его ошибок filename —
     // адрес самой страницы (скрипты VS Code — отдельные .js). Во вкладке страница целиком наша.
-    window.addEventListener("error", function (ev) {
+    cdOnGlobal(window, "error", function (ev) {
       if (!ev) return;
       var fn = String(ev.filename || "").split("?")[0];
       var mine = IN_PANEL || (fn && typeof location !== "undefined" && fn === String(location.href).split("?")[0]) ||
         /mooncore-mod-cppdocs\.js$/.test(fn);   // файл модуля Moon Core рядом с оболочкой
       if (mine) reportError("window.onerror", ev.error || ev.message);
     });
-    if (IN_PANEL) window.addEventListener("unhandledrejection", function (ev) { reportError("promise", ev && ev.reason); });
+    if (IN_PANEL) cdOnGlobal(window, "unhandledrejection", function (ev) { reportError("promise", ev && ev.reason); });
   } catch (e) {}
   // Прочитать файл хранилища/расширения (vscode-file://; во вкладке — только зеркало прогресса).
   function fileRead(u) {
