@@ -66,6 +66,9 @@ function sandboxFrom(exe) {
 async function main() {
   let exe = process.env.VSCODE_EXE || null;
   if (!exe && (WANT_DOWNLOAD || (WANT_WINDOW && !WANT_SANDBOX))) exe = await downloadAndUnzipVSCode("stable");
+  // macOS: в новых сборках VS Code бинарник в .app называется Code, а test-electron 2.x ждёт Electron.
+  if (exe && !fs.existsSync(exe) && path.basename(exe) === "Electron" && fs.existsSync(path.join(path.dirname(exe), "Code")))
+    exe = path.join(path.dirname(exe), "Code");
   if (!exe) exe = installedVSCode();
   if (!exe) throw new Error("VS Code не найден: задайте VSCODE_EXE или запустите с --download");
   if (WANT_WINDOW && WANT_SANDBOX) {
