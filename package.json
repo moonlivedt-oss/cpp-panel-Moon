@@ -23,7 +23,7 @@
     "check:consistency": "node scripts/check-consistency.js",
     "check:zadachnik": "node scripts/check-zadachnik.js",
     "stamp:ids": "node scripts/stamp-ids.js",
-    "lint": "eslint extension scripts test installer/tools playwright.config.js",
+    "lint": "node --stack-size=4000 node_modules/eslint/bin/eslint.js extension scripts test installer/tools playwright.config.js",
     "version:set": "node scripts/set-version.js",
     "hash:runtime": "node scripts/hash-runtime.js",
     "hash:check": "node scripts/hash-runtime.js --check",

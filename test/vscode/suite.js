@@ -89,8 +89,10 @@ if (PHASE === "basic") {
     const h = info.hosts.find((x) => x.port === st.bridge.port);
     assert.ok(h, "хост записан в cpp-docs-bridge.json");
     const r1 = await post(h.port, "/rpc/" + h.token + "/action", { id: "e1", kind: "bogus" });
-    assert.strictEqual(r1.code, 200);
-    assert.strictEqual(JSON.parse(r1.body).ok, false);
+    // Действие выполняет только хост окна в фокусе, остальные отвечают 409 «не я». На раннере
+    // macOS окно тестового VS Code бывает не в фокусе — тогда 409 и есть правильный ответ.
+    assert.ok(r1.code === 200 || r1.code === 409, "action: " + r1.code);
+    if (r1.code === 200) assert.strictEqual(JSON.parse(r1.body).ok, false);
     const r2 = await post(h.port, "/rpc/" + h.token + "/run", { id: "e2", code: "int main(){}", tests: [] });
     assert.strictEqual(JSON.parse(r2.body).stage, "disabled", "без cppDocs.localRun запуск выключен");
     const r3 = await post(h.port, "/rpc/" + "0".repeat(48) + "/run", {});
