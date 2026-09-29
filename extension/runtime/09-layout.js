@@ -186,6 +186,7 @@
     if (splitTitleEl) splitTitleEl.textContent = f.title || f.name;
     setHTML(splitArticle, renderMarkdown(f.md || "", null));
     resolveImagesIn(splitArticle, f);
+    try { annotateAhead(splitArticle, f.rel); } catch (e) { reportError("забегаем вперёд", e); }
     var box = splitArticle.parentNode;
     if (hash) {
       var t = splitArticle.querySelector('[id="' + cssEscape(decodeURIComponent(String(hash).replace(/^#/, ""))) + '"]');

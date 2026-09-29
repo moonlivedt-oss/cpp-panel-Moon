@@ -134,10 +134,13 @@ function findStyleIssues(text) {
   // Поле класса без значения — не ошибка: его часто задаёт конструктор (A() : hp(10) {}).
   const scopes = [];
   let pendingClass = false;      // «struct P» — скобка на следующей строке
+  let pendingNs = false;         // «namespace game» — скобка на следующей строке
 
   lines.forEach((line, idx) => {
     const t = line.trim();
     const inClass = scopes[scopes.length - 1] === 'class';
+    // Глобальная (и в namespace) переменная без значения обнуляется сама — это не «мусор».
+    const inFunc = scopes.indexOf('block') !== -1;
     scan(RE.using, line, idx, 'using-namespace');
     scan(RE.rand, line, idx, 'rand');
     scan(RE.bits, line, idx, 'bits');
@@ -147,7 +150,7 @@ function findStyleIssues(text) {
     scan(RE.newE, line, idx, 'new-delete');
     scan(RE.del, line, idx, 'new-delete');
     const mu = line.match(RE.uninit);
-    if (mu && !inClass && !/^\s*(return|extern|typedef)\b/.test(line)) add('uninit', idx, mu[1].length, line.trimEnd().length - mu[1].length);
+    if (mu && inFunc && !inClass && !/^\s*(return|extern|typedef|static)\b/.test(line)) add('uninit', idx, mu[1].length, line.trimEnd().length - mu[1].length);
 
     // do { … } while (…); — тоже цикл: заголовок «do», а хвост «} while (…);» — не заголовок
     const isLoopHeader = ((/(^|[^\w])(for|while)\s*\(/.test(t) && !/^\}?\s*while\s*\(.*\)\s*;\s*$/.test(t)) ||
@@ -160,9 +163,13 @@ function findStyleIssues(text) {
     // Стек видов скобок: первая «{» после заголовка struct/class/union — тело класса.
     const classHeader = /^(template\s*<.*>\s*)?(struct|class|union)\b[^;()=]*$/.test(t.replace(/\{.*$/, ''));
     let firstIsClass = (classHeader && opens > 0) || (pendingClass && t.startsWith('{'));
+    // namespace — тоже не тело функции: переменные в нём глобальные
+    const nsHeader = /^(inline\s+)?namespace\b[^;()=]*$/.test(t.replace(/\{.*$/, ''));
+    let firstIsNs = (nsHeader && opens > 0) || (pendingNs && t.startsWith('{'));
+    if (nsHeader && !opens) pendingNs = true; else if (t) pendingNs = false;
     if (classHeader && !opens) pendingClass = true; else if (t) pendingClass = false;
     for (const ch of line) {
-      if (ch === '{') { scopes.push(firstIsClass ? 'class' : 'block'); firstIsClass = false; }
+      if (ch === '{') { scopes.push(firstIsClass ? 'class' : firstIsNs ? 'ns' : 'block'); firstIsClass = false; firstIsNs = false; }
       else if (ch === '}') scopes.pop();
     }
     if (isLoopHeader) {

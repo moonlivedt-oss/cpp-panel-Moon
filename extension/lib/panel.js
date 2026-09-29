@@ -22,7 +22,7 @@ const { onBroadcast, WRITABLE, MAX_BODY } = require('./bridge');
 const { METHODS } = require('./protocol');
 const { escapeScript } = require('./wb-patch');
 
-let _panel = null;
+let _panel = null, _panelSavedAt = 0;
 
 /** Данные окна с адресами картинок, понятными webview (file:/// → https://…vscode-cdn.net). */
 function panelData(context, webview) {
@@ -61,7 +61,9 @@ function buildHtml(context, webview) {
 function handleWrite(context, msg) {
   if (!msg || typeof msg.name !== 'string' || typeof msg.text !== 'string') return;
   if (!WRITABLE.has(msg.name) || Buffer.byteLength(msg.text, 'utf8') > MAX_BODY) return;
-  try { JSON.parse(msg.text); } catch (e) { return; }
+  let parsed;
+  try { parsed = JSON.parse(msg.text); } catch (e) { return; }
+  if (parsed && typeof parsed.savedAt === 'number') _panelSavedAt = parsed.savedAt;
   try {
     const file = path.join(storageDir(context), msg.name);
     fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -86,7 +88,8 @@ function openWindowPanel(context, dispatch) {
     else if (msg.type === 'rpc' && typeof msg.id === 'string' && METHODS.indexOf(msg.method) !== -1 && dispatch) {
       // во вкладке окно одно на этот хост — фокус не проверяем
       dispatch(msg.method, msg.body, { requireFocus: false })
-        .then((result) => { if (_panel) panel.webview.postMessage({ type: 'rpc-result', id: msg.id, result: result }); });
+        // вкладку могли закрыть (и даже открыть новую), пока шла сборка: пишем только в живую эту
+        .then((result) => { if (_panel === panel) panel.webview.postMessage({ type: 'rpc-result', id: msg.id, result: result }); });
     }
     else if (msg.type === 'ready') {
       // сразу отдать контекст редактора, если он есть
@@ -99,6 +102,13 @@ function openWindowPanel(context, dispatch) {
     if (event === 'stamp') {
       const data = panelData(context, panel.webview);
       if (data) panel.webview.postMessage({ type: 'data', data: data });
+    } else if (event === 'progress') {
+      // Прогресс поменяли снаружи (плавающее окно, боковая панель) — вкладке шлём зеркало целиком:
+      // файлы она не читает. Своё же сохранение узнаём по метке и назад не гоняем.
+      let at = 0;
+      try { at = JSON.parse(String(text)).savedAt || 0; } catch (e) { return; }
+      if (at && at === _panelSavedAt) return;
+      try { panel.webview.postMessage({ type: 'progress', text: fs.readFileSync(progressFilePath(context), 'utf8') }); } catch (e) {}
     } else if (event === 'editor') {
       panel.webview.postMessage({ type: event, text: String(text) });
     }
@@ -114,4 +124,4 @@ function openWindowPanel(context, dispatch) {
 /** Открыто ли окно во вкладке (для «Найти в справочнике»: без впечатанного окна — сюда). */
 function panelOpen() { return !!_panel; }
 
-module.exports = { openWindowPanel, panelOpen, panelData, handleWrite, buildHtml };
+module.exports = { openWindowPanel, panelOpen, handleWrite, buildHtml };

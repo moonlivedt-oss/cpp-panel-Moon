@@ -15,7 +15,7 @@ const Module = require("module");
 const ROOT = path.join(__dirname, "..");
 
 const BUDGET = {
-  runtimeKB: 900,          // extension/cpp-docs-runtime.js
+  runtimeKB: 1000,         // extension/cpp-docs-runtime.js (2026-09-27: +окно «Прогресс», применения примеров, «Забегаем вперёд»)
   inlineKB: 64,            // что впечатывается в workbench.html (оглавление + загрузчик)
   dataKB: 3500,            // полный файл данных окна (тексты + индекс поиска)
   renderAllMs: 800,        // renderMarkdown всех материалов подряд

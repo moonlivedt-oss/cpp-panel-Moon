@@ -25,7 +25,8 @@ var BUILD = path.join(ROOT, "build");
 // Путь к документации: аргументом или значение по умолчанию из манифеста
 var pkg = JSON.parse(fs.readFileSync(path.join(EXT, "package.json"), "utf8"));
 var defaultPath = pkg.contributes.configuration.properties["cppDocs.path"]["default"];
-var docsPath = process.argv[2] || defaultPath;
+// cppDocs.path по умолчанию пустой — тогда берём docs/ этого репозитория.
+var docsPath = process.argv[2] || defaultPath || path.join(__dirname, "..", "docs");
 
 // ------------------------------------------------------------
 //  Заглушка vscode — вне редактора модуля нет

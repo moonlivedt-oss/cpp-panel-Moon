@@ -228,6 +228,9 @@
     var exAgain = t.closest(".cd-exam-again");
     if (exAgain) { e.preventDefault(); examReset(exAgain); return true; }
     if (bossClick(t)) { e.preventDefault(); return true; }
+    if (repeatClick(t, e) || checkpointClick(t)) { e.preventDefault(); return true; }
+    var altB = t.closest(".cd-alt-go, .cd-alt-tab");
+    if (altB) { e.preventDefault(); altGo(altB); return true; }
     var stb = t.closest(".cd-st-btn");
     if (stb) { e.preventDefault(); stepsClick(stb); return true; }
     if (memClick(t)) { e.preventDefault(); return true; }
@@ -274,12 +277,14 @@
   // Отметить ката решённой (прогресс переживает перезапуск; день идёт в «серию»).
   function challengeSolved(box) {
     var id = box.getAttribute("data-id");
-    if (id && !state.challenge[id]) { state.challenge[id] = true; saveState(); try { recordActivity(); } catch (e) {} }
+    if (id && !state.challenge[id]) { state.challenge[id] = true; try { noteSolvedFirst(box); } catch (e) {} saveState(); try { recordActivity(); } catch (e) {} }
     if (id && state.daily && state.daily.id === id && state.daily.date === cdDate(0) && !state.dailyDone[cdDate(0)]) {
+      try { noteDailySolved(box); } catch (e) {}
       state.dailyDone[cdDate(0)] = 1; saveState();
       toast("Задача дня решена! Серия: " + dailyStreak());
     }
     box.classList.add("done");
+    try { repeatSolved(box); } catch (e) {}
   }
   // Parsons: клик по строке перекладывает её между «банком» и «решением».
   function parsonsPick(li) {
@@ -312,7 +317,7 @@
       if (!good) okAll = false;
     }
     if (okAll) { if (msg) { msg.textContent = "Верно! Программа собрана правильно."; msg.className = "cd-ch-msg ok"; } challengeSolved(box); }
-    else if (got.length === want.length) missParsons(box);   // собрал всё, но не в том порядке
+    else if (got.length === want.length) { missParsons(box); noteAttempt(box, false); }   // собрал всё, но не в том порядке
     else if (msg) { msg.textContent = got.length !== want.length ? ("Нужно " + want.length + " " + plural(want.length, ["строка", "строки", "строк"]) + ", а стоит " + got.length + ".") : ("Строка " + firstBad + " не на месте — поправь порядок."); msg.className = "cd-ch-msg err"; }
   }
   // Predict: сверяем введённый вывод с эталоном (построчно, схлопнув лишние пробелы).
@@ -325,7 +330,7 @@
     inp.classList.remove("right", "wrong"); inp.classList.add(good ? "right" : "wrong");
     if (msg) {
       if (good) { msg.textContent = "Верно!"; msg.className = "cd-ch-msg ok"; challengeSolved(box); }
-      else { msg.textContent = "Не совпало. Проследи код по шагам и попробуй снова."; msg.className = "cd-ch-msg err"; missPredict(box); }
+      else { msg.textContent = "Не совпало. Проследи код по шагам и попробуй снова."; msg.className = "cd-ch-msg err"; missPredict(box); noteAttempt(box, false); }
     }
   }
   function predictReveal(btn) {
@@ -334,9 +339,10 @@
     var exp = decodeURIComponent(box.getAttribute("data-exp") || "");
     if (inp) { inp.value = exp; inp.classList.remove("wrong"); }
     if (msg) { msg.textContent = "Ответ показан."; msg.className = "cd-ch-msg"; }
+    box.__revealed = true; noteHint(box);
     if (!box.classList.contains("done")) missPredict(box);
   }
-  // «Напиши и запусти»: пишем код+тесты в req-файл, ждём res-файл от хоста, показываем прогон.
+  // «Напиши и запусти»: код и тесты — запросом к расширению (мост / вкладка / Moon Core), ответ — прогон.
   var _runSeq = 0;
   function runChallengeRun(btn) {
     var box = btn.closest(".cd-ch-run"); if (!box) return;
@@ -344,15 +350,15 @@
     var ta = box.querySelector(".cd-run-code");
     if (!ta) return;
     var tests = []; try { tests = JSON.parse(decodeURIComponent(box.getAttribute("data-tests") || "[]")); } catch (e) {}
-    var id = "r" + Date.now() + "-" + (++_runSeq);
+    var id = "r" + Date.now() + "-" + (++_runSeq), mode = box.getAttribute("data-mode") === "contains" ? "contains" : undefined;
     btn.disabled = true;
     if (msg) { msg.textContent = "Компилирую и запускаю…"; msg.className = "cd-ch-msg"; }
     if (out) { out.hidden = true; setHTML(out, ""); }
     setMood(box, "think");
     // Запрос с ответом сразу: у каждой задачи своё ожидание, соседняя его не отменит.
-    rpc("run", { id: id, code: ta.value, tests: tests.slice(0, PROTO.MAX_TESTS) }, PROTO.RUN_TIMEOUT_MS, function (res) {
+    rpc("run", { id: id, code: ta.value, tests: tests.slice(0, PROTO.MAX_TESTS), mode: mode }, PROTO.RUN_TIMEOUT_MS, function (res) {
       btn.disabled = false;
-      if (res) { renderRunResult(box, res); return; }
+      if (res) { renderRunResult(box, res); try { noteRunResult(box, res); } catch (e) {} return; }
       setMood(box, "oops");
       if (msg) { msg.textContent = "Нет ответа от расширения. Проверь, что оно активно («Документация C++: проверить плавающее окно»)."; msg.className = "cd-ch-msg err"; }
     });
@@ -395,15 +401,28 @@
     var tests = res.tests || [], passed = 0, rows = "";
     tests.forEach(function (t) {
       if (t.pass) passed++;
+      if (t.skipped) {   // хост остановил прогон: программа зависла или кончилось время
+        rows += '<div class="cd-run-t skip"><span class="cd-run-tmark">–</span><span class="cd-run-tin">вход: <code>' +
+          testShow(t["in"] == null ? "∅" : t["in"]) + "</code> · не запускался</span></div>";
+        return;
+      }
       rows += '<div class="cd-run-t ' + (t.pass ? "ok" : "bad") + '"><span class="cd-run-tmark">' + (t.pass ? "✓" : "✗") + "</span>" +
         '<span class="cd-run-tin">вход: <code>' + testShow(t["in"] == null ? "∅" : t["in"]) + "</code></span>" +
         (t.pass ? "" : '<span class="cd-run-tgot">вывод <code>' + testShow(t.got == null ? "" : t.got) +
-          '</code> · ждали <code>' + testShow(t.expected == null ? "" : t.expected) + "</code></span>") + "</div>";
+          '</code> · ждали <code>' + testShow(t.expected == null ? "" : t.expected) + "</code></span>") +
+        // программа упала: причина простыми словами + начало stderr (там часто what() исключения)
+        (t.crash ? '<span class="cd-run-tcrash">💥 Программа упала: ' + escapeHtml(String(t.crash)) +
+          (t.stderr ? '<code>' + escapeHtml(String(t.stderr).slice(0, 300)) + "</code>" : "") + "</span>" : "") + "</div>";
     });
     if (out) { out.hidden = false; setHTML(out, rows || '<div class="cd-run-t ok"><span class="cd-run-tmark">✓</span><span class="cd-run-tin">скомпилировалось без ошибок</span></div>'); }
     if (msg) {
       if (res.ok && tests.length) { msg.textContent = "Все тесты пройдены (" + passed + "/" + tests.length + ")!"; msg.className = "cd-ch-msg ok"; challengeSolved(box); syncSolution(box); }
-      else if (tests.length) { msg.textContent = "Пройдено " + passed + " из " + tests.length + " — поправь код и запусти снова."; msg.className = "cd-ch-msg err"; }
+      else if (tests.length) {
+        msg.textContent = "Пройдено " + passed + " из " + tests.length + (res.stopped === "hang"
+          ? " — программа зависла (бесконечный цикл?), остальные тесты не запускались."
+          : res.stopped ? " — время вышло, остальные тесты не запускались." : " — поправь код и запусти снова.");
+        msg.className = "cd-ch-msg err";
+      }
       else { msg.textContent = "Скомпилировалось без ошибок."; msg.className = "cd-ch-msg ok"; }
     }
   }
@@ -576,6 +595,7 @@
     var hlu = e.target.closest && e.target.closest(".cd-hlu");
     if (hlu) { e.preventDefault(); removeHighlight(hlu); return; }
     if (quizClick(e)) return;
+    if (gamesClick(e)) return;                     // сундуки, волна поиска пути
     // клик по строке таблицы «Задачи темы» — переход к самой задаче
     var taskRow = e.target.closest && e.target.closest("tr.cd-taskrow");
     if (taskRow && !e.target.closest("a[href]")) { gotoTask(taskRow.getAttribute("data-num")); return; }
@@ -633,8 +653,10 @@
     return !!((t && t.nodeType === 1 && win.contains(t)) || (ae && ae !== document.body && win.contains(ae)));
   }
   function onKey(e) {
+    if (isOpen() && altKey(e)) return;                     // ← → листают применения примера
     if (!isOpen() || e.key !== "Escape") return;
     if (!focusInside(winEl, e.target, document.activeElement)) return;
+    if (progressOpen()) { e.stopPropagation(); hideProgress(); return; }                 // окно «Прогресс»
     if (guideEl && !guideEl.hidden) { e.stopPropagation(); hideGuide(); return; }        // сперва закрываем руководство
     if (viewMenu && !viewMenu.hidden) { viewMenu.hidden = true; return; }
     if (edPopEl && !edPopEl.hidden) { edPopEl.hidden = true; return; }

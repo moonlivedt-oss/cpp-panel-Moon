@@ -118,7 +118,7 @@
             Object.keys(files).forEach(function (k) { if (!Object.prototype.hasOwnProperty.call(eager, k)) eager[k] = files[k]; });
             return;
           }
-          var txt = url ? nodeRead(url) : null;
+          var txt = url ? fileRead(url) : null;
           if (txt) obj = JSON.parse(txt);
         }
       } catch (e) { obj = null; }
@@ -190,7 +190,7 @@
       return _palStickers;
     }
     var d = DATA(), url = (d && d.stickersUrl) || bootVal("stickersUrl");
-    var txt = url ? nodeRead(url) : null;
+    var txt = url ? fileRead(url) : null;
     if (!txt) return {};                 // файла нет (превью, старая сборка) — общий набор, без кэша
     _palStickers = parsePalStickers(txt);
     return _palStickers;

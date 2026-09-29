@@ -114,10 +114,11 @@
     if (state.whatsnew !== WHATSNEW) {
       newsHtml = '<div class="cd-whatsnew"><div class="cd-wn-h">' + emo("ui-news", "✨") + ' Что нового</div>' +
         '<ul class="cd-wn-list">' +
-        '<li><b>▶ По шагам</b> — код проигрывается строка за строкой: видно переменные и вывод на каждом шаге (циклы, функции, рекурсия, указатели, вектор, RAII)</li>' +
-        '<li><b>🤔 Загадки в разборах</b> — угадайте значение переменной до следующего шага; <b>👑 Босс темы</b> — итоговый мини-проект, открывается отметкой «Изучено»</li>' +
-        '<li><b>🕹️ Раздел «Создание игр»</b> — 9 тем: время и FPS, меню и пауза, поиск пути, лут, бой, консоль, сохранения, ИИ врагов, физика прыжка</li>' +
-        '<li><b>🎮 Сквозной проект «Подземелье»</b> — одна игра на весь курс; ошибки в загадках возвращаются в «Разминку»; на главной — <b>«Вы остановились»</b></li>' +
+        '<li><b>🏞️ Пейзажи</b> — у каждой палитры своя картинка на главной и в повторении карточек</li>' +
+        '<li><b>⚙ Новые настройки</b> — кнопка всегда в шапке; вкладки, палитры с картинками, образец текста прямо в окне</li>' +
+        '<li><b>🔤 Шрифты в комплекте</b> — Inter, PT Sans и Golos работают сразу, устанавливать не нужно</li>' +
+        '<li><b>🎴 Повторение карточек</b> — «сначала вспомни», «↶ Назад», «не помню» возвращается в конце сессии, итог с разбором</li>' +
+        '<li><b>▶ Запустить</b> — упавшая программа больше не засчитывается; причина падения — простыми словами</li>' +
         '</ul><button class="cd-wn-ok" type="button">Понятно</button></div>';
     }
 
@@ -135,6 +136,7 @@
     if (ts.total) qab += '<button class="cd-qa cd-qa-rand" type="button">' + emo("ui-dice", "🎲") + " Случайная задача</button>";
     if (cc.due + cc.neu > 0) qab += '<button class="cd-qa cd-qa-rev" type="button">' + emo("ui-cards", "🎴") + " Повторить" + (cc.due ? " · " + cc.due : "") + "</button>";
     qab += '<button class="cd-qa cd-qa-find" type="button">⌕ Найти</button>';
+    qab += '<button class="cd-qa cd-qa-prog" type="button">' + emo("icon-route", "") + " Прогресс</button>";
     qab += '<button class="cd-qa cd-qa-guide" type="button">' + emo("ui-guide", "📖") + " Обучение</button>";
     qaHtml = '<div class="cd-qabar">' + qab + "</div>";
 
@@ -160,6 +162,7 @@
       }
     }
     cardsHtml += dailyCardHtml();
+    try { cardsHtml += weeklyHomeHtml() + weakHomeHtml(); } catch (e) { reportError("главная: прогресс", e); }
     var planHtml = "", trackHtml = courseTrack();
 
     if (allDone) {
@@ -372,6 +375,16 @@
     }
     var qaFind = homeEl.querySelector(".cd-qa-find");
     if (qaFind && hsIn) qaFind.addEventListener("click", function () { hsIn.focus(); hsIn.select(); });
+    var qaProg = homeEl.querySelector(".cd-qa-prog");
+    if (qaProg) qaProg.addEventListener("click", function () { showProgress("map"); });
+    var wkBtn = homeEl.querySelector(".cd-weekly");
+    if (wkBtn) {
+      wkBtn.addEventListener("click", function () { showProgress("weekly"); });
+      wkBtn.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); showProgress("weekly"); } });
+    }
+    homeEl.querySelectorAll(".cd-weak-go").forEach(function (b) {
+      b.addEventListener("click", function () { runWeakAction(b.getAttribute("data-wrel"), b.getAttribute("data-wk"), b.getAttribute("data-wx")); });
+    });
     var qaGuide = homeEl.querySelector(".cd-qa-guide");
     if (qaGuide) qaGuide.addEventListener("click", function () { showGuide(); });
     if (hsIn && hsRes) {
@@ -557,6 +570,7 @@
       rnameEl.textContent = reviewing ? "Повторение карточек" : "Главная";
       rnameEl.removeAttribute("title");
       if (crumbEl.textContent) crumbEl.textContent = "";
+      if (secProgEl) secProgEl.hidden = true;   // «0/8 ●●●» прошлого материала не должен висеть на главной и в повторении
     }
     // Цвет раздела: кромка и лёгкий тон шапки. На главной — обычный акцент.
     var col = reading && current.groupColor;
@@ -813,7 +827,7 @@
   }
   function guideAction(act) {
     if (act === "sepia") { state.theme = (state.theme === "sepia" ? "auto" : "sepia"); saveState(); applyThemeClasses(); applyAccent(); }
-    else if (act === "settings") { hideGuide(); if (viewMenu) viewMenu.hidden = false; }
+    else if (act === "settings") { hideGuide(); openSettings(); }
     else if (act === "tour") { hideGuide(); showHome(); setTimeout(startTour, 300); }
     else if (act === "search") { hideGuide(); if (searchInput) { try { searchInput.focus(); searchInput.select(); } catch (e) {} } }
     else if (act === "live" || act === "kata" || act === "steps") {

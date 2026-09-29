@@ -70,5 +70,5 @@ test("меню настроек", async ({ page }) => {
   await openWindow(page, {});
   await openTopic(page, /Основы: сборка/);
   await page.locator("#cppdocs-window .cd-rbtn[title^=\"Настройки\"]").click();
-  await expect(page.locator("#cppdocs-window .cd-viewmenu")).toHaveScreenshot("settings-menu.png");
+  await expect(page.locator("#cppdocs-window .cd-set-card")).toHaveScreenshot("settings-menu.png");
 });

@@ -33,6 +33,7 @@
   var findBtn = null, findBar = null, findInput = null, findCountEl = null;  // поиск по тексту материала
   var findHits = [], findIdx = -1;   // найденные <mark> и текущий
   var reviewEl = null, reviewQueue = [], reviewPos = 0, reviewOk = 0, reviewWarmup = false;  // сессия повторения карточек (+ это «Разминка дня»?)
+  var reviewLog = [], reviewUndo = null, reviewStreak = 0, reviewTyped = "";   // оценки сессии, «↶ Назад», серия, «сначала вспомни»
   var backBtn = null, fwdBtn = null;     // навигация по истории переходов
   var fillEl = null, ptextEl = null, continueBtn = null;
   var current = null;        // текущий файл (объект из data)
@@ -219,14 +220,15 @@
     reader.appendChild(tabsEl);
     readBtn = el("button", null); readBtn.className = "cd-rbtn cd-readbtn"; setHTML(readBtn, uiLabel("read-off", "○", "Изучено"));
     readBtn.title = "Отметить материал изученным";
-    // меню вида: шрифт / ширина / плотность
-    var viewWrap = el("div", null); viewWrap.className = "cd-tocwrap";
-    viewBtn = el("button", null); viewBtn.className = "cd-rbtn"; setHTML(viewBtn, uiLabel("settings", "⚙")); viewBtn.title = "Настройки: шрифт, ширина, разборы, подсказки, анимации";
-    viewMenu = el("div", null); viewMenu.className = "cd-viewmenu"; viewMenu.hidden = true;
-    viewWrap.appendChild(viewBtn); viewWrap.appendChild(viewMenu);
+    // Настройки — отдельная кнопка, видна ВСЕГДА (на главной, в повторении, в материале); сама
+    // панель — окно поверх всего окна документации (кладём его в корень окна в wireViewMenu).
+    viewBtn = el("button", null); viewBtn.className = "cd-rbtn cd-setbtn"; viewBtn.type = "button";
+    setHTML(viewBtn, uiLabel("settings", "⚙")); viewBtn.title = "Настройки: тема, палитра, шрифт, поведение";
+    viewBtn.setAttribute("aria-label", "Настройки"); viewBtn.setAttribute("aria-haspopup", "dialog");
+    viewMenu = el("div", null); viewMenu.className = "cd-viewmenu cd-set"; viewMenu.hidden = true;
     tocBtn = el("button", null); tocBtn.className = "cd-rbtn cd-file-only"; setHTML(tocBtn, uiLabel("sections", "☰", "Разделы"));
     tocBtn.title = "Оглавление файла сбоку (показать/скрыть)";
-    viewWrap.classList.add("cd-file-only"); readBtn.classList.add("cd-file-only");
+    readBtn.classList.add("cd-file-only");
     // кнопка возврата на главный экран (приветствие) — всегда видна
     homeBtn = el("button", null); homeBtn.className = "cd-rbtn cd-hb-home"; homeBtn.type = "button"; setHTML(homeBtn, uiLabel("home", "⌂", "Главная"));
     homeBtn.title = "На главную (приветствие и быстрый доступ)";
@@ -240,9 +242,9 @@
     findBtn = el("button", null); findBtn.className = "cd-rbtn cd-file-only"; findBtn.type = "button"; setHTML(findBtn, uiLabel("find", "⌕"));
     findBtn.title = "Найти в этом материале"; findBtn.setAttribute("aria-label", "Найти в материале");
     findBtn.addEventListener("click", function () { toggleFind(); });
-    // Инструменты (настройки, поиск, копировать) — одной сегментированной капсулой.
+    // Инструменты материала (поиск, копировать) — одной сегментированной капсулой.
     var tools = el("div", null); tools.className = "cd-rgrp cd-file-only";
-    tools.appendChild(viewWrap); tools.appendChild(findBtn); tools.appendChild(copyDocBtn);
+    tools.appendChild(findBtn); tools.appendChild(copyDocBtn);
     // Маскот выглядывает из-за нижней кромки шапки — рядом с кнопками (декор, не кликается).
     if ((typeof STICKERS !== "undefined" && STICKERS && STICKERS["ui-peek"])) {
       var peek = el("img", null); peek.className = "cd-peek"; peek.alt = ""; peek.src = STICKERS["ui-peek"];
@@ -250,7 +252,7 @@
       hrt.appendChild(peek);
     }
     // Бывшая вторая полоса «панель темы» живёт в шапке окна (одна полоса — больше места под текст).
-    hrt.appendChild(homeBtn); hrt.appendChild(tocBtn); hrt.appendChild(tools); hrt.appendChild(readBtn);
+    hrt.appendChild(homeBtn); hrt.appendChild(viewBtn); hrt.appendChild(tocBtn); hrt.appendChild(tools); hrt.appendChild(readBtn);
 
     // тонкая полоса прогресса чтения текущего файла
     var rprog = el("div", null); rprog.className = "cd-rprog";
@@ -384,7 +386,9 @@
     // При открытии окна показываем главный экран (приветствие). Файл уже загружен под ним —
     // клик по «Продолжить»/карточке/навигатору просто скрывает оверлей и открывает материал.
     showHome();
-    if (!state.tourDone) setTimeout(function () { startTour(); }, 700);   // первое открытие — знакомство в 3 шага
+    // первое открытие — знакомство в 3 шага; только если главная ещё на экране (материал могли
+    // открыть за эти 0,7 с — например, «Найти в справочнике» из редактора; тогда тур — в следующий раз)
+    if (!state.tourDone) setTimeout(function () { if (homeEl && !homeEl.hidden) startTour(); }, 700);
 
     // Esc закрывает окно (и меню разделов).
     document.addEventListener("keydown", onKey, true);

@@ -152,12 +152,14 @@ check("injectWindowFiles проверяет рантайм перед инъек
 // #1+#2 инлайн: данные и рантайм впечатываются В оболочку (внешний file://-скрипт VS Code блокирует).
 check("injectWindowFiles впечатывает данные инлайном (windowDataBody/__CPPDOCS__)",
       extRaw.indexOf("windowDataBody") !== -1 && extRaw.indexOf("window.__CPPDOCS__ = ") !== -1);
-// #4 паритет офлайн-установщика: те же маркеры и та же инлайн-схема, что в JS.
-var ps1 = fs.readFileSync(path.join(EXT, "..", "installer", "tools", "window-inject.ps1"), "utf8");
-check("PS1-установщик: те же маркеры + инлайн данных/рантайма + экранирование </script",
-      ps1.indexOf("CPPDOCS-WINDOW-START") !== -1 &&
-      ps1.indexOf("$dataJs") !== -1 && ps1.indexOf("$runtimeJs") !== -1 &&
-      ps1.indexOf("<\\/script") !== -1);
+// #4 паритет офлайн-установщика: батники зовут код самого расширения (tools/window.js ->
+// window-cli.js -> wb-patch), своей копии логики вставки у них нет.
+var toolsDir = path.join(EXT, "..", "installer", "tools");
+var winJs = fs.readFileSync(path.join(toolsDir, "window.js"), "utf8");
+var cliJs = fs.readFileSync(path.join(EXT, "window-cli.js"), "utf8");
+check("установщик: окно впечатывает код расширения (window.js -> window-cli.js -> wb-patch)",
+      winJs.indexOf("window-cli.js") !== -1 && cliJs.indexOf("require('./lib/wb-patch')") !== -1 &&
+      !fs.existsSync(path.join(toolsDir, "window-inject.ps1")));
 // #6 упаковщик падает при рассинхроне версий и требует запись в CHANGELOG.
 var packRaw = fs.readFileSync(path.join(EXT, "..", "scripts", "package-extension.js"), "utf8");
 check("упаковщик требует совпадения версий и записи в CHANGELOG",

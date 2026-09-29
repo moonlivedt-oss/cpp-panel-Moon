@@ -16,8 +16,10 @@ const { writeDocsData, windowDataBody } = require('./data');
 
 const WINDOW_SETUP_KEY = 'cppDocs.windowSetupOffered';      // предложили окно один раз
 const WINDOW_ON_KEY = 'cppDocs.windowEnabled';              // окно было включено (для восстановления после апдейта)
+const WINDOW_VIA_MC_KEY = 'cppDocs.windowViaMooncore';      // окно встраивал Moon Core (его удалили — своя вставка снята)
 const { WB_START, escapeScript, makeNonce, armCspWithNonce, buildWindowBlock, applyWindowInjection,
-  stripWindowInjection, writeWorkbenchAtomic, restoreCspFromBackup, findWorkbenchIn, unpatchFile, injectedRuntimeSha } = require('./wb-patch');
+  stripWindowInjection, writeWorkbenchAtomic, restoreCspFromBackup, findWorkbenchIn, unpatchFile, injectedRuntimeSha,
+  SHELL_RE, stageRuntimeIn, checkRuntime, patchFileWithBlock } = require('./wb-patch');
 const { storageDir } = require('./storage');
 
 // Якорь целостности рантайма. Значение хранится в extension.js (доверенная точка) и
@@ -69,31 +71,8 @@ function cleanupLeftovers() {
   return removed;
 }
 
-/** vscode-file://-адрес файла на диске — так оболочка VS Code отдаёт свои и пользовательские файлы. */
-function appFileUrl(p) {
-  const abs = path.resolve(p).replace(/\\/g, '/').replace(/^\/+/, '');
-  return 'vscode-file://vscode-app/' + abs.split('/').map((seg) => encodeURIComponent(seg).replace(/%3A/gi, ':')).join('/');
-}
-const RUNTIME_FILE_RE = /^cpp-docs-runtime-([0-9a-f]{12})\.js$/;
-/** Положить рантайм в хранилище под именем с хэшем (cpp-docs-runtime-<sha12>.js). Имя меняется
- *  с каждой версией: оболочка, ещё ссылающаяся на старый файл, работает до перезапуска, а
- *  новый блок ссылается на новый. Держим два последних файла. → { path, src, integrity, sha }. */
-function stageRuntime(context, runtimeJs, sha) {
-  const dir = storageDir(context);
-  fs.mkdirSync(dir, { recursive: true });
-  const name = 'cpp-docs-runtime-' + sha.slice(0, 12) + '.js';
-  const file = path.join(dir, name);
-  let same = false;
-  try { same = fs.readFileSync(file, 'utf8') === runtimeJs; } catch (e) {}
-  if (!same) { const tmp = file + '.' + process.pid + '.tmp'; fs.writeFileSync(tmp, runtimeJs, 'utf8'); fs.renameSync(tmp, file); }
-  try {
-    fs.readdirSync(dir).filter((n) => RUNTIME_FILE_RE.test(n) && n !== name)
-      .map((n) => ({ n, t: fs.statSync(path.join(dir, n)).mtimeMs })).sort((a, b) => b.t - a.t)
-      .slice(1).forEach((x) => { try { fs.unlinkSync(path.join(dir, x.n)); } catch (e) {} });
-  } catch (e) {}
-  const integrity = 'sha256-' + crypto.createHash('sha256').update(runtimeJs, 'utf8').digest('base64');
-  return { path: file, src: appFileUrl(file), integrity, sha };
-}
+/** Положить рантайм в хранилище расширения (см. wb-patch.stageRuntimeIn). */
+function stageRuntime(context, runtimeJs, sha) { return stageRuntimeIn(storageDir(context), runtimeJs, sha); }
 /** SHA рантайма, на который сейчас ссылается оболочка ('' — окна нет или старый инлайн-вариант). */
 function injectedSha() {
   for (const f of findWorkbenchFiles()) {
@@ -115,19 +94,11 @@ function injectWindowFiles(context) {
   let runtimeJs;
   try { runtimeJs = fs.readFileSync(scriptPath, 'utf8'); }
   catch (e) { return { ok: false, done: 0, denied: false, reason: 'read-runtime' }; }
-  // Санити: пустой/подменённый рантайм в оболочку не впечатываем (нужен размер + свой маркер).
-  if (runtimeJs.length < 5000 || runtimeJs.indexOf('__CPPDOCS_RUNTIME__') === -1) {
+  // Санити + целостность: пустой/подменённый рантайм в оболочку не впечатываем (маркер, размер,
+  // SHA-256 = якорь runtimeAnchor; пустой якорь — dev до генерации — хэш не сверяем).
+  if (checkRuntime(runtimeJs, runtimeAnchor)) {
+    log('инъекция окна отменена: рантайм повреждён или SHA-256 не совпал с ожидаемым — возможна подмена');
     return { ok: false, done: 0, denied: false, reason: 'bad-runtime' };
-  }
-  // Целостность: хэш рантайма должен совпасть с якорем runtimeAnchor (защита от подмены).
-  // Пустой якорь (dev до генерации) — проверку пропускаем.
-  if (runtimeAnchor) {
-    let actual = '';
-    try { actual = crypto.createHash('sha256').update(runtimeJs, 'utf8').digest('hex'); } catch (e) {}
-    if (actual && actual !== runtimeAnchor) {
-      log('инъекция окна отменена: SHA-256 рантайма (' + actual.slice(0, 12) + '…) не совпал с ожидаемым — возможна подмена');
-      return { ok: false, done: 0, denied: false, reason: 'bad-runtime' };
-    }
   }
   let staged;
   try { staged = stageRuntime(context, runtimeJs, crypto.createHash('sha256').update(runtimeJs, 'utf8').digest('hex')); }
@@ -135,22 +106,9 @@ function injectWindowFiles(context) {
   const block = buildWindowBlock(dataBody, staged, nonce);
   let done = 0, denied = false;
   for (const f of files) {
-    // Пишем только в настоящий workbench.html оболочки, не в случайный файл.
-    if (!/[\\/]workbench[\\/]workbench\.html$/i.test(f)) continue;
-    try {
-      const bak = f + '.cppdocs-backup';
-      const raw = fs.readFileSync(f, 'utf8');
-      // Бэкап держим равным оригиналу: файл ещё без нашего маркера — значит чистая оболочка.
-      if (raw.indexOf(WB_START) === -1) { try { fs.copyFileSync(f, bak); } catch (e) {} }
-      else if (!fs.existsSync(bak)) { try { fs.copyFileSync(f, bak); } catch (e) {} }
-      // Переподключение: сперва вернуть CSP из бэкапа (armCspWithNonce ещё и сам чистит старые nonce).
-      const base = raw.indexOf(WB_START) === -1 ? raw : restoreCspFromBackup(raw, bak);
-      const html = armCspWithNonce(base, nonce);
-      const next = applyWindowInjection(html, block);
-      if (next == null) continue;
-      writeWorkbenchAtomic(f, next);
-      done++;
-    } catch (e) {
+    if (!SHELL_RE.test(f)) continue;
+    try { if (patchFileWithBlock(f, block, nonce)) done++; }
+    catch (e) {
       if (e && (e.code === 'EACCES' || e.code === 'EPERM')) denied = true;
       log('инъекция окна: не удалось записать ' + f, e);
     }
@@ -164,7 +122,11 @@ function injectWindowFiles(context) {
  *  следующего запуска VS Code, текущий сеанс доживает на старом файле. */
 function ensureRuntimeCurrent(context) {
   try {
-    if (!context.globalState.get(WINDOW_ON_KEY) || !windowInjected() || !runtimeAnchor) return false;
+    if (mooncoreActive()) return false;   // рантайм обновляет Moon Core
+    // Блок в оболочке — уже согласие (его мог впечатать и батник установщика без ключа в globalState):
+    // запоминаем окно включённым, чтобы после обновления VS Code тоже предложить вернуть его.
+    if (!windowInjected() || !runtimeAnchor) return false;
+    if (!context.globalState.get(WINDOW_ON_KEY)) { try { context.globalState.update(WINDOW_ON_KEY, true); } catch (e) {} }
     if (injectedSha() === runtimeAnchor) return false;
     const r = injectWindowFiles(context);
     log('окно: ссылка на рантайм обновлена под новую версию расширения — ' + (r.ok ? 'готово' : 'не удалось: ' + r.reason));
@@ -172,8 +134,31 @@ function ensureRuntimeCurrent(context) {
   } catch (e) { log('обновление рантайма окна', e); return false; }
 }
 
+/** Окно встраивает Moon Core (модуль cppdocs): снять свою вставку, чтобы окно не шло дважды. */
+function adoptMooncore(context) {
+  let done = 0;
+  for (const f of findWorkbenchFiles()) {
+    try { if (unpatchFile(f)) done++; } catch (e) { log('Moon Core: снятие своей вставки ' + f, e); }
+  }
+  try { cleanupLeftovers(); } catch (e) {}
+  try { context.globalState.update(WINDOW_ON_KEY, true); context.globalState.update(WINDOW_VIA_MC_KEY, true); } catch (e) {}
+  log('окно встраивает Moon Core' + (done ? ': своя вставка снята (' + done + ')' : ''));
+  if (done) vscode.window.showInformationMessage('Документация C++: окно теперь встраивает Moon Core. Перезагрузите окно VS Code, чтобы применить.', 'Перезагрузить')
+    .then((p) => { if (p) vscode.commands.executeCommand('workbench.action.reloadWindow'); });
+  return done;
+}
+function mooncoreActive() { try { return require('./mooncore').active(); } catch (e) { return false; } }
+
+const DENIED_MSG = 'Нет доступа на запись к оболочке VS Code: он установлен для всех пользователей (Program Files). ' +
+  'Без прав администратора то же окно работает во вкладке. Насовсем — поставьте VS Code вариантом User Installer (в папку пользователя).';
+
 /** Подключить плавающее окно: прямой патч оболочки, без стороннего загрузчика. */
 async function enableWindow(context) {
+  if (mooncoreActive()) {
+    vscode.window.showInformationMessage('Документация C++: окно встраивает Moon Core. Включить или выключить его можно в «Moon Core: Модули».', 'Открыть модули')
+      .then((p) => { if (p) vscode.commands.executeCommand('moonCore.modules'); });
+    return;
+  }
   const r = injectWindowFiles(context);
   if (!r.ok) {
     const msg = {
@@ -182,13 +167,17 @@ async function enableWindow(context) {
       'read-runtime': 'Не удалось прочитать рантайм окна.',
       'bad-runtime': 'Файл рантайма окна повреждён или подменён — инъекция отменена. Переустановите расширение.',
       'no-workbench': 'Не удалось найти workbench.html в установке VS Code — прямой патч невозможен.',
-      'denied': 'Нет доступа на запись к оболочке VS Code. Запустите VS Code от имени администратора и повторите.',
+      'denied': DENIED_MSG,
       'no-head': 'Не удалось впечатать окно в оболочку VS Code.',
     }[r.reason] || 'Не удалось подключить окно.';
-    vscode.window.showErrorMessage(msg);
+    // Нет прав на оболочку — не тупик: то же окно работает во вкладке, без правки VS Code.
+    if (r.reason === 'denied') {
+      vscode.window.showErrorMessage(msg, 'Открыть во вкладке')
+        .then((p) => { if (p) vscode.commands.executeCommand('cppDocs.openWindowTab'); });
+    } else vscode.window.showErrorMessage(msg);
     return;
   }
-  try { context.globalState.update(WINDOW_ON_KEY, true); } catch (e) {}
+  try { context.globalState.update(WINDOW_ON_KEY, true); context.globalState.update(WINDOW_VIA_MC_KEY, false); } catch (e) {}
   const pick = await vscode.window.showInformationMessage(
     'Плавающее окно подключено. Перезапустить редактор? (Баннер «…appears to be corrupt» можно закрыть — это ожидаемо.)',
     'Перезапустить', 'Позже');
@@ -199,6 +188,11 @@ async function enableWindow(context) {
 
 /** Отключить плавающее окно: снять наш патч + удалить файл данных + почистить наследие загрузчиков. */
 async function disableWindow(context) {
+  if (mooncoreActive()) {
+    vscode.window.showInformationMessage('Документация C++: окно встраивает Moon Core — отключается там, в «Moon Core: Модули».', 'Открыть модули')
+      .then((p) => { if (p) vscode.commands.executeCommand('moonCore.modules'); });
+    return;
+  }
   let done = 0, denied = false;
   for (const f of findWorkbenchFiles()) {
     try {
@@ -214,14 +208,14 @@ async function disableWindow(context) {
   try { context.globalState.update(WINDOW_ON_KEY, false); } catch (e) {}
   vscode.window.showInformationMessage(done
     ? 'Плавающее окно отключено. Перезапустите редактор (Developer: Reload Window).'
-    : (denied ? 'Нет доступа на запись к оболочке VS Code (нужен администратор).'
+    : (denied ? 'Нет доступа на запись к оболочке VS Code: она установлена для всех пользователей (Program Files), снять окно можно только с правами администратора.'
               : 'Инъекция окна не найдена — оболочка уже чистая.'));
 }
 
 /** Одна команда-переключатель: окно впечатано — снять, иначе подключить. Удобная единая точка
  *  входа (без отдельной горячей клавиши) — по состоянию оболочки решаем, что делать. */
 async function toggleWindow(context) {
-  if (windowInjected()) return disableWindow(context);
+  if (mooncoreActive() || windowInjected()) return disableWindow(context);
   return enableWindow(context);
 }
 
@@ -252,7 +246,10 @@ async function windowHealth(context) {
     }
   } catch (e) { dataInfo = 'ошибка чтения'; }
   const leftovers = countLeftovers();
+  const mcs = require('./mooncore').status();
   const L = [
+    'Встраивание: ' + (mcs.active ? 'Moon Core (модуль cppdocs)' + (mcs.lastSeen ? ', окно выходило на связь ' + Math.round((Date.now() - mcs.lastSeen) / 1000) + ' с назад' : '')
+      : mcs.installed ? 'своя вставка (Moon Core есть, но модуль не разрешён — «Moon Core: Модули»)' : 'своя вставка'),
     'Оболочка VS Code (workbench.html): ' + (patched ? 'пропатчена' : 'НЕ пропатчена'),
     'Файл workbench.html найден: ' + (wbFiles.length ? 'да (' + wbFiles.length + ')' : 'НЕТ'),
     'Файл рантайма на месте: ' + (fs.existsSync(script) ? 'да' : 'НЕТ'),
@@ -262,11 +259,15 @@ async function windowHealth(context) {
     'Связь окна с расширением: ' + bridgeLine(),
     'Ошибок в окне за сессию: ' + require('./rpc').windowErrorCount() + ' (подробности — «Документация C++: показать журнал»)',
   ];
-  const actions = patched ? ['Отключить окно', 'Переподключить'] : ['Подключить окно'];
+  // Окно встраивает Moon Core — своей вставки нет и не должно быть: вместо «Подключить» ведём в его модули.
+  if (mcs.active) L[1] = 'Оболочка VS Code: окно встраивает Moon Core (своя вставка не нужна)';
+  const actions = mcs.active ? ['Модули Moon Core'] : patched ? ['Отключить окно', 'Переподключить'] : ['Подключить окно'];
   // Переводы строк показывает только модальный диалог (detail); в тосте семь пунктов слились бы в строку.
   const pick = await vscode.window.showInformationMessage(
     'Плавающее окно — состояние', { modal: true, detail: '• ' + L.join('\n• ') }, ...actions);
-  if (pick === 'Подключить окно' || pick === 'Переподключить') {
+  if (pick === 'Модули Moon Core') {
+    try { await vscode.commands.executeCommand('moonCore.modules'); } catch (e) {}
+  } else if (pick === 'Подключить окно' || pick === 'Переподключить') {
     await enableWindow(context);
   } else if (pick === 'Отключить окно') {
     await disableWindow(context);
@@ -274,9 +275,9 @@ async function windowHealth(context) {
 }
 
 module.exports = {
-  WINDOW_ON_KEY, WINDOW_SETUP_KEY, setRuntimeAnchor,
+  WINDOW_ON_KEY, WINDOW_SETUP_KEY, WINDOW_VIA_MC_KEY, setRuntimeAnchor,
   escapeScript, armCspWithNonce, makeNonce, buildWindowBlock,
   applyWindowInjection, stripWindowInjection, writeWorkbenchAtomic, restoreCspFromBackup,
-  findWorkbenchFiles, windowInjected, cleanupLeftovers, injectWindowFiles, ensureRuntimeCurrent, stageRuntime, appFileUrl, injectedSha,
-  enableWindow, disableWindow, toggleWindow, windowHealth,
+  findWorkbenchFiles, windowInjected, cleanupLeftovers, injectWindowFiles, ensureRuntimeCurrent, stageRuntime, injectedSha,
+  enableWindow, disableWindow, toggleWindow, windowHealth, adoptMooncore,
 };

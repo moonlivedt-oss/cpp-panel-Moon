@@ -6,7 +6,7 @@
 
 **Уровень:** 🟡 нужна база · **Опирается на:** [Логика и циклы](03-logika-cikly.md), [Функции](04-funkcii.md)
 
-[← Начни отсюда](../00-НАЧНИ-ОТСЮДА.md) · [← Функции](04-funkcii.md) · [Контейнеры: vector, map, set, pair →](06-konteynery.md) · [Примеры программ](../examples/README.md)
+[← Начни отсюда](../00-НАЧНИ-ОТСЮДА.md) · [Маршрут изучения](../00-marshrut.md) · [← Функции](04-funkcii.md) · [Контейнеры →](06-konteynery.md)
 
 ---
 
@@ -80,6 +80,22 @@ std::string repeated(5, 'x');         // → xxxxx   пять одинаковы
 
 Мысленная модель: строка — это «коробка с ручкой». Ручка (сам объект `std::string`) маленькая и лежит там же, где обычные переменные; за ручку ты берёшь всю коробку с текстом, которая может быть где угодно в памяти и любого размера. Когда ты копируешь строку, копируется и содержимое коробки — вот почему большой текст в функцию передают по `const&` (за ручку, без копирования всей коробки), а не по значению.
 
+```badgood
+Так пишут в C: массив символов | Так пишут на C++: std::string
+#include <cstring>
+
+char name[10];
+strcpy(name, "Александр");  // 18 байт в 10 —
+                            // запись за край массива
+strcat(name, "!");          // ещё дальше
+---
+#include <string>
+
+std::string name = "Александр";  // память — сама
+name += "!";                     // растёт сама
+std::cout << name.size();        // длина известна
+```
+
 ### Основные операции
 
 ```cpp
@@ -149,6 +165,22 @@ else
 std::cout << s.find('o') << "\n";              // → 4   первое вхождение символа
 std::cout << s.rfind('o') << "\n";             // → 7   последнее вхождение
 std::cout << s.find("xyz") << "\n";            // → 18446744073709551615 (это и есть npos)
+```
+
+```cpp alt: Найти расширение файла
+std::string file = "report.final.docx";
+std::size_t dot = file.rfind('.');                 // ищем с конца: последняя точка
+std::string ext = dot == std::string::npos ? "" : file.substr(dot + 1);
+std::cout << ext << "\n";   // docx
+```
+
+```cpp alt: Есть ли запрещённое слово в чате
+std::string message = "это просто спам и реклама";
+std::vector<std::string> banned = {"спам", "казино"};
+bool bad = false;
+for (const std::string &w : banned)
+  if (message.find(w) != std::string::npos) bad = true;
+std::cout << (bad ? "сообщение скрыто" : message) << "\n";
 ```
 
 > `find` **никогда** не возвращает `-1`. Сравнивай только с `std::string::npos`.
@@ -300,6 +332,25 @@ bool isPalindrome(const std::string &s) {
 
 std::cout << isPalindrome("level") << "\n";     // → 1
 std::cout << isPalindrome("hello") << "\n";     // → 0
+```
+
+```cpp alt: Проверка пароля по символам
+std::string pass = "Secret42";
+bool digit = false, upper = false;
+for (char c : pass) {
+  unsigned char u = static_cast<unsigned char>(c);
+  if (std::isdigit(u)) digit = true;
+  if (std::isupper(u)) upper = true;
+}
+std::cout << (digit && upper && pass.size() >= 8 ? "OK" : "слабый") << "\n";
+```
+
+```cpp alt: Шифр Цезаря для латиницы
+std::string text = "attack at dawn";
+int shift = 3;
+for (char &c : text)
+  if (c >= 'a' && c <= 'z') c = static_cast<char>('a' + (c - 'a' + shift) % 26);
+std::cout << text << "\n";   // dwwdfn dw gdzq
 ```
 
 Двумя «пальцами» навстречу друг другу — на слове `"radar"`:
@@ -590,6 +641,34 @@ $ ./zaglavnye
 
 > **Когда этого мало.** Рецепты выше — для русского и английского текста в учебных задачах. Полноценная работа со всеми языками мира (турецкая `i`, немецкая `ß`, составные эмодзи) — задача для специальных библиотек вроде ICU. В учебе до неё не дойдёт.
 
+**Предскажи вывод** — проверь, как ты понимаешь `find`, `substr` и перебор символов.
+
+```challenge
+@id c1mji050
+@type predict
+Что напечатает программа?
+---
+std::string s = "hello";
+s += " world";
+std::cout << s.size() << " " << s.find('o') << " " << s.substr(6, 3);
+---
+11 4 wor
+```
+
+```challenge
+@id cfa2zwm
+@type predict
+Сколько дефисов и какой последний символ?
+---
+std::string s = "a-b-c";
+int dashes = 0;
+for (char c : s)
+    if (c == '-') ++dashes;
+std::cout << dashes << s.back();
+---
+2c
+```
+
 ## Рецепты: хочу X → вот код
 
 Ищешь не функцию, а решение задачи — начни отсюда.
@@ -804,4 +883,4 @@ int main() {
 
 ---
 
-[← Начни отсюда](../00-НАЧНИ-ОТСЮДА.md) · [← Функции](04-funkcii.md) · [Контейнеры: vector, map, set, pair →](06-konteynery.md) · [Примеры программ](../examples/README.md)
+[← Начни отсюда](../00-НАЧНИ-ОТСЮДА.md) · [Маршрут изучения](../00-marshrut.md) · [← Функции](04-funkcii.md) · [Контейнеры →](06-konteynery.md)

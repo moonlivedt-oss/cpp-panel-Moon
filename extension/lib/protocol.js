@@ -14,14 +14,14 @@ const PROTOCOL = {
   // Файл, который окно пишет целиком (зеркало прогресса) — POST /w/<токен>/<имя>.
   WRITABLE: ['cpp-docs-progress.json'],
   // События потока (SSE /events) и сообщений вкладки.
-  EVENTS: ['editor', 'stamp', 'data', 'theme'],
+  EVENTS: ['editor', 'stamp', 'data', 'theme', 'progress'],
   // Файлы хранилища, изменения которых хост рассылает событиями.
-  EVENT_FILES: { 'cpp-docs-editor.js': 'editor', 'cpp-docs-stamp.js': 'stamp' },
+  EVENT_FILES: { 'cpp-docs-editor.js': 'editor', 'cpp-docs-stamp.js': 'stamp', 'cpp-docs-progress.json': 'progress' },
   MAX_BODY: 8 * 1024 * 1024,        // байт в теле запроса
   MAX_CODE: 200000,                 // символов кода в «Запустить»
   MAX_TESTS: 20,                    // тестов в одном запуске
   MAX_LOG: 4000,                    // символов в одной записи журнала от окна
-  RUN_TIMEOUT_MS: 30000,            // окно ждёт ответ на «Запустить»
+  RUN_TIMEOUT_MS: 60000,            // окно ждёт ответ на «Запустить» (хост укладывается в него с запасом)
   ACTION_TIMEOUT_MS: 8000,          // …и на действие
 };
 

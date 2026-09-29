@@ -110,6 +110,12 @@ for (const file of mdFiles(ROOT)) {
   });
 }
 
+// Навигация тем «← назад / вперёд →» — по порядку курса (extension/lib/course.js, scripts/fix-nav.js).
+for (const line of require('./fix-nav').run(true)) {
+  const m = line.match(/^(\S+?):\s*(.*)$/);
+  problems.push({ rel: m ? m[1] : line, line: 0, target: 'навигация', why: (m ? m[2] : line) + ' — node scripts/fix-nav.js' });
+}
+
 if (problems.length === 0) {
   const count = mdFiles(ROOT).length;
   console.log('Ссылки: все внутренние ссылки целы (' + count + ' файлов).');

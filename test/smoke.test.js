@@ -515,20 +515,22 @@ check("скрипт встраивания наклеек на месте", fs.e
 // ------------------------------------------------------------
 group("Безопасность");
 var rtSec = fs.readFileSync(path.join(EXT, "cpp-docs-runtime.js"), "utf8");
-var ps1Path = path.join(ROOT, "installer", "tools", "window-inject.ps1");
+var ps1Path = path.join(ROOT, "installer", "tools", "window-remove.ps1");
 var ps1 = fs.existsSync(ps1Path) ? fs.readFileSync(ps1Path, "utf8") : "";
 
 // #1 файл данных не исполняется при перечитке
 check("#1 перечитка данных без исполнения файла (fs+JSON.parse, sanitizeData)",
       rtSec.indexOf("sanitizeData(JSON.parse(") !== -1 && !/s\.src = url/.test(rtSec));
-// #2 PS1-установщик вооружает CSP nonce, а не снимает её целиком
-check("#2 PS1 вооружает CSP nonce (не снимает целиком)",
-      ps1.indexOf("nonce-") !== -1 && ps1.indexOf("script-src") !== -1 &&
-      ps1.indexOf("Content-Security-Policy[^>]*>', ''") === -1);
+// #2 запасной PS1 снятия окна: только свои добавки в CSP, бэкап оболочки целиком не возвращает
+//    (он затёр бы чужие вставки, например Moon Core)
+check("#2 PS1 снятия окна снимает только свои добавки CSP",
+      ps1.indexOf("StripOurNonces") !== -1 && ps1.indexOf("RestoreCsp") !== -1 &&
+      ps1.indexOf("Copy-Item -LiteralPath $bak -Destination $wb") === -1);
 // #3 якорь целостности рантайма + сверка при инъекции
 check("#3 SHA-256 рантайма: якорь и сверка перед инъекцией",
       /const RUNTIME_SHA256 = '[0-9a-f]{64}';/.test(srcAll) &&
-      srcAll.indexOf("actual !== runtimeAnchor") !== -1 && srcAll.indexOf("setRuntimeAnchor(RUNTIME_SHA256)") !== -1 &&
+      srcAll.indexOf("checkRuntime(runtimeJs, runtimeAnchor)") !== -1 && srcAll.indexOf("!== anchor") !== -1 &&
+      srcAll.indexOf("setRuntimeAnchor(RUNTIME_SHA256)") !== -1 &&
       fs.existsSync(path.join(ROOT, "scripts", "hash-runtime.js")));
 check("#3 якорь совпадает с фактическим SHA-256 рантайма",
       (function () {
@@ -558,7 +560,7 @@ check("#8 CSP без script-src не снимается, а дополняетс
 // #9 самопроверка «жив ли каталог расширения»
 check("#9 окно самопроверяется на удаление расширения (extAlive)",
       rtSec.indexOf("function extAlive") !== -1 && rtSec.indexOf("if (!extAlive()) return;") !== -1 &&
-      srcAll.indexOf("data.runtimeUrl = ") !== -1);
+      srcAll.indexOf("data.aliveUrl = ") !== -1);
 // #10 строгая валидация перечитанных данных
 check("#10 sanitizeData: строгая форма + лимиты объёма",
       rtSec.indexOf("function sanitizeData") !== -1 && rtSec.indexOf("CD_MAX_TOTAL_MD") !== -1 &&

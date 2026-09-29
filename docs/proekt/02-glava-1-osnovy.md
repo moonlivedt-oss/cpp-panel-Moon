@@ -17,6 +17,15 @@
 - имя (`std::string`), здоровье и максимум здоровья (`int`), золото (`int`), сила атаки (`int`), «жив ли» (`bool`);
 - карточка — несколько строк: имя, `HP 30/30`, золото, атака.
 
+**Так будет выглядеть игра после квеста 1** — пример; ваши тексты и числа могут отличаться:
+
+```console
+=== ТОРИН ===
+HP      30/30
+Золото  0
+Атака   5
+```
+
 ```checklist
 Квест 1 готов, если:
 - программа собирается без предупреждений
@@ -61,6 +70,21 @@ int main() {
 - Предложите класс: `1 — воин (HP 40, атака 5)`, `2 — лучник (HP 30, атака 7)`. Характеристики зависят от выбора.
 - Карточку оформите ровными колонками (`std::setw`).
 - Ввели буквы вместо номера класса — не падать: сообщить и спросить снова.
+
+**Так будет выглядеть игра после квеста 2** — пример; ваши тексты и числа могут отличаться:
+
+```console
+Как зовут героя? << Сэр Ланселот
+1 — воин (HP 40, атака 5), 2 — лучник (HP 30, атака 7)
+Класс: << abc
+Нужен номер 1 или 2
+Класс: << 1
+
+Имя      Сэр Ланселот
+Класс    воин
+HP       40/40
+Атака    5
+```
 
 ```checklist
 Квест 2 готов, если:
@@ -125,6 +149,21 @@ while (running && hp > 0) {
 }
 ```
 
+**Так будет выглядеть игра после квеста 3** — пример; ваши тексты и числа могут отличаться:
+
+```console
+Шаг 2 | HP 40/40 | золото 0
+1 — идти дальше, 2 — отдохнуть, 0 — выход
+> << 1
+Шаг 3. Из темноты выходит монстр! (HP 12, атака 3)
+Вы бьёте: 5. У монстра 7 HP.
+Монстр бьёт: 3. У вас 37 HP.
+Вы бьёте: 5. У монстра 2 HP.
+Монстр бьёт: 3. У вас 34 HP.
+Вы бьёте: 5. Монстр повержен! +10 золота
+Шаг 3 | HP 34/40 | золото 10
+```
+
 ```checklist
 Квест 3 готов, если:
 - меню повторяется, пока не выбран выход
@@ -173,6 +212,17 @@ int main() {
 - `void rest(int &hp, int maxHp)` — меняет здоровье **по ссылке**;
 - `bool fight(int &heroHp, int heroAtk, int monsterHp, int monsterAtk)` — возвращает `true`, если герой победил.
 
+**Так будет выглядеть игра после квеста 4** — пример; ваши тексты и числа могут отличаться:
+
+```console
+1 — идти дальше, 2 — отдохнуть, 0 — выход
+> << 7
+Введите число от 0 до 2
+> << 2
+Вы отдыхаете: HP 34 → 39
+Шаг 3 | HP 39/40 | золото 10
+```
+
 ```checklist
 Квест 4 готов, если:
 - в main нет ни одного вложенного цикла — они ушли в функции
@@ -210,6 +260,134 @@ int main() {
 ```
 
 > 💾 **Сохраните версию:** `git add . && git commit -m "Квест 4: Порядок в коде: функции"` — к ней всегда можно вернуться (`git log`, `git checkout`).
+
+## Контрольная точка главы
+
+**Сверься с эталоном.** Глава пройдена — сравни свою игру с одним из возможных вариантов. Окно документации возьмёт открытый в редакторе `.cpp` и покажет построчно, что совпало, чего у тебя нет и что у тебя своё.
+
+```checkpoint
+# Игра к концу главы 1
+Один из возможных вариантов игры после квестов 1–4: имя и класс героя, игровой цикл, бой, отдых и функции `printStatus`, `readChoice`, `rest`, `fight`.
+
+Открой в редакторе **свой** файл игры и нажми «Сравнить с моим кодом»: окно покажет, чего из эталона у тебя пока нет. Совпадать дословно не нужно — сравнивай устройство.
+---
+#include <windows.h> // только Windows: русские буквы в консоли
+
+#include <iostream>
+#include <limits>
+#include <string>
+
+// Подпись, дополненная пробелами до width букв. std::setw считает байты, а
+// русская буква в UTF-8 — два байта: колонки с кириллицей через setw
+// разъезжаются.
+std::string pad(const std::string &label, std::size_t width) {
+  std::size_t letters = 0;
+  for (char ch : label)
+    if ((static_cast<unsigned char>(ch) & 0xC0) != 0x80)
+      ++letters; // первый байт буквы
+  return label + std::string(letters < width ? width - letters : 1, ' ');
+}
+
+// Карточка героя ровными колонками.
+void printStatus(const std::string &name, int hp, int maxHp, int gold) {
+  std::cout << pad("Имя", 9) << name << "\n"
+            << pad("HP", 9) << hp << "/" << maxHp << "\n"
+            << pad("Золото", 9) << gold << "\n";
+}
+
+// Число из диапазона: переспрашивает, пока не введут правильно (буквы тоже не
+// ломают ввод).
+int readChoice(int min, int max) {
+  int value = 0;
+  while (true) {
+    std::cout << "> ";
+    if (std::cin >> value && value >= min && value <= max)
+      return value;
+    if (!std::cin) {
+      if (std::cin.eof())
+        return min; // ввод закончился — выходим
+      std::cin.clear();
+    }
+    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+    std::cout << "Введите число от " << min << " до " << max << "\n";
+  }
+}
+
+// Отдых: +5 HP, но не выше максимума. Здоровье меняется по ссылке.
+void rest(int &hp, int maxHp) {
+  int before = hp;
+  hp += 5;
+  if (hp > maxHp)
+    hp = maxHp;
+  std::cout << "Вы отдыхаете: HP " << before << " → " << hp << "\n";
+}
+
+// Бой до падения одного из двух. true — герой победил.
+bool fight(int &heroHp, int heroAtk, int monsterHp, int monsterAtk) {
+  while (heroHp > 0 && monsterHp > 0) {
+    monsterHp -= heroAtk;
+    if (monsterHp <= 0) {
+      std::cout << "Вы бьёте: " << heroAtk << ". Монстр повержен!\n";
+      break;
+    }
+    std::cout << "Вы бьёте: " << heroAtk << ". У монстра " << monsterHp
+              << " HP.\n";
+    heroHp -= monsterAtk;
+    if (heroHp < 0)
+      heroHp = 0;
+    std::cout << "Монстр бьёт: " << monsterAtk << ". У вас " << heroHp
+              << " HP.\n";
+  }
+  return heroHp > 0;
+}
+
+int main() {
+  SetConsoleCP(CP_UTF8);
+  SetConsoleOutputCP(CP_UTF8);
+
+  std::string name;
+  std::cout << "Как зовут героя? ";
+  std::getline(std::cin, name);
+
+  std::cout << "1 — воин (HP 40, атака 5), 2 — лучник (HP 30, атака 7)\n";
+  int cls = readChoice(1, 2);
+  int maxHp = cls == 1 ? 40 : 30;
+  int attack = cls == 1 ? 5 : 7;
+  int hp = maxHp;
+  int gold = 0;
+  printStatus(name, hp, maxHp, gold);
+
+  int step = 0;
+  bool running = true;
+  while (running && hp > 0) {
+    std::cout << "Шаг " << step << " | HP " << hp << "/" << maxHp
+              << " | золото " << gold << "\n";
+    std::cout << "1 — идти дальше, 2 — отдохнуть, 0 — выход\n";
+    switch (readChoice(0, 2)) {
+    case 1:
+      ++step;
+      if (step % 3 == 0) {
+        std::cout << "Шаг " << step
+                  << ". Из темноты выходит монстр! (HP 12, атака 3)\n";
+        if (fight(hp, attack, 12, 3)) {
+          gold += 10;
+          std::cout << "+10 золота\n";
+        }
+      }
+      break;
+    case 2:
+      rest(hp, maxHp);
+      break;
+    default:
+      running = false;
+      break;
+    }
+  }
+  if (hp <= 0)
+    std::cout << "Игра окончена.\n";
+  std::cout << "Шагов: " << step << ", золото: " << gold << "\n";
+}
+```
 
 ---
 

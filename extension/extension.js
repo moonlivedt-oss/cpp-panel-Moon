@@ -37,11 +37,12 @@ const { registerStyleHints } = require('./lib/style');
 const { openWindowPanel } = require('./lib/panel');
 const { dispatch } = require('./lib/rpc');
 const { writeEditorContext, registerEditorBridge, openDocTarget } = require('./lib/editor-bridge');
+const mooncore = require('./lib/mooncore');
 
 // Якорь целостности рантайма: перед впечатыванием сверяем SHA-256 cpp-docs-runtime.js с этим
 // значением (подмена файла на диске не пройдёт). Ставит `npm run hash:runtime`; пусто — проверку
 // пропускаем. Доверенная точка тут сам extension.js.
-const RUNTIME_SHA256 = '95fffb18b041f681fcb9972ad36de0091bb6ecacdd0dc223a7684332d1c6a4ca'; /* HASH:runtime — ставит scripts/hash-runtime.js */
+const RUNTIME_SHA256 = '6cc2e18ea777b390d5d1150ea269fb46e7cce3acc6555d4dbffa1033c4b362e6'; /* HASH:runtime — ставит scripts/hash-runtime.js */
 win.setRuntimeAnchor(RUNTIME_SHA256);
 
 function activate(context) {
@@ -88,50 +89,92 @@ function activate(context) {
   // Держим файл данных окна свежим при запуске (нужен окну и авто-инъектору).
   try { writeDocsData(context); } catch (e) {}
 
-  // Патч пропал после обновления VS Code, а окно было включено — не патчим молча,
-  // а спрашиваем согласие; впечатываем только по «Восстановить».
-  try {
-    if (context.globalState.get(WINDOW_ON_KEY) && findDocsRoot() &&
-        findWorkbenchFiles().length && !windowInjected()) {
-      setTimeout(() => {
-        vscode.window.showInformationMessage(
-          'Документация C++: после обновления VS Code плавающее окно пропало. Восстановить? Это снова разово изменит оболочку VS Code (появится баннер «…corrupt», его можно закрыть).',
-          'Восстановить', 'Позже'
-        ).then((pick) => {
-          if (pick !== 'Восстановить') return;
-          const r = injectWindowFiles(context);
-          if (r.ok) {
-            vscode.window.showInformationMessage(
-              'Окно восстановлено. Перезагрузить редактор?', 'Перезагрузить', 'Позже'
-            ).then((p2) => { if (p2 === 'Перезагрузить') { try { vscode.commands.executeCommand('workbench.action.reloadWindow'); } catch (e) {} } });
-          } else if (r.denied) {
-            vscode.window.showWarningMessage(
-              'Не удалось восстановить окно (нет доступа на запись к оболочке). Запустите VS Code от имени администратора и выполните «подключить плавающее окно».');
-          } else {
-            vscode.window.showWarningMessage('Не удалось восстановить плавающее окно. Откройте «проверить плавающее окно» для диагностики.');
-          }
-        });
-      }, 2500);
+  // Окно как модуль Moon Core: если ядро есть и модуль разрешён — встраивает оно, своя вставка
+  // снимается. Без Moon Core (или пока модуль не разрешён) — прежний путь со своей вставкой.
+  let adopted = false;
+  const adoptIfReady = () => {
+    if (adopted || !mooncore.active()) return false;
+    adopted = true;
+    win.adoptMooncore(context);
+    return true;
+  };
+  mooncore.connect(context, rpcFor(context)).catch((e) => log('Moon Core', e)).then(() => {
+    try {
+    if (adoptIfReady()) return;
+    if (mooncore.status().connected) {
+      // Moon Core есть, модуль ещё не разрешён (ядро спросит само) — ждём разрешения, свои
+      // вопросы про вставку не задаём, чтобы не было двух вставок и двух вопросов.
+      const t = setInterval(() => { if (adoptIfReady()) clearInterval(t); }, 15000);
+      if (t.unref) t.unref();
+      context.subscriptions.push({ dispose: () => clearInterval(t) });
+      return;
     }
-  } catch (e) {}
+    standalonePrompts();
+    } catch (e) { log('Moon Core: выбор режима окна', e); }
+  });
+  // Moon Core поставили или удалили позже — переподключиться. Удалили, а окно встраивал он —
+  // своя вставка давно снята: предложим вернуть окно своей вставкой (иначе оно просто пропадёт).
+  if (vscode.extensions && vscode.extensions.onDidChange) context.subscriptions.push(vscode.extensions.onDidChange(() => {
+    mooncore.connect(context, rpcFor(context)).then(() => {
+      if (adoptIfReady()) return;
+      if (adopted && !mooncore.status().installed) { adopted = false; standalonePrompts(); }
+    }).catch(() => {});
+  }));
 
-  // Первый запуск: один раз предложим включить плавающее окно.
-  try {
-    if (!context.globalState.get(WINDOW_SETUP_KEY)) {
-      context.globalState.update(WINDOW_SETUP_KEY, true);
-      if (findDocsRoot() && findWorkbenchFiles().length && !windowInjected()) {
+  function standalonePrompts() {
+  // Патч пропал после обновления VS Code, а окно было включено — не патчим молча,
+    // а спрашиваем согласие; впечатываем только по «Восстановить».
+    try {
+      if (context.globalState.get(WINDOW_ON_KEY) && findDocsRoot() &&
+          findWorkbenchFiles().length && !windowInjected()) {
+        const viaMc = !!context.globalState.get(win.WINDOW_VIA_MC_KEY);
         setTimeout(() => {
           vscode.window.showInformationMessage(
-            'Документация C++: можно открыть плавающее окно поверх редактора. Это разово изменит оболочку VS Code (появится баннер «…corrupt», его можно закрыть). Или откройте то же окно во вкладке — без правки VS Code.',
-            'Включить окно', 'Во вкладке', 'Позже'
+            (viaMc
+              ? 'Документация C++: плавающее окно встраивал Moon Core, а его больше нет. Вернуть окно своей вставкой?'
+              : 'Документация C++: после обновления VS Code плавающее окно пропало. Восстановить?') +
+            ' Это снова разово изменит оболочку VS Code (появится баннер «…corrupt», его можно закрыть).',
+            'Восстановить', 'Позже'
           ).then((pick) => {
-            if (pick === 'Включить окно') enableWindow(context);
-            else if (pick === 'Во вкладке') openWindowPanel(context, rpcFor(context));
+            if (pick !== 'Восстановить') return;
+            if (viaMc) { try { context.globalState.update(win.WINDOW_VIA_MC_KEY, false); } catch (e) {} }
+            const r = injectWindowFiles(context);
+            if (r.ok) {
+              vscode.window.showInformationMessage(
+                'Окно восстановлено. Перезагрузить редактор?', 'Перезагрузить', 'Позже'
+              ).then((p2) => { if (p2 === 'Перезагрузить') { try { vscode.commands.executeCommand('workbench.action.reloadWindow'); } catch (e) {} } });
+            } else if (r.denied) {
+              vscode.window.showWarningMessage(
+                'Не удалось восстановить окно: нет доступа на запись к оболочке VS Code (установлен для всех пользователей). Без прав администратора окно работает во вкладке.',
+                'Открыть во вкладке'
+              ).then((p3) => { if (p3) openWindowPanel(context, rpcFor(context)); });
+            } else {
+              vscode.window.showWarningMessage('Не удалось восстановить плавающее окно. Откройте «проверить плавающее окно» для диагностики.');
+            }
           });
-        }, 3500);
+        }, 2500);
       }
-    }
-  } catch (e) {}
+    } catch (e) {}
+
+    // Первый запуск: один раз предложим включить плавающее окно.
+    try {
+      if (!context.globalState.get(WINDOW_SETUP_KEY)) {
+        context.globalState.update(WINDOW_SETUP_KEY, true);
+        if (findDocsRoot() && findWorkbenchFiles().length && !windowInjected()) {
+          setTimeout(() => {
+            vscode.window.showInformationMessage(
+              'Документация C++: можно открыть плавающее окно поверх редактора. Это разово изменит оболочку VS Code (появится баннер «…corrupt», его можно закрыть). Или откройте то же окно во вкладке — без правки VS Code.',
+              'Включить окно', 'Во вкладке', 'Позже'
+            ).then((pick) => {
+              if (pick === 'Включить окно') enableWindow(context);
+              else if (pick === 'Во вкладке') openWindowPanel(context, rpcFor(context));
+            });
+          }, 3500);
+        }
+      }
+    } catch (e) {}
+
+  }
 
   // Кнопка в статус-баре — постоянная точка входа в меню, мимо левого сайдбара.
   if (typeof vscode.window.createStatusBarItem === 'function') {
@@ -191,7 +234,8 @@ module.exports = {
   writeWorkbenchAtomic: win.writeWorkbenchAtomic, restoreCspFromBackup: win.restoreCspFromBackup,
   // «напиши и запусти» и действия окна — для тестов
   _run: { runUserCode: run.runUserCode, handleRun: run.handleRun, resolveCompilerAsync: run.resolveCompilerAsync,
-    normRunOut: run.normRunOut, writeEditorContext, editorFilePath: storage.editorFilePath },
-  _actions: { formatNoteEntry: actions.formatNoteEntry, insertNoteEntry: actions.insertNoteEntry, handleAction: actions.handleAction },
+    normRunOut: run.normRunOut, crashReason: run.crashReason, writeEditorContext, editorFilePath: storage.editorFilePath,
+    outputMatches: run.outputMatches, compilerStamp: run.compilerStamp, RUN_BUDGET_MS: run.RUN_BUDGET_MS },
+  _actions: { formatNoteEntry: actions.formatNoteEntry, insertNoteEntry: actions.insertNoteEntry, handleAction: actions.handleAction, editorText: actions.editorText },
   _rpc: { dispatch },
 };

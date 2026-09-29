@@ -19,13 +19,16 @@ const cp = require('child_process');
 const crypto = require('crypto');
 const { log } = require('./log');
 const { userSetting, localRunEnabled } = require('./storage');
-const { MAX_CODE, MAX_TESTS } = require('./protocol');
+const { MAX_CODE, MAX_TESTS, RUN_TIMEOUT_MS } = require('./protocol');
 
 const COMPILE_TIMEOUT_MS = 20000;
 const TEST_TIMEOUT_MS = 5000;
 const MAX_OUT = 65536;          // символов stdout на тест
 const MAX_ERR = 4096;           // символов stderr на тест (для «упало с ошибкой»)
 const QUEUE_MAX = 3;            // ждущих запусков сверх текущего
+// Общий бюджет одного «Запустить» (сборка + все тесты). Окно ждёт ответ RUN_TIMEOUT_MS — бюджет
+// меньше него с запасом, чтобы ответ успел дойти, а не пропал вместе с занятой очередью.
+const RUN_BUDGET_MS = Math.max(10000, RUN_TIMEOUT_MS - 8000);
 const CACHE_KEEP = 20;          // собранных программ в кэше
 
 // Компилятор ищем один раз: сначала настройка cppDocs.compiler, иначе автопоиск в PATH.
@@ -37,7 +40,7 @@ function resolveCompilerAsync(cb) {
   if (_compilerWaiters) { _compilerWaiters.push(cb); return; }   // поиск уже идёт — ждём его, а не запускаем второй
   let conf = '';
   try { conf = String(userSetting('compiler') || '').trim(); } catch (e) {}
-  if (conf) { _compilerCache = { cmd: conf, kind: guessCompilerKind(conf) }; cb(_compilerCache); return; }
+  if (conf) { _compilerCache = { cmd: conf, kind: guessCompilerKind(conf), path: /[\\/]/.test(conf) ? conf : '' }; cb(_compilerCache); return; }
   _compilerWaiters = [cb];
   const done = (c) => { _compilerCache = c; const ws = _compilerWaiters; _compilerWaiters = null; ws.forEach((w) => { try { w(c); } catch (e) {} }); };
   const win = process.platform === 'win32';
@@ -49,7 +52,8 @@ function resolveCompilerAsync(cb) {
     const name = names[i++];
     try {
       cp.execFile(finder, [name], { timeout: 3000 }, (err, stdout) => {
-        if (!err && stdout && String(stdout).trim()) done({ cmd: name, kind: guessCompilerKind(name) });
+        const found = !err && stdout ? String(stdout).split(/\r?\n/).map((l) => l.trim()).filter(Boolean)[0] : '';
+        if (found) done({ cmd: name, kind: guessCompilerKind(name), path: found });
         else tryNext();
       });
     } catch (e) { tryNext(); }
@@ -90,10 +94,30 @@ function runOneExe(exe, input, timeoutMs, env, cb) {
   child.stdout.setEncoding('utf8');   // декодер держит разрезанные на границе куска UTF-8 символы
   child.stdout.on('data', (d) => { out += d; if (out.length > MAX_OUT) { out = out.slice(0, MAX_OUT); finish({ out: out, truncated: true }); } });
   child.on('error', (e) => { cleanup(); finish({ error: String(e && e.message || e) }); });
-  child.on('close', (code) => { cleanup(); finish({ out: out, code: code }); });
+  child.on('close', (code, signal) => { cleanup(); finish({ out: out, code: code, signal: signal || null }); });
   try { if (input != null) child.stdin.write(String(input)); } catch (e) {}
   try { child.stdin.end(); } catch (e) {}
 }
+/** Почему программа упала — простыми словами (код выхода Windows или сигнал Linux/macOS). '' — не упала. */
+const CRASH_CODES = {
+  3: 'аварийное завершение (abort): необработанное исключение или сработавший assert',
+  0xC0000005: 'обращение к чужой памяти (выход за границы массива, разыменование nullptr или висячего указателя)',
+  0xC00000FD: 'переполнение стека (скорее всего, бесконечная рекурсия)',
+  0xC0000094: 'целочисленное деление на ноль',
+  0xC0000409: 'аварийная остановка (порча стека или необработанное исключение)',
+};
+const CRASH_SIGNALS = {
+  SIGSEGV: CRASH_CODES[0xC0000005], SIGBUS: CRASH_CODES[0xC0000005],
+  SIGABRT: CRASH_CODES[3], SIGFPE: 'арифметическая ошибка (например, деление на ноль)',
+};
+function crashReason(r) {
+  if (!r || r.timeout || r.error) return '';
+  if (r.signal) return CRASH_SIGNALS[r.signal] || 'программу остановил сигнал ' + r.signal;
+  if (r.code == null || r.code === 0) return '';
+  const code = r.code < 0 ? r.code >>> 0 : r.code;   // Windows отдаёт NTSTATUS и как отрицательное число
+  return CRASH_CODES[code] || 'main вернула код ' + r.code + ' (ожидали 0)';
+}
+
 // Нормализация вывода для сравнения: построчно trim + схлопывание пробелов, хвостовые пустые строки долой.
 function normRunOut(s) {
   return String(s == null ? '' : s).replace(/\r\n?/g, '\n').split('\n')
@@ -116,8 +140,15 @@ function pruneCache() {
   } catch (e) {}
 }
 /** Собрать код (или взять из кэша). cb({exe, env} | {error, stage}). */
-function compileCached(comp, code, cb) {
-  const key = crypto.createHash('sha256').update(comp.cmd + '\0' + compileArgs(comp, 'x', 'y').join(' ') + '\0' + code).digest('hex').slice(0, 24);
+/** Отпечаток компилятора: путь + размер + время изменения exe. Обновили g++ по тому же пути —
+ *  отпечаток другой, и кэш не отдаст программу, собранную старой версией. */
+function compilerStamp(comp) {
+  const p = comp.path || (/[\\/]/.test(comp.cmd) ? comp.cmd : '');
+  if (!p) return comp.cmd;
+  try { const st = fs.statSync(p); return p + '|' + st.size + '|' + Math.round(st.mtimeMs); } catch (e) { return p; }
+}
+function compileCached(comp, code, cb, timeoutMs) {
+  const key = crypto.createHash('sha256').update(compilerStamp(comp) + '\0' + compileArgs(comp, 'x', 'y').join(' ') + '\0' + code).digest('hex').slice(0, 24);
   const dir = path.join(cacheDir(), key);
   const exe = path.join(dir, exeName());
   const binDir = /[\\/]/.test(comp.cmd) ? path.dirname(comp.cmd) : '';
@@ -134,7 +165,7 @@ function compileCached(comp, code, cb) {
   const drop = () => { try { fs.rmSync(work, { recursive: true, force: true }); } catch (e) {} };
   try {
     cp.execFile(comp.cmd, compileArgs(comp, path.join(work, 'main.cpp'), wexe),
-      { timeout: COMPILE_TIMEOUT_MS, cwd: work, windowsHide: true, maxBuffer: 1 << 20, env },
+      { timeout: Math.max(1000, Math.min(COMPILE_TIMEOUT_MS, timeoutMs || COMPILE_TIMEOUT_MS)), cwd: work, windowsHide: true, maxBuffer: 1 << 20, env },
       (err, stdout, stderr) => {
         if (err || !fs.existsSync(wexe)) {
           drop();
@@ -152,38 +183,72 @@ function compileCached(comp, code, cb) {
 }
 
 /** Скомпилировать код и прогнать тесты. cb(результат для окна). */
+/** Совпал ли вывод с ожидаемым. mode 'contains' — каждая ожидаемая строка встречается в выводе
+ *  (по порядку, как часть строки): для «Повтори за мной», где подсказки ввода у ученика свои. */
+function outputMatches(got, expected, mode) {
+  if (mode !== 'contains') return normRunOut(got) === normRunOut(expected);
+  const want = normRunOut(expected).split('\n').filter((l) => l.trim());
+  const have = normRunOut(got).split('\n');
+  let j = 0;
+  for (const w of want) {
+    const lw = w.toLowerCase();
+    while (j < have.length && have[j].toLowerCase().indexOf(lw) === -1) j++;
+    if (j >= have.length) return false;
+    j++;
+  }
+  return true;
+}
+
 function runUserCode(req, cb) {
+  // Срок ответа: от прихода запроса (время в очереди тоже считается), иначе окно не дождётся.
+  const deadline = (req._t0 || Date.now()) + RUN_BUDGET_MS;
+  const left = () => deadline - Date.now();
   resolveCompilerAsync((comp) => {
     if (!comp) { cb({ id: req.id, ok: false, stage: 'nocompiler' }); return; }
+    if (left() < 1500) { cb({ id: req.id, ok: false, stage: 'busy' }); return; }
     compileCached(comp, String(req.code || ''), (b) => {
       if (!b.exe) { cb(Object.assign({ id: req.id, ok: false }, b)); return; }
       const tests = Array.isArray(req.tests) ? req.tests.slice(0, MAX_TESTS) : [];
+      const mode = req.mode === 'contains' ? 'contains' : 'exact';
       const results = [];
-      let i = 0;
+      let i = 0, stopped = '';
       const next = () => {
-        if (i >= tests.length) {
+        if (i >= tests.length || stopped) {
+          // Не дошедшие тесты — «не запускался»: зависшая программа не держит ответ минуту.
+          for (; i < tests.length; i++) {
+            const t = tests[i];
+            results.push({ in: t && t.in, expected: t && t.out, got: '', pass: false, skipped: stopped || 'time' });
+          }
           const okAll = results.length > 0 && results.every((r) => r.pass);
-          cb({ id: req.id, ok: okAll, stage: 'run', tests: results, cached: !!b.cached });
+          const out = { id: req.id, ok: okAll, stage: 'run', tests: results, cached: !!b.cached };
+          if (stopped) out.stopped = stopped;
+          cb(out);
           return;
         }
+        const budget = Math.min(TEST_TIMEOUT_MS, left() - 500);
+        if (budget < 300) { stopped = 'time'; next(); return; }
         const t = tests[i++];
-        runOneExe(b.exe, t && t.in != null ? String(t.in) : '', TEST_TIMEOUT_MS, b.env, (r) => {
+        runOneExe(b.exe, t && t.in != null ? String(t.in) : '', budget, b.env, (r) => {
           // EPERM/EACCES/EBUSY при запуске свежего .exe — почти всегда антивирус (ложное срабатывание на MinGW-сборку).
           const blockedRun = r.error && /EPERM|EACCES|EBUSY/.test(r.error);
-          const crashed = !r.timeout && !r.error && r.code != null && r.code !== 0;
-          const got = r.timeout ? '⏱ превышено время (' + TEST_TIMEOUT_MS / 1000 + ' c)'
+          // Упавшая программа не засчитывается, даже если успела напечатать верный ответ: UB/исключение
+          // после вывода — тоже ошибка, и ученик должен её увидеть.
+          const crash = crashReason(r);
+          const got = r.timeout ? '⏱ превышено время (' + Math.round(budget / 100) / 10 + ' c)'
             : blockedRun ? '⛔ запуск заблокирован — похоже, антивирус. Добавь временную папку ' + os.tmpdir() + ' в исключения'
               : (r.error ? 'ошибка запуска' : String(r.out || '').slice(0, 2000));
-          const pass = !r.timeout && !r.error && normRunOut(r.out) === normRunOut(t && t.out);
+          const pass = !r.timeout && !r.error && !crash && outputMatches(r.out, t && t.out, mode);
           const row = { in: t && t.in, expected: t && t.out, got: got.slice(0, 500), pass: pass };
-          if (crashed) row.exit = r.code;
+          if (crash) { row.exit = r.signal || r.code; row.crash = crash; }
           if (!pass && r.err) row.stderr = String(r.err).slice(0, 500);
           results.push(row);
+          // Программа зависла (бесконечный цикл) — остальные тесты почти наверняка тоже зависнут.
+          if (r.timeout) stopped = 'hang';
           next();
         });
       };
       next();
-    });
+    }, left() - 1000);
   });
 }
 
@@ -198,6 +263,7 @@ function handleRun(req) {
       resolve({ id: req && req.id, ok: false, stage: 'io', error: 'неверный запрос' }); return;
     }
     if (_queue.length >= QUEUE_MAX) { resolve({ id: req.id, ok: false, stage: 'busy' }); return; }
+    req._t0 = Date.now();
     _queue.push({ req, resolve });
     pump();
   });
@@ -212,4 +278,4 @@ function pump() {
   catch (e) { log('запуск кода пользователя', e); done({ id: req.id, ok: false, stage: 'io', error: String(e) }); }
 }
 
-module.exports = { runUserCode, handleRun, resolveCompilerAsync, normRunOut, resetCompilerCache, killTree, cacheDir };
+module.exports = { runUserCode, handleRun, resolveCompilerAsync, normRunOut, outputMatches, resetCompilerCache, crashReason, compilerStamp, RUN_BUDGET_MS };

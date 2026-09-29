@@ -80,6 +80,9 @@
     return out;
   }
   var _lastAccent = "", _accentSig = "";
+  // MoonLight custom-bg сообщает о смене акцента событием — перекрашиваемся сразу, не ждём
+  // тикера heal (иначе окно отставало от смены обоев на секунду-две).
+  try { window.addEventListener("mlbg-accent", function () { _accentSig = ""; applyAccent(); }); } catch (e) {}
   function applyAccent() {
     try {
       // Дешёвая сигнатура «могло ли что-то поменяться»: тема-класс оболочки + ручная тема +

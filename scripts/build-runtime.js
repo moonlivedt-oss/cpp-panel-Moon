@@ -41,7 +41,7 @@ function partWith(marker) {
   return hit[0];
 }
 // Константы протокола окно↔расширение: единственный источник — extension/lib/protocol.js; в часть
-// 00-core.js они попадают блоком между маркерами PROTOCOL:start … PROTOCOL:end.
+// 00-core.js они попадают блоком между маркерами PROTOCOL:start … PROTOCOL:end. Туда же — VERSION.
 var PROTO_RE = /  \/\* PROTOCOL:start[\s\S]*?\/\* PROTOCOL:end \*\//;
 function syncProtocol(apply) {
   var snippet = require(path.join(ROOT, "extension", "lib", "protocol.js")).runtimeSnippet();
@@ -49,6 +49,9 @@ function syncProtocol(apply) {
   var s = fs.readFileSync(core, "utf8").replace(/\r\n/g, "\n");
   var next = PROTO_RE.test(s) ? s.replace(PROTO_RE, function () { return snippet; })
     : s.replace(/(  var STYLE_ID = [^\n]*\n)/, function (m) { return m + snippet + "\n"; });
+  // Версия окна (журнал ошибок, консоль) — из extension/package.json, чтобы не отставала от релиза.
+  var ver = JSON.parse(fs.readFileSync(path.join(ROOT, "extension", "package.json"), "utf8")).version;
+  next = next.replace(/(  var VERSION = )"[^"]*";/, function (m, a) { return a + JSON.stringify(ver) + ";"; });
   if (next === s) return false;
   if (apply) fs.writeFileSync(core, next, "utf8");
   return true;
@@ -59,7 +62,7 @@ module.exports = { parts: parts, build: build, partWith: partWith, write: write,
 
 if (require.main === module) {
   if (process.argv.indexOf("--check") !== -1 && syncProtocol(false)) {
-    console.error("  ✗ константы протокола в extension/runtime/00-core.js разошлись с extension/lib/protocol.js — npm run build:runtime");
+    console.error("  ✗ константы протокола или VERSION в extension/runtime/00-core.js разошлись с extension/lib/protocol.js / package.json — npm run build:runtime");
     process.exit(1);
   }
   if (process.argv.indexOf("--check") === -1) syncProtocol(true);

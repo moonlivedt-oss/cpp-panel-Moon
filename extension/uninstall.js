@@ -23,8 +23,10 @@ function outDirs() {
   const out = [];
   bases.forEach((b) => {
     ['resources', 'Resources'].forEach((r) => {
-      const o = path.join(b, r, 'app', 'out');
-      if (fs.existsSync(o) && out.indexOf(o) === -1) out.push(o);
+      // Настоящий путь: на Windows «resources» и «Resources» — одна папка (иначе обход дважды).
+      let o = path.join(b, r, 'app', 'out');
+      try { o = fs.realpathSync.native(o); } catch (e) { return; }
+      if (out.indexOf(o) === -1) out.push(o);
     });
   });
   return out;
@@ -34,7 +36,7 @@ function main() {
   let done = 0;
   outDirs().forEach((dir) => {
     findWorkbenchIn(dir, 6).forEach((f) => {
-      if (!/[\\/]workbench[\\/]workbench\.html$/i.test(f)) return;
+      if (!/[\\/]electron-(browser|sandbox)[\\/]workbench[\\/]workbench\.html$/i.test(f)) return;
       try { if (unpatchFile(f)) done++; } catch (e) { /* нет прав — оставляем как есть */ }
       try { fs.unlinkSync(f + '.cppdocs-tmp'); } catch (e) { /* хвоста нет */ }
     });

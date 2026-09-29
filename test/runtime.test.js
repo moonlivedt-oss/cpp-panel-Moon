@@ -429,7 +429,8 @@ if (render) {
 check("на главной статья и оглавление спрятаны (не просвечивают сквозь фон)",
   code.indexOf('.home .cd-rmain>.cd-content') !== -1 && code.indexOf('.home .cd-rmain>.cd-outline') !== -1);
 var rtSize = fs.statSync(path.join(__dirname, "..", "extension", "cpp-docs-runtime.js")).size;
-check("рантайм без встроенных наклеек легче 750 КБ", rtSize < 750 * 1024, Math.round(rtSize / 1024) + " КБ");
+// Страховка от случайно встроенных картинок (наклейки — отдельными файлами). Общий бюджет — scripts/perf-budget.js.
+check("рантайм без встроенных наклеек легче 950 КБ", rtSize < 950 * 1024, Math.round(rtSize / 1024) + " КБ");
 
 // --- постоянный ключ блока @id: правка текста не сбрасывает прогресс ---
 group("Рантайм: постоянные ключи заданий (@id)");
@@ -538,7 +539,7 @@ if (api && api._stateSchema) {
 // --- Задача дня ---
 group("Рантайм: задача дня");
 if (api && typeof api.dailyChallenge === "function") {
-  global.window.__CPPDOCS__ = { root: "d", indexFile: "00.md", generatedAt: 1, files: [
+  global.window.__CPPDOCS__ = { root: "d", indexFile: "00.md", generatedAt: 1, run: { enabled: true }, files: [
     { rel: "ref/01-a.md", name: "01-a.md", title: "А", md: "```challenge\n@id k1\n@type predict\nЧто выведет?\n---\nint main(){}\n---\n1\n```\n```challenge\n@id k2\nСобери\n---\na\nb\n```" },
     { rel: "ref/02-b.md", name: "02-b.md", title: "Б", md: "```challenge\n@id k3\n@type run\nНапиши\n---\nint main(){}\n---\n1 => 1\n```" },
   ] };
@@ -553,6 +554,13 @@ if (api && typeof api.dailyChallenge === "function") {
   check("серия: вчера и позавчера, сегодня ещё не решал — 2", api.dailyStreak() === 2, api.dailyStreak());
   st9.dailyDone[dk(0)] = 1;
   check("серия: с сегодняшней — 3", api.dailyStreak() === 3);
+  // Без cppDocs.localRun «напиши и запусти» решить нельзя — такая задача дня не выпадает (и не держится с утра)
+  global.window.__CPPDOCS__.run = { enabled: false };
+  delete st9.daily; st9.challenge = {};
+  var dcOff = api.dailyChallenge();
+  check("без localRun задача дня — не «напиши и запусти»", dcOff && dcOff.type !== "run", dcOff);
+  st9.daily = { date: dk(0), id: "k3", rel: "ref/02-b.md", type: "run", prompt: "", title: "" };
+  check("…и утренняя «run» заменяется, когда запуск выключили", api.dailyChallenge().type !== "run");
   global.window.__CPPDOCS__ = null;
 }
 
@@ -568,6 +576,39 @@ if (api && typeof api._adoptProgress === "function") {
   check("метка времени — не старее чужой", st1._savedAt >= Date.now() + 4000);
   api._adoptProgress({ read: [1, 2], cards: null, _savedAt: 1 });
   check("кривые поля из чужого окна — пустые словари", !Array.isArray(api._state().read) && typeof api._state().cards === "object");
+}
+
+// --- Игровые блоки: волна BFS на сетке, сундуки, «Путь героя» ---
+group("Рантайм: игровые блоки");
+if (api && typeof api.bfsDist === "function") {
+  var FN = "```";
+  var g1 = api.bfsParse("#####\n#S.E#\n#####");
+  check("волна: до врага в коридоре 2 шага", api.bfsDist(g1).reach === 2);
+  var g2 = api.bfsParse("#####\n#S#E#\n#####");
+  check("волна: стена между — врагу не дойти", api.bfsDist(g2).reach === -1);
+  var r3 = api.bfsDist(api.bfsParse("#######\n#S....#\n#.###.#\n#....E#\n#######"));
+  check("волна: кратчайший из двух обходов", r3.reach === 6 && Object.keys(r3.path).length === 6);
+  var g4 = api.bfsParse("#?#\n#S\n###");
+  check("волна: чужой символ — пол, короткая строка добита стенами", g4[0][1] === "." && g4[1][2] === "#");
+  var bgHtml = api.render(FN + "bfsgrid\n#####\n#S.E#\n#####\n" + FN);
+  check("```bfsgrid рисует сетку и статус", bgHtml.indexOf("cd-bfs-grid") !== -1 && bgHtml.indexOf("2</b> шага") !== -1);
+  var lsHtml = api.render(FN + "lootsim\nОбычный = 60\nРедкий = 30\nЛегендарный = 10\n@pity 10\n" + FN);
+  check("```lootsim: три строки, шанс в процентах и гарантия",
+    (lsHtml.match(/cd-ls-row/g) || []).length === 3 && lsHtml.indexOf("шанс 10%") !== -1 && lsHtml.indexOf("cd-ls-pity") !== -1);
+  check("```lootsim из одной строки — не симулятор", api.render(FN + "lootsim\nОдин = 1\n" + FN).indexOf("cd-lootsim") === -1);
+  var savedData = global.window.__CPPDOCS__;
+  global.window.__CPPDOCS__ = { root: "", files: [
+    { rel: "proekt/02-glava-1-osnovy.md", title: "Подземелье · Глава 1. Герой",
+      md: "## Квест 1. Раз\n" + FN + "checklist\nКвест 1 готов, если:\n- пункт А\n- пункт Б\n" + FN + "\n" +
+          "## Квест 2. Два\n" + FN + "checklist\n- пункт В\n" + FN + "\n## Прочее\n" + FN + "checklist\n- чужой пункт\n" + FN + "\n" },
+  ] };
+  var qs = api.collectQuests();
+  check("квесты: два квеста, у каждого — пункты своего чек-листа",
+    qs && qs.chapters[0].quests.length === 2 && qs.chapters[0].quests[0].items.length === 2 && qs.chapters[0].quests[1].items.length === 1);
+  check("квесты: «Подземелье · » снято с названия главы", qs.chapters[0].title === "Глава 1. Герой");
+  var qm = api.render(FN + "quests\n" + FN);
+  check("```quests: карта с прогрессом и ссылкой на следующий квест", qm.indexOf("cd-qmap") !== -1 && qm.indexOf("из 2") !== -1 && qm.indexOf("Следующий") !== -1);
+  global.window.__CPPDOCS__ = savedData;
 }
 
 finish("Рантайм окна");

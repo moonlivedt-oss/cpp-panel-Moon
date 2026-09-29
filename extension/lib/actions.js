@@ -82,6 +82,33 @@ async function insertCodeToEditor(code) {
   return { where: 'editor', name: path.basename(ed.document.fileName || '') };
 }
 
+/** Текст открытого C/C++-файла — для «Сравнить с эталоном». Только C/C++ и не больше MAX_INSERT:
+ *  окно показывает его построчно рядом с эталоном главы. */
+function editorText() {
+  const isCpp = (ed) => ed && ed.document && CPP_LANGS[ed.document.languageId] && !ed.document.isClosed;
+  let ed = vscode.window.activeTextEditor;
+  if (!isCpp(ed)) ed = (vscode.window.visibleTextEditors || []).find(isCpp);
+  if (!ed) return { ok: false, error: 'нет открытого .cpp — открой файл своей игры в редакторе' };
+  const text = ed.document.getText();
+  if (text.length > MAX_INSERT) return { ok: false, error: 'файл слишком большой для сравнения' };
+  return { ok: true, text: text, name: path.basename(ed.document.fileName || '') };
+}
+
+/** Колода карточек → файл для импорта в Anki (текст с табуляцией: вопрос, ответ, метки). */
+const MAX_EXPORT = 4 * 1024 * 1024;
+async function exportAnki(text, count) {
+  const home = process.env.USERPROFILE || process.env.HOME || '';
+  const uri = await vscode.window.showSaveDialog({
+    defaultUri: home ? vscode.Uri.file(path.join(home, 'cpp-docs-cards.txt')) : undefined,
+    filters: { 'Карточки для Anki (текст с табуляцией)': ['txt'] },
+    saveLabel: 'Сохранить колоду',
+  });
+  if (!uri) return false;
+  fs.writeFileSync(uri.fsPath, text, 'utf8');
+  vscode.window.showInformationMessage('Колода сохранена: ' + count + ' карточек. В Anki: Файл → Импорт, разделитель — табуляция, поля: Лицевая, Оборотная, Метки.');
+  return true;
+}
+
 /**
  * Выполнить действие окна. Возвращает Promise с ответом { id, ok, … }.
  * opts.requireFocus — мост: при нескольких окнах VS Code действие выполняет хост окна в фокусе
@@ -110,6 +137,12 @@ async function handleAction(context, req, opts) {
       appendNote(context, req);
       return { id, ok: true };
     }
+    if (req.kind === 'editor-text') return Object.assign({ id }, editorText());
+    if (req.kind === 'export-anki' && typeof req.text === 'string' && req.text.length <= MAX_EXPORT) {
+      // Диалог ждёт человека дольше, чем окно ждёт ответа, — отвечаем сразу, итог покажет VS Code.
+      exportAnki(req.text, Number(req.count) || 0).catch((e) => log('экспорт карточек', e));
+      return { id, ok: true };
+    }
     return { id, ok: false, error: 'неизвестное действие' };
   } catch (e) {
     log('действие окна ' + req.kind, e);
@@ -136,8 +169,15 @@ function pushEvent(context, name) {
   _evtTimers[name] = setTimeout(() => {
     let text;
     try { text = fs.readFileSync(path.join(storageDir(context), name), 'utf8'); } catch (e) { return; }
+    // Зеркало прогресса бывает в мегабайты — окнам шлём только метку времени: окно, у которого
+    // прогресс старше, само перечитает файл (своё же сохранение по метке узнаётся и не трогается).
+    if (EVENT_FILES[name] === 'progress') {
+      let at = 0;
+      try { const o = JSON.parse(text); at = o && typeof o.savedAt === 'number' ? o.savedAt : 0; } catch (e) { return; }
+      text = JSON.stringify({ savedAt: at });
+    }
     broadcast(EVENT_FILES[name], text);
   }, 30);
 }
 
-module.exports = { formatNoteEntry, insertNoteEntry, handleAction, watchWindowEvents, windowFocused };
+module.exports = { formatNoteEntry, insertNoteEntry, handleAction, watchWindowEvents, editorText };

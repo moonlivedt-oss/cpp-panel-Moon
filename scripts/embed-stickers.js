@@ -42,10 +42,13 @@ var SLOTS = [
   "ui-read", "ui-solve", "ui-streak", "ui-steps",        // плитки героя: изучено / решено / серия / разборы
   "ui-cards", "ui-warm", "ui-deck", "ui-shuffle", "ui-hint",   // повторение, разминка, колода, перемешать, подсказка
   "ui-dice", "ui-guide", "ui-news",                      // случайная задача, обучение, «что нового»
+  "ui-settings",                                         // шапка окна настроек (2026-09-26)
+  "ui-tab-look", "ui-tab-text", "ui-tab-window", "ui-tab-behave", "ui-tab-progress",   // вкладки настроек
+  "ui-calendar", "ui-pencil",                           // итог повторения, «сначала вспомни»
 ];
 // Ещё не нарисованы — окно обходится без них (запасная наклейка или пусто). Нарисовал — убери
 // имя отсюда (смоук-тест проверяет, что у каждого слота вне этого списка есть картинка).
-var PENDING = ["mascot-oops", "cover-ref", "cover-tasks", "cover-examples", "cover-proekt", "cover-igry", "cover-main", "cover-notes"];
+var PENDING = ["mascot-oops", "ui-settings", "ui-tab-look", "ui-tab-text", "ui-tab-window", "ui-tab-behave", "ui-tab-progress", "ui-calendar", "ui-pencil", "cover-ref", "cover-tasks", "cover-examples", "cover-proekt", "cover-igry", "cover-main", "cover-notes"];
 var MIME = {
   ".webp": "image/webp", ".png": "image/png", ".gif": "image/gif",   // .webp первым: легче в 2–4 раза
   ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".svg": "image/svg+xml",

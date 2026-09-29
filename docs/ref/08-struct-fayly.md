@@ -6,7 +6,7 @@
 
 **Уровень:** 🟡 нужна база · **Опирается на:** [Строки](05-stroki.md), [Контейнеры](06-konteynery.md)
 
-[← Начни отсюда](../00-НАЧНИ-ОТСЮДА.md) · [← Итераторы и алгоритмы](07-algoritmy.md) · [Справка: заголовки, устаревшее, чеклист →](09-spravka.md) · [Примеры программ](../examples/README.md)
+[← Начни отсюда](../00-НАЧНИ-ОТСЮДА.md) · [Маршрут изучения](../00-marshrut.md) · [← Алгоритмы](07-algoritmy.md) · [Ссылки и указатели →](22-ukazateli.md)
 
 ---
 
@@ -32,6 +32,7 @@
   - [Запись](#запись)
   - [Чтение](#чтение)
   - [Полный пример: посчитать статистику файла](#полный-пример-посчитать-статистику-файла)
+  - [Папки и файлы: `std::filesystem`](#папки-и-файлы-stdfilesystem)
   - [Куда класть файл](#куда-класть-файл)
 - **[Рецепты: хочу X → вот код](#рецепты-хочу-x--вот-код)**
 - **[Мини-проект: таблица результатов в файле](#мини-проект-таблица-результатов-в-файле)**
@@ -140,6 +141,24 @@ Point b{3, 4};
 std::cout << dist(a, b) << "\n";     // → 5
 movePoint(a, 1, 1);
 std::cout << a.x << "," << a.y;      // → 1,1
+```
+
+```cpp alt: Герой и монстр: кто ближе к выходу
+struct Pos { int x = 0; int y = 0; };
+int steps(Pos a, Pos b) { return std::abs(a.x - b.x) + std::abs(a.y - b.y); }   // по клеткам, без диагоналей
+
+Pos exitCell{9, 4}, hero{1, 1}, monster{7, 3};
+std::cout << (steps(hero, exitCell) < steps(monster, exitCell) ? "герой" : "монстр") << "\n";
+```
+
+```cpp alt: Прямоугольник кнопки: попал ли клик
+struct Rect { int x, y, w, h; };
+bool contains(const Rect &r, int px, int py) {
+  return px >= r.x && px < r.x + r.w && py >= r.y && py < r.y + r.h;
+}
+
+Rect button{10, 10, 80, 30};
+std::cout << contains(button, 40, 20) << contains(button, 5, 5) << "\n";   // 10
 ```
 
 ### Методы — функции внутри структуры
@@ -381,6 +400,20 @@ for (int i = 0; i < 5; ++i)
   std::cout << dist(gen) << " ";                // → 3 6 1 4 4   (каждый запуск свои)
 ```
 
+```cpp alt: Бросок кубика d20 для атаки
+std::mt19937 rng(std::random_device{}());
+std::uniform_int_distribution<int> d20(1, 20);
+int roll = d20(rng);
+std::cout << (roll == 20 ? "Критический удар!" : roll >= 10 ? "Попадание" : "Промах") << " (" << roll << ")\n";
+```
+
+```cpp alt: Случайный вопрос для самопроверки
+std::vector<std::string> questions = {"Что такое ссылка?", "Чем vector лучше массива?", "Зачем const &?"};
+std::mt19937 rng(std::random_device{}());
+std::uniform_int_distribution<std::size_t> pick(0, questions.size() - 1);
+std::cout << questions[pick(rng)] << "\n";
+```
+
 Старый `rand()` из `<cstdlib>` работает, но распределение у него хуже. Для учебных задач разницы нет, для чего-то серьёзного бери `<random>`.
 
 ### Перемешать колоду и вероятности
@@ -444,6 +477,23 @@ if (!in.is_open()) {              // ✅ так работает всегда
 
 **Правило: проверяй открытие через `is_open()`.** То же самое для записи — `if (!out.is_open())`. Это единственное место в справочнике, где совет расходится с большинством учебников, и расходится намеренно: `is_open()` верен и там, и здесь.
 
+```badgood
+Так в C: FILE* и fopen | Так на C++: потоки
+#include <cstdio>
+
+FILE *f = fopen("out.txt", "w");
+fprintf(f, "%d\n", score);
+fclose(f);        // забыл — данные могут
+                  // не записаться
+---
+#include <fstream>
+
+std::ofstream out("out.txt");
+out << score << "\n";
+// закроется сам в конце блока —
+// забыть нельзя
+```
+
 ### Запись
 
 ```cpp
@@ -478,6 +528,27 @@ out << "Вторая строка\n";
 ```cpp
 std::ofstream out("log.txt", std::ios::app);   // app = append, дописывание
 out << "ещё одна строка\n";
+```
+
+```cpp alt: Журнал игры: каждое событие — строкой в конец файла
+void logEvent(const std::string &text) {
+  std::ofstream out("game-log.txt", std::ios::app);   // открыли, дописали, закрылся сам
+  out << text << "\n";
+}
+
+logEvent("Шаг 3: победа над гоблином");
+logEvent("Шаг 7: найдено зелье");
+```
+
+```cpp alt: Сохранить и загрузить настройки
+{
+  std::ofstream out("settings.txt");
+  out << 70 << " " << 1 << "\n";           // громкость и «полный экран»
+}
+std::ifstream in("settings.txt");
+int volume = 50, fullscreen = 0;           // значения по умолчанию, если файла нет
+if (in.is_open()) in >> volume >> fullscreen;
+std::cout << volume << " " << fullscreen << "\n";
 ```
 
 ### Чтение
@@ -565,6 +636,42 @@ int main() {
 }
 ```
 
+### Папки и файлы: `std::filesystem`
+
+`<fstream>` читает и пишет **содержимое** файла. А узнать, есть ли файл, создать папку для сохранений или перечислить все сохранения — это `std::filesystem` (C++17).
+
+```cpp
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+
+namespace fs = std::filesystem;   // короткое имя вместо длинного
+
+int main() {
+  fs::path dir = "saves";
+  fs::create_directories(dir);                         // создать папку (если её нет)
+  std::ofstream(dir / "slot1.txt") << "hp 30\n";       // «/» склеивает части пути
+
+  if (fs::exists(dir / "slot1.txt"))
+    std::cout << "Размер: " << fs::file_size(dir / "slot1.txt") << " байт\n";
+
+  for (const auto &entry : fs::directory_iterator(dir))   // все файлы папки
+    if (entry.path().extension() == ".txt")
+      std::cout << entry.path().filename().string() << "\n";
+}
+```
+
+| Нужно | Как |
+|---|---|
+| есть ли файл | `fs::exists(p)` |
+| создать папку со всеми родителями | `fs::create_directories(p)` |
+| размер | `fs::file_size(p)` |
+| удалить | `fs::remove(p)` |
+| все файлы папки | `fs::directory_iterator(dir)` |
+| имя без пути, расширение | `p.filename()`, `p.extension()` |
+
+Операции над диском бросают `fs::filesystem_error`, если что-то пошло не так (нет прав, диска). Для проверок «спросить, а не падать» у функций есть вариант с `std::error_code` последним аргументом.
+
 ### Куда класть файл
 
 Программа ищет `input.txt` в **рабочей директории**, а это не всегда папка с `.exe`. В VS Code с `C/C++ Runner` рабочая директория — папка проекта. Если файл «не находится»:
@@ -577,6 +684,35 @@ std::ifstream in("D:\\Desktop\\C++\\les_5\\input.txt"); // ✅ или двойн
 > Файлы закрываются сами при выходе из области видимости — это RAII, главная идея C++. Явный `in.close()` нужен редко: например, если хочешь тут же открыть тот же файл на запись.
 
 > **Что запомнить.** `std::ifstream` читает, `std::ofstream` пишет и стирает старое содержимое (`std::ios::app` — дописывает). Сразу после открытия проверь `is_open()`. Читай в условии цикла — `while (std::getline(in, line))`, а не `while (!in.eof())`. Файл закроется сам.
+
+**Предскажи вывод** — копия структуры и математика.
+
+```challenge
+@id c9acwgp
+@type predict
+Что напечатает программа? `b` — копия `a` или то же самое?
+---
+struct Point { int x = 0; int y = 0; };
+
+int main() {
+    Point a{3, 4};
+    Point b = a;
+    b.x = 10;
+    std::cout << a.x << " " << b.x << " " << b.y;
+}
+---
+3 10 4
+```
+
+```challenge
+@id cmaa3xc
+@type predict
+Округление, приведение и остаток.
+---
+std::cout << std::round(2.5) << " " << static_cast<int>(2.9) << " " << std::abs(-7) % 4;
+---
+3 2 3
+```
 
 ## Рецепты: хочу X → вот код
 
@@ -764,6 +900,12 @@ A: Сам, когда объект потока выходит из област
 
 Q: Что даёт `std::sqrt(-1.0)`?
 A: `nan` — «не число». Любая арифметика с `nan` даёт `nan`, а `nan == nan` — `false`. Проверка: `std::isnan(x)`.
+
+Q: Чем `std::filesystem` отличается от `<fstream>`?
+A: `<fstream>` читает и пишет содержимое файла, `std::filesystem` работает с самими файлами и папками: есть ли, размер, создать, перечислить.
+
+Q: Как перечислить все файлы в папке?
+A: `for (const auto &e : std::filesystem::directory_iterator(dir))` — у каждого `e.path()`.
 ```
 
 Напиши сам и запусти:
@@ -861,4 +1003,4 @@ int main() {
 
 ---
 
-[← Начни отсюда](../00-НАЧНИ-ОТСЮДА.md) · [← Итераторы и алгоритмы](07-algoritmy.md) · [Справка: заголовки, устаревшее, чеклист →](09-spravka.md) · [Примеры программ](../examples/README.md)
+[← Начни отсюда](../00-НАЧНИ-ОТСЮДА.md) · [Маршрут изучения](../00-marshrut.md) · [← Алгоритмы](07-algoritmy.md) · [Ссылки и указатели →](22-ukazateli.md)

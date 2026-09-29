@@ -9,6 +9,7 @@ const docs = require('./docs');
 const { RECENT_LIMIT, workspaceTrusted, findDocsRoot, collectGroups, bundledDocs } = docs;
 const { writeDocsData } = require('./data');
 const { dataFilePath } = require('./storage');
+const shared = require('./shared-progress');
 
 const RECENT_KEY = 'cppDocs.recent';
 const PINS_KEY = 'cppDocs.pins';
@@ -77,6 +78,11 @@ class DocsViewProvider {
     this.watcher = null;        // следит за *.md, чтобы панель обновлялась сама
     this.watchedRoot = null;    // какую папку уже сторожим — не пересоздаём зря
     this.renderTimer = null;    // гасим пачку файловых событий одной перерисовкой
+    // Окно поменяло прогресс (зеркало) — обновить галочки «изучено» без пересборки списка.
+    try {
+      const sub = require('./bridge').onBroadcast((ev) => { if (ev === 'progress') this.postState(); });
+      if (context && context.subscriptions) context.subscriptions.push(sub);
+    } catch (e) { /* мост необязателен */ }
   }
 
   /** Обновиться не сразу: при сохранении файла событий прилетает несколько. */
@@ -162,7 +168,15 @@ class DocsViewProvider {
     return this.saveList(PINS_KEY, next);
   }
 
-  read() { return this.list(READ_KEY); }
+  /** «Изучено» = открывали в панели ИЛИ отметили в плавающем окне (его зеркало прогресса). */
+  read() {
+    const own = this.list(READ_KEY);
+    const root = findDocsRoot();
+    let fromWindow = [];
+    try { fromWindow = root ? shared.windowRead(this.context).map((rel) => absOf(root, rel)) : []; } catch (e) {}
+    fromWindow.forEach((p) => { if (own.indexOf(p) === -1) own.push(p); });
+    return own;
+  }
 
   /** Отметить материал изученным (открывали хотя бы раз). */
   markRead(filePath) {
@@ -173,10 +187,11 @@ class DocsViewProvider {
 
   /** Переключить отметку «изучено» вручную — по клику на галочку у пункта. */
   toggleRead(filePath) {
-    const list = this.read();
-    const next = list.includes(filePath)
-      ? list.filter((p) => p !== filePath)
-      : list.concat([filePath]);
+    const on = !this.read().includes(filePath);
+    const own = this.list(READ_KEY);
+    const next = on ? own.concat([filePath]) : own.filter((p) => p !== filePath);
+    // Ручная отметка — и в окно: там «изучено» открывает боссов и считается в прогрессе.
+    try { const rel = relOf(findDocsRoot(), filePath); if (rel) shared.setWindowRead(this.context, rel, on); } catch (e) {}
     return this.saveList(READ_KEY, next);
   }
 
@@ -228,7 +243,11 @@ class DocsViewProvider {
       await this.context.globalState.update(RECENT_KEY, []);
       this.renderAll();
     } else if (msg.type === 'resetProgress') {
+      // Прогресс теперь общий с плавающим окном — сброс без спроса стёр бы и его отметки.
+      const pick = await vscode.window.showWarningMessage('Снять все отметки «изучено»? Они снимутся и в боковой панели, и в плавающем окне (решённые задачи и карточки не трогаются).', { modal: true }, 'Снять');
+      if (pick !== 'Снять') return;
       await this.context.globalState.update(READ_KEY, []);
+      try { shared.clearWindowRead(this.context); } catch (e) {}
       this.postState();
     } else if (msg.type === 'togglePin') {
       await this.togglePin(msg.file);

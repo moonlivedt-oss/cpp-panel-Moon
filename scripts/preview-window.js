@@ -24,7 +24,8 @@ var EXT = path.join(ROOT, "extension");
 
 var pkg = JSON.parse(fs.readFileSync(path.join(EXT, "package.json"), "utf8"));
 var defaultPath = pkg.contributes.configuration.properties["cppDocs.path"]["default"];
-var docsPath = process.argv[2] || defaultPath;
+// cppDocs.path по умолчанию пустой — тогда берём docs/ этого репозитория.
+var docsPath = process.argv[2] || defaultPath || path.join(__dirname, "..", "docs");
 
 // Заглушка vscode: extension.js требует модуль 'vscode', которого вне редактора нет.
 // Нам нужен только buildDocsData — чистая функция от пути, но модуль всё равно грузится.
@@ -61,6 +62,14 @@ if (!fs.existsSync(path.join(docsPath, "00-НАЧНИ-ОТСЮДА.md"))) {
 
 var data = ext.buildDocsData(docsPath);
 data.dataUrl = ""; // в браузере перечитать по сети нельзя — окно пересоберёт из загруженных данных
+// Пейзажи главной (extension/bg-*.webp): копируем в build/ext/, адрес папки окно получит при загрузке
+// (location.origin — порт сервера превью заранее неизвестен).
+var BUILD_EXT = path.join(ROOT, "build", "ext");
+fs.mkdirSync(BUILD_EXT, { recursive: true });
+data.bgImages = fs.readdirSync(EXT).filter(function (n) { return /^bg-[a-z0-9-]{1,40}.webp$/.test(n); });
+data.bgImages.forEach(function (n) { fs.copyFileSync(path.join(EXT, n), path.join(BUILD_EXT, n)); });
+// встроенные шрифты окна (extension/fonts) — туда же, окно возьмёт их из <extDirUrl>/fonts
+if (fs.existsSync(path.join(EXT, "fonts"))) fs.cpSync(path.join(EXT, "fonts"), path.join(BUILD_EXT, "fonts"), { recursive: true });
 
 var runtime = fs.readFileSync(path.join(EXT, "cpp-docs-runtime.js"), "utf8");
 var stickersFile = path.join(EXT, "stickers.json");
@@ -89,7 +98,8 @@ var html =
   "  <div class=\"hint\">Превью: акцент здесь — образец (Catppuccin Mauve). В редакторе окно возьмёт твой живой акцент custom-bg/темы. Нажми «📘 C++» справа внизу.</div>\n" +
   "  <div class=\"fake-edit\">// имитация редактора VS Code\nint main() {\n  std::cout << \"Документация C++\";\n  return 0;\n}</div>\n" +
   "</div>\n" +
-  "<script>window.__CPPDOCS__ = " + safe(JSON.stringify(data)) + ";</script>\n" +
+  "<script>window.__CPPDOCS__ = " + safe(JSON.stringify(data)) + ";\n" +
+  "if (/^https?:$/.test(location.protocol)) window.__CPPDOCS__.extDirUrl = location.origin + '/ext';</script>\n" +
   // наклейки лежат отдельным файлом (в VS Code окно читает его с диска) — в браузере подкладываем готовыми
   "<script>window.__CPPDOCS_STICKERS__ = " + safe(stickersJson) + ";</script>\n" +
   "<script>\n" + safe(runtime) + "\n</script>\n" +

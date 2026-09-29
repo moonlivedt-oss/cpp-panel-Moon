@@ -85,6 +85,25 @@ test("CSP чистой оболочки: мост и Trusted Types впущен�
   assert.equal(WB.stripOurNonces(again.match(/<meta[^>]*>/)[0]), csp);
 });
 
+test("CSP: чужие nonce (Moon Core) не снимаются, снятие окна не подставляет CSP из бэкапа", () => {
+  const csp = '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; script-src \'self\' \'nonce-MOONCORE1\'; style-src \'self\' \'nonce-MOONCORE1\'; connect-src \'self\' http://127.0.0.1:47300;">';
+  const html = "<html><head>" + csp + "</head><body></body></html>";
+  const armed = WB.applyWindowInjection(WB.armCspWithNonce(html, "CPPDOCS1"), WB.buildWindowBlock("x", "y", "CPPDOCS1"));
+  assert.equal((armed.match(/'nonce-MOONCORE1'/g) || []).length, 2, "nonce Moon Core на месте");
+  assert.match(armed, /'nonce-CPPDOCS1' file:/);
+  const again = WB.armCspWithNonce(armed, "CPPDOCS2").match(/<meta[^>]*>/)[0];
+  assert.ok(again.indexOf("CPPDOCS1") === -1 && again.indexOf("'nonce-MOONCORE1'") !== -1);
+  // Бэкап старый (без Moon Core) — снятие всё равно возвращает только «минус наши добавки».
+  const bak = path.join(TMP, "old.cppdocs-backup");
+  fs.writeFileSync(bak, "<html><head><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'\"></head></html>");
+  assert.equal(WB.restoreCspFromBackup(WB.stripWindowInjection(armed), bak), html);
+  // script-src нет: новая директива копирует default-src (иначе скрипты VS Code отрезаны) и снимается.
+  const noScript = "<html><head><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'self'; connect-src 'self'\"></head></html>";
+  const a2 = WB.armCspWithNonce(noScript, "CPPDOCS3");
+  assert.match(a2, /script-src 'self' 'nonce-CPPDOCS3' file:; default-src 'self'/);
+  assert.equal(WB.restoreCspFromBackup(a2, bak), noScript);
+});
+
 test("Индекс поиска: разделы, якоря как у окна, без кода", () => {
   const sx = DOCS.searchSections("# Файл\nвступление\n## Раздел `vector`\nтекст про push_back\n```cpp\nint secret;\n```\n### Под **раздел**\nещё\n");
   assert.deepEqual(sx.map((s) => s.s), ["", "раздел-vector", "под-раздел"]);

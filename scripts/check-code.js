@@ -52,7 +52,8 @@ function cppBlocks(content) {
   let cur = null;
   for (let i = 0; i < lines.length; i++) {
     const s = lines[i].replace(/^\s*(?:>\s?)+/, '');
-    const open = s.match(/^```+\s*([\w+]*)\s*$/);
+    // ```cpp, ```cpp {3,5} и слайды другого применения ```cpp alt: Подпись
+    const open = s.match(/^```+\s*([\w+]*)(?:\s+\{[\d,\s-]*\})?(?:\s+alt:?.*)?\s*$/);
     if (cur) {
       if (/^```+\s*$/.test(s)) { blocks.push(cur); cur = null; }
       else cur.code.push(s);

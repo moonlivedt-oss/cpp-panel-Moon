@@ -9,7 +9,10 @@
 //   ```challenge @type run      — заготовка собирается; если есть эталон test/solutions/<файл>.<N>.cpp,
 //                                 он проходит все тесты задания («\n» в тесте — перевод строки);
 //   ```steps                    — номера строк в пределах кода, а накопленный «вывод» шагов совпадает
-//                                 с настоящим (для фрагментов без ввода и случайности).
+//                                 с настоящим (для фрагментов без ввода и случайности);
+//   ```repeat                   — «Повтори за мной»: программа из @ref (examples/code/…) проходит
+//                                 тесты в режиме contains (строки ожидаемого есть в выводе по порядку);
+//   ```checkpoint               — эталон главы собирается без предупреждений (-Wall -Wextra -Werror).
 //
 // Фрагмент без main оборачивается: объявления верхнего уровня (функции, struct, enum…) — наверх,
 // остальное — в main, плюс набор стандартных #include. Фрагмент, которому нужен контекст из текста
@@ -39,7 +42,7 @@ if (probe.error) {
 
 const HEADERS = ['iostream', 'iomanip', 'string', 'string_view', 'vector', 'map', 'set', 'unordered_map',
   'algorithm', 'numeric', 'memory', 'optional', 'ranges', 'cmath', 'cstdlib', 'sstream', 'stdexcept',
-  'utility', 'array', 'functional', 'limits', 'cctype', 'format', 'chrono', 'random', 'fstream', 'queue', 'deque']
+  'utility', 'array', 'functional', 'limits', 'cctype', 'format', 'chrono', 'random', 'fstream', 'queue', 'deque', 'variant', 'atomic', 'thread', 'mutex', 'future', 'type_traits']
   .map((h) => '#include <' + h + '>').join('\n') + '\n';
 
 function mdFiles(dir) {
@@ -53,12 +56,12 @@ function mdFiles(dir) {
   return out.sort();
 }
 
-/** Блоки ```challenge и ```steps: {kind, line, body[], noRun}. */
+/** Блоки ```challenge, ```steps, ```repeat, ```checkpoint: {kind, line, body[], noRun}. */
 function blocks(content) {
   const lines = content.replace(/\r\n?/g, '\n').split('\n');
   const out = [];
   for (let i = 0; i < lines.length; i++) {
-    const m = lines[i].match(/^```(challenge|steps)\s*$/);
+    const m = lines[i].match(/^```(challenge|steps|repeat|checkpoint)\s*$/);
     if (!m) continue;
     let j = i - 1;
     while (j >= 0 && lines[j].trim() === '') j--;
@@ -156,8 +159,22 @@ function sections(body) {
   return secs;
 }
 
+// Как outputMatches в extension/lib/run.js (режим contains): каждая строка ожидаемого — часть
+// какой-то строки вывода, по порядку, без учёта регистра.
+function containsInOrder(got, want) {
+  const have = normRun(got).split('\n');
+  let j = 0;
+  for (const w of normRun(want).split('\n').filter((l) => l.trim())) {
+    const lw = w.toLowerCase();
+    while (j < have.length && have[j].toLowerCase().indexOf(lw) === -1) j++;
+    if (j >= have.length) return false;
+    j++;
+  }
+  return true;
+}
+
 const failures = [];
-const stats = { predict: 0, parsons: 0, run: 0, runSolved: 0, runNoSol: [], ctxSkip: 0, steps: 0, stepsRun: 0, noCtx: 0, skipped: 0 };
+const stats = { predict: 0, parsons: 0, run: 0, runSolved: 0, runNoSol: [], ctxSkip: 0, steps: 0, stepsRun: 0, noCtx: 0, skipped: 0, repeat: 0, checkpoint: 0 };
 function fail(where, msg) { failures.push(where + '\n      ' + msg.replace(/\n/g, '\n      ')); }
 function note(where, msg) { if (VERBOSE) console.log('  · ' + where + ' — ' + msg); }
 
@@ -166,6 +183,38 @@ for (const file of mdFiles(ROOT)) {
   let runIdx = 0;
   for (const b of blocks(fs.readFileSync(file, 'utf8'))) {
     const where = rel + ':' + b.line;
+    if (b.kind === 'repeat') {
+      stats.repeat++;
+      const ref = (b.body.find((x) => /^\s*@ref\s/.test(x)) || '').replace(/^\s*@ref\s+/, '').trim();
+      if (!ref) { fail(where + ' [повтори за мной]', 'нет строки @ref <файл эталона>'); continue; }
+      const refFile = path.join(path.dirname(file), ref);
+      if (!fs.existsSync(refFile)) { fail(where + ' [повтори за мной]', 'нет файла ' + ref); continue; }
+      const sol = build(fs.readFileSync(refFile, 'utf8'));
+      if (sol.error) { fail(where + ' [повтори за мной]', ref + ' не собирается:\n' + sol.error); continue; }
+      const tests = sections(b.body)[1] || [];
+      if (!tests.some((t) => t.indexOf('=>') >= 0)) fail(where + ' [повтори за мной]', 'нет тестов «ввод => вывод»');
+      for (const t of tests) {
+        const x = t.replace(/\s+$/, '');
+        if (!x.trim() || x.trim()[0] === '#' || x.indexOf('=>') < 0) continue;
+        const idx = x.indexOf('=>');
+        const input = x.slice(0, idx).trim().replace(/\\n/g, '\n');
+        const want = x.slice(idx + 2).trim().replace(/\\n/g, '\n');
+        const o = run(sol, input);
+        if (o.blocked) { blocked.push(where); break; }
+        if (o.error) fail(where + ' [повтори за мной]', JSON.stringify(input) + ' → ' + o.error);
+        else if (!containsInOrder(o.out, want)) fail(where + ' [повтори за мной]', 'вход ' + JSON.stringify(input) + ': в выводе нет ' + JSON.stringify(normRun(want)) + '\n вывод: ' + JSON.stringify(normRun(o.out).slice(0, 400)));
+      }
+      continue;
+    }
+    if (b.kind === 'checkpoint') {
+      stats.checkpoint++;
+      const secs = sections(b.body);
+      const code = secs.slice(1).map((x) => x.join('\n')).join('\n---\n').replace(/^\n+|\n+$/g, '');
+      if (!code) { fail(where + ' [контрольная точка]', 'нет кода эталона после ---'); continue; }
+      const r = build(code, ['-Wall', '-Wextra', '-Werror']);
+      if (r.error) fail(where + ' [контрольная точка]', 'эталон не собирается без предупреждений:\n' + r.error);
+      continue;
+    }
     if (b.kind === 'challenge') {
       const type = ((b.body.find((s) => /^@type\s/.test(s)) || '').split(/\s+/)[1] || 'parsons');
       const secs = sections(b.body);
@@ -253,6 +302,7 @@ try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (e) { /* не
 
 const summary = 'предскажи вывод ' + stats.predict + ', собери код ' + stats.parsons + ', напиши и запусти ' + stats.run +
   ' (с эталоном ' + stats.runSolved + '), по шагам ' + stats.steps + ' (вывод сверен у ' + stats.stepsRun + ')' +
+  (stats.repeat ? ', повтори за мной ' + stats.repeat : '') + (stats.checkpoint ? ', контрольных точек ' + stats.checkpoint : '') +
   (stats.noCtx ? ', без контекста ' + stats.noCtx : '') + (stats.ctxSkip ? ', не программа ' + stats.ctxSkip : '') + (stats.skipped ? ', docs:no-run ' + stats.skipped : '');
 if (blocked.length) {
   console.warn('Внимание: антивирус не дал запустить собранную программу (' + [...new Set(blocked)].join(', ') +

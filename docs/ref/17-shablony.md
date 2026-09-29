@@ -6,13 +6,14 @@
 
 **Уровень:** 🔴 продвинутая тема · **Опирается на:** [Функции](04-funkcii.md), [Контейнеры](06-konteynery.md)
 
-[← Начни отсюда](../00-НАЧНИ-ОТСЮДА.md) · [Маршрут изучения](../00-marshrut.md) · [← Ranges](16-ranges.md) · [Умные указатели →](18-umnye-ukazateli.md)
+[← Начни отсюда](../00-НАЧНИ-ОТСЮДА.md) · [Маршрут изучения](../00-marshrut.md) · [← Ranges](16-ranges.md) · [Перемещение →](23-peremeshchenie.md)
 
 ---
 
 ## Что в этом файле
 
 - **[32. Шаблоны](#32-шаблоны)**
+  - [За 30 секунд](#за-30-секунд)
   - [Проблема: одна логика, несколько копий](#проблема-одна-логика-несколько-копий)
   - [`template` — функция с «дыркой под тип»](#template--функция-с-дыркой-под-тип)
   - [Как это работает: инстанцирование](#как-это-работает-инстанцирование)
@@ -20,11 +21,28 @@
   - [`concepts`: понятные требования к типу](#concepts-понятные-требования-к-типу)
   - [Шаблонные структуры](#шаблонные-структуры)
   - [Когда писать свой шаблон, а когда нет](#когда-писать-свой-шаблон-а-когда-нет)
+- **[Рецепты: хочу X → вот код](#рецепты-хочу-x--вот-код)**
 - **[Проверь себя](#проверь-себя)**
 
 ---
 
 ## 32. Шаблоны
+
+### За 30 секунд
+
+- Шаблон — функция (или тип) с «дыркой под тип»: `template <typename T> T maxOf(T a, T b)`.
+- Тип подставляет компилятор по аргументам: `maxOf(3, 7)` — `int`, `maxOf(2.5, 1.0)` — `double`.
+- Для каждого типа компилятор создаёт свою копию функции — **инстанцирование**.
+- Тип должен уметь то, что делает шаблон (`a < b` — нужен `operator<`), иначе ошибка при сборке.
+- `concepts` (C++20) пишут требование словами: `template <std::integral T>` — только целые.
+
+```cpp
+template <typename T>
+T maxOf(T a, T b) { return a < b ? b : a; }
+
+maxOf(3, 7);                     // T = int
+maxOf(std::string("кот"), std::string("пёс"));   // T = std::string
+```
 
 ### Проблема: одна логика, несколько копий
 
@@ -127,6 +145,26 @@ int main() {
 }
 ```
 
+```cpp alt: Номер уровня — только целое
+template <std::integral T>
+T nextLevel(T level) { return level + 1; }
+
+std::cout << nextLevel(4) << "\n";   // 5
+// nextLevel(4.5);                   // не соберётся: double — не integral
+```
+
+```cpp alt: Среднее для любых чисел
+template <typename T> requires std::integral<T> || std::floating_point<T>
+double average(const std::vector<T> &v) {
+  if (v.empty()) return 0.0;
+  double sum = 0;
+  for (T x : v) sum += static_cast<double>(x);
+  return sum / static_cast<double>(v.size());
+}
+
+std::cout << average(std::vector<int>{4, 5, 5}) << " " << average(std::vector<double>{1.5, 2.5}) << "\n";
+```
+
 Теперь вызов `maxOf` с типом без сравнения даёт понятное «constraint not satisfied: тип не удовлетворяет `totally_ordered`», а не десять экранов внутренностей. Готовых концептов в `<concepts>` много: `std::integral` (целые), `std::floating_point` (дробные), `std::totally_ordered` (сравнимые). Свои требования тоже можно описывать через `requires`, но на первое время хватает готовых.
 
 ### Шаблонные структуры
@@ -143,6 +181,35 @@ struct Box {                 // коробка, в которой лежит ч�
 Box<int> a{42, false};           // коробка с int
 Box<std::string> b{"текст", false};   // коробка со строкой
 std::cout << a.value << " " << b.value;   // → 42 текст
+```
+
+```cpp alt: Стек «отменить действие» для любых действий
+template <typename T>
+struct UndoStack {
+  std::vector<T> items;
+  void push(const T &x) { items.push_back(x); }
+  bool canUndo() const { return !items.empty(); }
+  T pop() { T x = items.back(); items.pop_back(); return x; }
+};
+
+UndoStack<std::string> edits;
+edits.push("набрал «кот»");
+edits.push("удалил слово");
+std::cout << edits.pop() << "\n";      // удалил слово
+```
+
+```cpp alt: Ограничитель значения для любых чисел
+template <typename T>
+struct Limited {
+  T value, lo, hi;
+  void set(T v) { value = v < lo ? lo : v > hi ? hi : v; }
+};
+
+Limited<int> hp{30, 0, 30};
+hp.set(45);
+Limited<double> volume{0.5, 0.0, 1.0};
+volume.set(-2.0);
+std::cout << hp.value << " " << volume.value << "\n";   // 30 0
 ```
 
 Параметров-типов может быть несколько — как у `std::map<K, V>`:
@@ -191,6 +258,16 @@ struct Pair {
 
 </details>
 ```
+
+## Рецепты: хочу X → вот код
+
+Ищешь не функцию, а решение задачи — начни отсюда.
+
+- **Одна функция для `int`, `double` и `string`** — `template <typename T>`. → [template](#template--функция-с-дыркой-под-тип)
+- **Понять огромную ошибку в шаблоне** — ищи строку «required from here» и тип, которому не хватило операции. → [требование к типу](#требование-к-типу-он-должен-уметь-нужное)
+- **Разрешить только числа** — `template <std::integral T>` или `std::floating_point`. → [concepts](#concepts-понятные-требования-к-типу)
+- **Свой контейнер для любого типа** — `template <typename T> struct Stack { std::vector<T> data; };`. → [шаблонные структуры](#шаблонные-структуры)
+- **Решить, нужен ли свой шаблон** — чаще хватает готовых контейнеров и алгоритмов. → [когда писать](#когда-писать-свой-шаблон-а-когда-нет)
 
 ## Проверь себя
 
@@ -385,4 +462,4 @@ A: Компилятор показывает всю цепочку инстан�
 
 ---
 
-[← Начни отсюда](../00-НАЧНИ-ОТСЮДА.md) · [Маршрут изучения](../00-marshrut.md) · [← Ranges](16-ranges.md) · [Умные указатели →](18-umnye-ukazateli.md)
+[← Начни отсюда](../00-НАЧНИ-ОТСЮДА.md) · [Маршрут изучения](../00-marshrut.md) · [← Ranges](16-ranges.md) · [Перемещение →](23-peremeshchenie.md)

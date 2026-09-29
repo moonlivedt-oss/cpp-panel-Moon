@@ -16,5 +16,5 @@
     "skipLibCheck": true,
     "resolveJsonModule": true
   },
-  "include": ["extension/extension.js", "extension/uninstall.js", "extension/lib/**/*.js"]
+  "include": ["extension/extension.js", "extension/uninstall.js", "extension/window-cli.js", "extension/lib/**/*.js", "installer/tools/*.js"]
 }

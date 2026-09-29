@@ -5,10 +5,12 @@ const vscode = require('vscode');
 const path = require('path');
 const { bundledDocs } = require('./docs');
 
-/** file:///-URL: прямые слэши, на Windows — третий слэш перед буквой диска. */
+/** file:///-URL: прямые слэши, на Windows — третий слэш перед буквой диска. Символы пути
+ *  кодируются (pathToFileURL): «#», «?» и «%» в имени папки иначе обрезали бы адрес в окне. */
 function fileUrl(p) {
-  const abs = path.resolve(p).replace(/\\/g, '/');
-  return 'file:///' + abs.replace(/^\/+/, '');
+  try { return require('url').pathToFileURL(path.resolve(p)).href; } catch (e) {
+    return 'file:///' + path.resolve(p).replace(/\\/g, '/').replace(/^\/+/, '');
+  }
 }
 
 /** Папка globalStorage расширения (гарантированно доступна на запись). */

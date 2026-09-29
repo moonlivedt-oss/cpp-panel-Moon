@@ -153,6 +153,7 @@
         if (obj) { window.__CPPDOCS__ = obj; rebuildFromData(); }
       }
       else if (m.type === "theme") { try { applyAccent(); applyThemeClasses(); } catch (e) {} }
+      else if (m.type === "progress" && typeof m.text === "string") { window.__CPPDOCS_MIRROR__ = m.text; onProgressEvent(m.text); }
     });
     try {
       document.addEventListener("mouseup", function () { setTimeout(onArticleSelect, 0); });
@@ -167,7 +168,7 @@
     try {
       var b0 = window.__CPPDOCS_BOOT__, d0 = DATA();
       CD_NONCE = (b0 && typeof b0.scriptNonce === "string" && b0.scriptNonce) ||
-                 (d0 && typeof d0.scriptNonce === "string" && d0.scriptNonce) || "";
+                 (d0 && typeof d0.scriptNonce === "string" && d0.scriptNonce) || MC_NONCE || "";
     } catch (e) {}
     if (IN_PANEL) { bootPanel(); return; }
     heal();
@@ -224,6 +225,16 @@
     // для тестов: заготовка задачи, интервалы на кнопках, лимит новых карточек, режим по разделам
     taskStubCode: taskStubCode, ivlLabel: ivlLabel, cdPreview: cdPreview, newLeftToday: newLeftToday,
     tidyArticle: tidyArticle, showSection: showSection, parseTopics: parseTopics, examPassedTopics: examPassedTopics,
-    _rpc: function (m, b, t, cb) { rpc(m, b, t, cb); }, _scrubHTML: scrubHTML, _stateSchema: { migrate: migrateState, normalize: normalizeState, prune: pruneState, version: STATE_VERSION }, stepsNorm: stepsNorm, collectChallenges: collectChallenges, dailyChallenge: dailyChallenge, dailyStreak: dailyStreak, parseMemory: parseMemory, parseFrames: parseFrames, focusInside: focusInside, _adoptProgress: adoptProgress, _saveState: function () { saveState(); }, _sticker: function (n) { return STICKERS[n]; }, _read: function (u) { return nodeRead(u); }, _write: function (u, t) { return nodeWrite(u, t); },
+    _rpc: function (m, b, t, cb) { rpc(m, b, t, cb); }, _scrubHTML: scrubHTML, _stateSchema: { migrate: migrateState, normalize: normalizeState, prune: pruneState, version: STATE_VERSION }, stepsNorm: stepsNorm, collectChallenges: collectChallenges, dailyChallenge: dailyChallenge, dailyStreak: dailyStreak, parseMemory: parseMemory, parseFrames: parseFrames, focusInside: focusInside, _adoptProgress: adoptProgress, _saveState: function () { saveState(); }, _sticker: function (n) { return STICKERS[n]; }, _read: function (u) { return fileRead(u); }, _write: function (u, t) { return bridgeWrite(u, t); },
+    // для тестов: игровые блоки (волна BFS, квесты «Подземелья»)
+    bfsDist: bfsDist, bfsParse: bfsParse, collectQuests: collectQuests,
+    // для тестов: освоение тем, карта, экзамен недели, достижения, рекорды, сравнение кода, Anki
+    progressTopics: progressTopics, topicMastery: topicMastery, topicUnlocked: topicUnlocked, weakSpots: weakSpots,
+    knowledgeMapHtml: knowledgeMapHtml, weekKey: weekKey, buildWeeklyExam: buildWeeklyExam, quizQuestionsOf: quizQuestionsOf,
+    checkAchievements: checkAchievements, achList: ACH, noteRunResult: noteRunResult, noteDailySolved: noteDailySolved,
+    noteDailyOpened: noteDailyOpened, dailyRecordLine: dailyRecordLine, recordsHtml: recordsHtml, achHtml: achHtml,
+    diffHtml: diffHtml, codeLines: codeLines, lcsOps: lcsOps, codeNames: codeNames, exampleRefCode: exampleRefCode,
+    renderCheckpoint: renderCheckpoint, renderRepeat: renderRepeat, ankiExportText: ankiExportText,
+    onProgressEvent: onProgressEvent, keepRecent: keepRecent, aheadNotes: aheadNotes, renderCodeAlts: renderCodeAlts,
   };
 })();

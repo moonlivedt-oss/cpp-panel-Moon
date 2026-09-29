@@ -418,7 +418,7 @@
   function pollEditor() {
     var d = DATA(); var url = (d && d.editorUrl) || bootVal("editorUrl");
     if (!url) return;
-    var txt = nodeRead(url); if (txt == null) return;   // файла нет — не трогаем плашку
+    var txt = fileRead(url); if (txt == null) return;   // файла нет — не трогаем плашку
     if (txt === _editorText) { applyEditorPayload(editorPayload); return; }
     _editorText = txt;
     editorPayload = parseEditorText(txt);
@@ -457,6 +457,6 @@
   function pollStamp() {
     var d = DATA();
     var url = (d && d.stampUrl) || bootVal("stampUrl");
-    if (url) applyStampText(nodeRead(url));
+    if (url) applyStampText(fileRead(url));
   }
 

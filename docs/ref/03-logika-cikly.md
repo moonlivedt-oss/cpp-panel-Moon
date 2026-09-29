@@ -6,7 +6,7 @@
 
 **Уровень:** 🟢 первые шаги · **Опирается на:** [Основы](01-osnovy.md), [Ввод и вывод](02-vvod-vyvod.md)
 
-[← Начни отсюда](../00-НАЧНИ-ОТСЮДА.md) · [← Ввод и вывод](02-vvod-vyvod.md) · [Функции →](04-funkcii.md) · [Примеры программ](../examples/README.md)
+[← Начни отсюда](../00-НАЧНИ-ОТСЮДА.md) · [Маршрут изучения](../00-marshrut.md) · [← Ввод и вывод](02-vvod-vyvod.md) · [Функции →](04-funkcii.md)
 
 ---
 
@@ -240,6 +240,20 @@ int main() {
   std::cout << volume << "\n";
   return 0;
 }
+```
+
+```cpp alt: HP героя: не выше максимума, не ниже нуля
+int hp = 28, maxHp = 30;
+hp = std::clamp(hp + 15, 0, maxHp);   // зелье: 43 → 30
+hp = std::clamp(hp - 50, 0, maxHp);   // удар дракона: -20 → 0
+std::cout << hp << "\n";
+```
+
+```cpp alt: Громкость 0–100 по кнопкам
+int volume = 95;
+char key = '+';
+volume = std::clamp(volume + (key == '+' ? 10 : -10), 0, 100);   // 105 → 100
+std::cout << "Громкость: " << volume << "\n";
 ```
 
 `std::clamp(x, lo, hi)` возвращает `lo`, если `x` меньше `lo`; `hi`, если больше `hi`; иначе сам `x`. Важно: **все три аргумента должны быть одного типа** — `std::clamp(volume, 0, 1)` с `int`-границами не соберётся, нужно `0.0` и `1.0`. Больше про `<algorithm>` — в разделе [Итераторы и алгоритмы](07-algoritmy.md).
@@ -543,6 +557,18 @@ std::cout << (n % 2 == 0 ? "чётное" : "нечётное") << "\n";   // п
 std::cout << "Найдено: " << (found ? "да" : "нет") << "\n";
 ```
 
+```cpp alt: Статус героя одним выражением
+int hp = 0;
+std::cout << "Герой " << (hp > 0 ? "жив" : "пал") << "\n";
+```
+
+```cpp alt: Окончание слова для числа
+int n = 3;
+std::string word = (n % 10 == 1 && n % 100 != 11) ? "монета"
+                 : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? "монеты" : "монет";
+std::cout << n << " " << word << "\n";   // 3 монеты
+```
+
 <details>
 <summary>Что такое `isLeapYear(year)` — откуда взялась эта функция?</summary>
 
@@ -593,6 +619,29 @@ default:                      // если ни один case не подошёл
 }
 
 std::cout << days << "\n";    // → 31
+```
+
+```cpp alt: Движение героя по клавише
+char key = 'd';
+int x = 5, y = 5;
+switch (key) {
+  case 'w': --y; break;
+  case 's': ++y; break;
+  case 'a': --x; break;
+  case 'd': ++x; break;
+  default: std::cout << "Клавиши: w a s d\n"; break;
+}
+std::cout << "(" << x << ", " << y << ")\n";
+```
+
+```cpp alt: Оценка числом → словом
+int mark = 4;
+switch (mark) {
+  case 5: std::cout << "отлично\n"; break;
+  case 4: std::cout << "хорошо\n"; break;
+  case 3: std::cout << "удовлетворительно\n"; break;
+  default: std::cout << "нужно пересдать\n"; break;
+}
 ```
 
 **Забытый `break` — классический баг:**
@@ -660,6 +709,21 @@ case Menu::Quit:
   std::cout << "Выход\n";
   return 0;
 }
+```
+
+```cpp alt: Состояние игры
+enum class GameState { Menu, Playing, Paused, GameOver };
+GameState state = GameState::Playing;
+if (state == GameState::Paused) std::cout << "Пауза\n";
+else if (state == GameState::GameOver) std::cout << "Игра окончена\n";
+```
+
+```cpp alt: Направление без магических чисел
+enum class Dir { Up, Down, Left, Right };
+Dir d = Dir::Left;
+int dx = d == Dir::Left ? -1 : d == Dir::Right ? 1 : 0;
+int dy = d == Dir::Up ? -1 : d == Dir::Down ? 1 : 0;
+std::cout << dx << " " << dy << "\n";
 ```
 
 Три причины, по которым это лучше голых чисел:
@@ -956,6 +1020,23 @@ for (std::size_t i = 1; i < v.size(); ++i) {   // со ВТОРОГО элеме
 std::cout << best << " на позиции " << bestIndex;   // → 12 на позиции 2
 ```
 
+```cpp alt: Лучший результат и чей он
+std::vector<std::string> names = {"Аня", "Борис", "Вика"};
+std::vector<int> scores = {70, 95, 88};
+std::size_t bestI = 0;
+for (std::size_t i = 1; i < scores.size(); ++i)
+  if (scores[i] > scores[bestI]) bestI = i;     // запоминаем НОМЕР, а не только значение
+std::cout << names[bestI] << ": " << scores[bestI] << "\n";
+```
+
+```cpp alt: Самое длинное слово
+std::vector<std::string> words = {"кот", "бегемот", "ёж"};
+std::string longest = words[0];
+for (const std::string &w : words)
+  if (w.size() > longest.size()) longest = w;
+std::cout << longest << "\n";
+```
+
 **Вложенный цикл — таблица умножения:**
 
 ```cpp
@@ -1051,6 +1132,23 @@ bool isPrime(int n) {
       return false;                        // нашли делитель — не простое
   return true;
 }
+```
+
+```cpp alt: Сумма цифр номера карты (проверка ввода)
+long long card = 4276550012345678LL;
+int sum = 0;
+for (long long n = card; n > 0; n /= 10)
+  sum += static_cast<int>(n % 10);
+std::cout << "Сумма цифр: " << sum << "\n";
+```
+
+```cpp alt: Перевернуть число: 1234 → 4321
+int n = 1234, reversed = 0;
+while (n > 0) {
+  reversed = reversed * 10 + n % 10;   // приписали последнюю цифру справа
+  n /= 10;                             // и отрезали её у n
+}
+std::cout << reversed << "\n";
 ```
 
 <details>
@@ -1278,4 +1376,4 @@ for (int i = 2; i * i [[<=]] n; ++i)
 
 ---
 
-[← Начни отсюда](../00-НАЧНИ-ОТСЮДА.md) · [← Ввод и вывод](02-vvod-vyvod.md) · [Функции →](04-funkcii.md) · [Примеры программ](../examples/README.md)
+[← Начни отсюда](../00-НАЧНИ-ОТСЮДА.md) · [Маршрут изучения](../00-marshrut.md) · [← Ввод и вывод](02-vvod-vyvod.md) · [Функции →](04-funkcii.md)

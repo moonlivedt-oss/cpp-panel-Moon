@@ -7,9 +7,9 @@
 //  сверяется с якорем RUNTIME_SHA256 в extension.js: после правки этого файла
 //  выполните  npm run hash:runtime.
 //
-//  Связь с расширением — только через файлы в globalStorage (окно читает/пишет их
-//  через Node fs оболочки): данные и метка свежести, контекст редактора,
-//  запросы «Запустить» и действия «в редактор» / «в заметки».
+//  Связь с расширением: файлы globalStorage окно ЧИТАЕТ по vscode-file:// (данные, метка
+//  свежести, контекст редактора), а запросы («Запустить», «в редактор», «в заметки») и запись
+//  зеркала прогресса идут через мост на 127.0.0.1 (lib/bridge.js); во вкладке — сообщениями.
 //
 //  Карта файла (ищите по тексту заголовка раздела):
 //    Данные ............... «Данные: материалы приходят…» — форма и санитизация данных
@@ -35,11 +35,21 @@
   if (window.__CPPDOCS_RUNTIME__) return;
   window.__CPPDOCS_RUNTIME__ = true;
 
+  // Модуль Moon Core: окно встроено ядром (одна вставка на все плагины). Оглавление и адреса
+  // файлов — в файле данных модуля (ядро читает его при старте), запросы и события — через
+  // мост ядра, nonce — у нашего же <script>. Без Moon Core MCM = null и всё как раньше.
+  var MCM = null, MC_NONCE = "";
+  try { MC_NONCE = (document.currentScript && document.currentScript.nonce) || ""; } catch (e) {}
+  try { MCM = window.__MOONCORE__ && typeof window.__MOONCORE__.module === "function" ? window.__MOONCORE__.module("cppdocs") : null; } catch (e) { MCM = null; }
+  if (MCM && !window.__CPPDOCS__) {
+    try { var mcd = MCM.data(); if (mcd && mcd.toc && typeof mcd.toc === "object") window.__CPPDOCS__ = mcd.toc; } catch (e) {}
+  }
+
   var WIN_ID = "cppdocs-window";
   var BTN_ID = "cppdocs-launch";
   var STYLE_ID = "cppdocs-style";
   /* PROTOCOL:start — генерируется из extension/lib/protocol.js, руками не править */
-  var PROTO = {"VERSION":2,"METHODS":["run","action","log"],"WRITABLE":["cpp-docs-progress.json"],"EVENTS":["editor","stamp","data","theme"],"EVENT_FILES":{"cpp-docs-editor.js":"editor","cpp-docs-stamp.js":"stamp"},"MAX_BODY":8388608,"MAX_CODE":200000,"MAX_TESTS":20,"MAX_LOG":4000,"RUN_TIMEOUT_MS":30000,"ACTION_TIMEOUT_MS":8000};
+  var PROTO = {"VERSION":2,"METHODS":["run","action","log"],"WRITABLE":["cpp-docs-progress.json"],"EVENTS":["editor","stamp","data","theme","progress"],"EVENT_FILES":{"cpp-docs-editor.js":"editor","cpp-docs-stamp.js":"stamp","cpp-docs-progress.json":"progress"},"MAX_BODY":8388608,"MAX_CODE":200000,"MAX_TESTS":20,"MAX_LOG":4000,"RUN_TIMEOUT_MS":60000,"ACTION_TIMEOUT_MS":8000};
   /* PROTOCOL:end */
   var LS_KEY = "cppdocs.ui.v1";
   // Шрифты чтения — только те, что уже есть в системе (без встраивания, офлайн).
@@ -48,15 +58,15 @@
     serif:  { label: "Сериф",     stack: "Cambria, Georgia, 'PT Serif', 'Times New Roman', serif" },
     soft:   { label: "Мягкий",    stack: "Candara, 'Segoe UI', Optima, 'Trebuchet MS', system-ui, sans-serif" },
     round:  { label: "Округлый",  stack: "'Comic Sans MS', 'Segoe Print', 'Chalkboard SE', 'Comic Neue', cursive" },
-    // Шрифты с хорошей кириллицей. Берутся, только если установлены в системе (окно офлайн и
-    // шрифтов с собой не везёт); нет шрифта — остаётся системный.
-    inter:  { label: "Inter",     stack: "Inter, 'Inter Variable', 'Segoe UI', system-ui, sans-serif" },
-    ptroot: { label: "PT Root",   stack: "'PT Root UI', 'PT Sans', 'Segoe UI', system-ui, sans-serif" },
-    golos:  { label: "Golos",     stack: "'Golos Text', 'Golos UI', 'Segoe UI', system-ui, sans-serif" },
+    // Шрифты с хорошей кириллицей — ВСТРОЕНЫ в расширение (extension/fonts/*.woff2, лицензия OFL):
+    // ставить их в систему не нужно. Имя «CppDocs …» — чтобы не спорить с установленной копией.
+    inter:  { label: "Inter",     stack: "'CppDocs Inter', Inter, 'Segoe UI', system-ui, sans-serif", sample: "Чёткий и строгий" },
+    ptsans: { label: "PT Sans",   stack: "'CppDocs PT Sans', 'PT Sans', 'Segoe UI', system-ui, sans-serif", sample: "Мягкий и книжный" },
+    golos:  { label: "Golos",     stack: "'CppDocs Golos', 'Golos Text', 'Segoe UI', system-ui, sans-serif", sample: "Современный и живой" },
   };
-  var VERSION = "3.0.0";
+  var VERSION = "3.5.2";
   // Идентификатор баннера «Что нового»: пока state.whatsnew !== этого значения — показываем баннер.
-  var WHATSNEW = "igry2-2026-09";
+  var WHATSNEW = "landscapes-2026-09";
   // Логотип как data-URI. В оболочке VS Code рантайм не может грузить файл с диска, поэтому
   // картинка встроена. Значение подставляет `node scripts/embed-logo.js` из docs/screenshots/logo-embed.png.
   var LOGO_URI = "data:image/webp;base64,UklGRuoGAABXRUJQVlA4IN4GAAAQIgCdASqAAIAAPj0ejESiIaERzJVEIAPEsoBp6GjH2lDXruhhv4au4V51z0tf6r0/+p3/mG+++TNTUfx2Q//r+JXao/tH5QcVTYXxcfm3+y43NMHjE8+XOf+Uf4f2CP5d/UP107W/o3/uGS/HfexgIwK3SweZGRGVB95TzfvwEFgdo+k+TRIVTUmhDCqNaomBK3T3nHylKz4VftwOZ/IaEoIVAz5LdbTkOmgXOe2I6cABohZZ+FvGNei3oO+WE/0wgygch1v/7tPcBsOzMtAW7eq0cOgiv0OORd/I29a9RSjRINZjWTfBDhrKW9YqXN0Bil/QTrn+3vIxIl/e8MG3MQ39Z6HA+p+D6aioU+CSIQVAJ3lCwyFRAAD+/XRj/SuHSzNdLATJXQTmaajyp+gQnghJ1LOROA+BESs/P75ZbTCQ1bETqCeaDIOhst2VjzT9Cot81bgmL/77jHHnwVGb1rxZjAzSekQfOkZOh4/7+aNQ6HlEr7rVDrNRd0r8nZxGETCtdfEyRa/79l5xMdiCboyRYrjmCPLm1iX3A/ZXdJHyS+UT35v/wQPmPHPVh3V0dUsbvpnlk2+ooquqhgAI/WQSz4Nms/V3judwxMDJx7wgj0yI6t5IlX4gN3U4VzKv+po08eDTfc3PwXBlKT5jA7amxWX2+TjfJ1RLDaNx1WXu4ZhuYLt6CWfnQoJ0k+fRG38B4YD6NLvFB8Q5Vnl5p+Pv9ZXbMSBeeGFhVgnFr9gvIrsVwqu341o9lQLtb5Tamj0eSqYSA+D9eZaHCoSP3CoWCGTrZCi0ft/fNBgvwW8TUMNrdS0HtJUiP2Q8/qxkw63vKW52naD/34cw7tzYozv8vYt9RDtR4IRjty6UkMvr6NPWSs+r5uFcx7xPqqCoYE/hLIXio3fQ3wOaDCOrfuUF7d+WiTa0PzpisMiVgLaQk0aqzzZQJwUBBiVXThoIbjm8DRZWggBEZeIBXND5+D15ldJdI2cAmhKSG6m3ZhYjPNdjiU5AecreCtwdTLFyqCBOXsqQkgjEpK5QTgplsP8VZvch+FL0+d1a/kLsqARSMhkfvLRnnbwU9Lkys7QoZ0pZkXP/QGQrWEzTYLYyhVFJobbCI5dI33ZvwR4WLfe4UF/hit3ryGMUWT3y/oDxeizau55uYCUF7w312R2EoiNJNksb1KRwpJ3e2Q4F+X2slPnQatpYNS35Laa5foj32lMa7j+0DSUwzlB9Nwaczyka0yt9qnyRIIIYP9aT/phjtoJwpqGGrAa1Hc+WnK7M5PzdGGJ0/pyLo7enlVohjSalFNbK0WoHpUOoMjoaRx78Ap4fl1ucPhoc35O34rgvCzI+vKq5pkKBxosLTfWV4FBHzNmDILLTsbfsQeExecv3ux02+5fSVlqpgzL1ROvb4ObPIk4316f9taFs0JlH5tWVNXJX8Ny7VcagnDMh9dTtbI1K+A8oowozPzGItGNECZ4u/iXtQgflGwHpk7hvyk3me/bDAmzmHCOrlqEpK9Wycpv+P/F6sI43II7//nfFjvmtiNv81gi63+1UdYKJ9vNr57VuDmf/vRt4/2lowOn7TrMf7ywzdCGQIB5nZ+Jpk7qaY90EOakLy3ipZIIeg6E3Q1XTx5R541/9Q4ImlLWIcZHQag+M8CQpCFsOE6eUjmkfbpM4nHwO7WIOkxyHkmgTtcRLa6F9IM0OMNhPGXFy5BKWHUHXWdJqbAg1eNLYN+r+Wdg+BKVP88CsqRZpEUwWEgNWX2GEg1h5GEv57YKyvI9/1uvFfGUZVqy+swjkBdkPWnvkGVr1tw66W1F3/xTyCUk941u1+s7tNAIOMHSvbbfk5roGq1YM37teyEeYYdFS/+lj3oymCH+CQ1UzTT9uzZeFmB8zrRumdt0WoQquiS9oC0eydf3frNEmDrXGUD+k9p/jZdlzgP+VKAEmeej4LCErEpcJTxJDelLsr1DBC8Vpb6aw+/13GoOC4nhNFwzuxsXQtvRrtceJDI9dUFcXNExkbD2nJy7e1cTB+ReFg6WeHzpoxS35Vy+98qKduOIjHfLNTFqCeX3sZMl/VYkpjNDKnt4IDxsMOmFWv0y4zXpGrew1rIS3RQMqmUl9dsaTAquGomleWjt7fNOEVSaGnU0EYgsUbp8DmC5EfnfsaIEgkIYMzt/3HiJ3ApUMwldG9deqDinptyAe6Ja0rBQuMOQZTI+7FUmUxXHWDfERhQiaG//6uE+er2mdWFptATs9yrEOiZNpHzI9QAbYPgnvF1DmpaLppifJHsEk3BcP9MQ7EPkvtqpU7eIrEwaEJm20bl6ItwHEAYWwy8uOhDBRdVslcQ0t5ACUAAA=";
@@ -101,7 +111,6 @@
     };
     if (typeof d.dataUrl === "string") out.dataUrl = d.dataUrl;
     if (typeof d.stampUrl === "string") out.stampUrl = d.stampUrl;
-    if (typeof d.runtimeUrl === "string") out.runtimeUrl = d.runtimeUrl;
     if (typeof d.editorUrl === "string") out.editorUrl = d.editorUrl;
     if (typeof d.stickersUrl === "string") out.stickersUrl = d.stickersUrl;
     if (typeof d.stickersAllUrl === "string") out.stickersAllUrl = d.stickersAllUrl;
@@ -181,7 +190,7 @@
     for (var k in BAD_KEYS) if (Object.prototype.hasOwnProperty.call(st, k)) return null;
     return st;
   }
-  function readMirror() { var u = progressUrl(), txt = u ? nodeRead(u) : null; return txt ? unwrapProgress(txt) : null; }
+  function readMirror() { var u = progressUrl(), txt = u ? fileRead(u) : null; return txt ? unwrapProgress(txt) : null; }
   function savedAtOf(s) { return s && typeof s._savedAt === "number" && isFinite(s._savedAt) ? s._savedAt : 0; }
   function loadState() {
     var s = {}, hadLs = false;
@@ -201,15 +210,43 @@
     return s;
   }
   // Записать зеркало. Не затираем более новое (импорт или другое окно VS Code записали позже нас).
+  // Метку зеркала знаем из событий «progress» и своих записей (mirrorAt), а файл перечитываем
+  // асинхронно — синхронный XHR на каждое сохранение подвисал бы главный поток VS Code.
+  var mirrorAt = 0;
   function writeMirror(unloading) {
     _mirrorTimer = null;
     var u = progressUrl(); if (!u) return;
-    try {
-      var cur = readMirror();
-      if (cur && savedAtOf(cur) > savedAtOf(state)) return;
-      var text = JSON.stringify({ format: PROGRESS_FORMAT, version: 1, savedAt: savedAtOf(state), state: state });
-      bridgeWrite(u, text, unloading);     // у окна нет Node (песочница VS Code): пишет расширение
-    } catch (e) {}
+    function put() {
+      if (mirrorAt > savedAtOf(state)) return;
+      try {
+        var text = JSON.stringify({ format: PROGRESS_FORMAT, version: 1, savedAt: savedAtOf(state), state: state });
+        if (bridgeWrite(u, text, unloading)) mirrorAt = savedAtOf(state);   // у окна нет Node (песочница VS Code): пишет расширение
+      } catch (e) {}
+    }
+    // При закрытии окна ждать нельзя — пишем по уже известной метке.
+    if (unloading || IN_PANEL || typeof appReadAsync !== "function") { put(); return; }
+    appReadAsync(u, function (txt) {
+      var cur = txt ? unwrapProgress(txt) : null;
+      if (cur) mirrorAt = Math.max(mirrorAt, savedAtOf(cur));
+      put();
+    });
+  }
+  // Прогресс поменяли снаружи (другое окно VS Code, боковая панель, импорт): приходит метка savedAt.
+  // Новее нашей — перечитываем зеркало и берём прогресс оттуда.
+  function onProgressEvent(txt) {
+    var at = 0;
+    try { var o = JSON.parse(String(txt)); at = o && typeof o.savedAt === "number" ? o.savedAt : 0; } catch (e) { return; }
+    if (at) mirrorAt = Math.max(mirrorAt, at);
+    if (!at || at <= savedAtOf(state)) return;
+    var apply = function (m) {
+      if (!m || savedAtOf(m) <= savedAtOf(state)) return;
+      adoptProgress(m);
+      try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {}
+      try { onExternalProgress(); } catch (e) {}
+    };
+    if (IN_PANEL || typeof appReadAsync !== "function") { apply(readMirror()); return; }
+    var u = progressUrl(); if (!u) return;
+    appReadAsync(u, function (t) { apply(t ? unwrapProgress(t) : null); });
   }
   // При закрытии окна VS Code обычный fetch может оборваться — зеркало уходит через sendBeacon.
   function flushMirror() { if (_mirrorTimer) { clearTimeout(_mirrorTimer); writeMirror(true); } }
@@ -222,7 +259,7 @@
   // нормализуется по SCHEMA: словари — только объекты, флаги — только булевы, числа — конечные и в
   // пределах. Всё, что растёт само (выделения, прокрутка, прочитанные разделы, дни), подрезается,
   // чтобы не упереться в лимит localStorage (~5 МБ на всё окно VS Code).
-  var STATE_VERSION = 3;
+  var STATE_VERSION = 4;
   var MIGRATIONS = {
     // v1: выделения-маркер — были массивом строк, стали [{t, c}] (цвет y|p|g)
     1: function (s) {
@@ -243,6 +280,8 @@
     2: function (s) { if (s.layoutV !== 2) s.navHidden = true; delete s.layoutV; },
     // v3: дни активности — не флаг, а число действий за день (для тепловой карты)
     3: function (s) { var d = plainMap(s.days); Object.keys(d).forEach(function (k) { if (d[k] === true) d[k] = 1; }); s.days = d; },
+    // v4: шрифт «PT Root» (не было в комплекте) заменён встроенным PT Sans
+    4: function (s) { if (s.rfont === "ptroot") s.rfont = "ptsans"; },
   };
   function migrateState(s) {
     var v = typeof s.v === "number" && isFinite(s.v) ? s.v : (s.layoutV === 2 ? 2 : 0);   // до версий знаком была только layoutV
@@ -253,13 +292,13 @@
   }
   // Словари прогресса и настроек: { ключ: … }.
   var MAP_KEYS = ["read", "stepsDone", "boss", "missed", "secSeen", "solved", "notes", "days", "pins", "collapsed",
-    "cards", "scroll", "checks", "exams", "challenge", "hl", "marks", "dailyDone"];
+    "cards", "scroll", "checks", "exams", "challenge", "hl", "marks", "dailyDone", "ach", "weekly", "records"];
   // Скаляры: [тип, по умолчанию, (для строк) допустимые значения].
   var SCALARS = {
     wide: ["boolean", false], dense: ["boolean", false], expandNotes: ["boolean", false], termHints: ["boolean", true],
     noAnim: ["boolean", false], noCelebrate: ["boolean", false], covers: ["boolean", true], docked: ["boolean", false],
     tourDone: ["boolean", false], focus: ["boolean", false], rolled: ["boolean", false], navHidden: ["boolean", true],
-    navHiddenHome: ["boolean", false], codeWrap: ["boolean", false], bySection: ["boolean", false],
+    navHiddenHome: ["boolean", false], codeWrap: ["boolean", false], bySection: ["boolean", false], repeatShowCode: ["boolean", false],
     navFilter: ["string", "all", ["all", "unread", "pinned", "noted"]],
     theme: ["string", "auto", ["auto", "light", "dark", "sepia"]],
     palette: ["string", "auto"], homeBg: ["string", "image", ["image", "stars", "none"]],
@@ -291,24 +330,41 @@
   }
   // Подрезка растущих словарей. files — известные материалы (rel → true) или null (данных ещё нет).
   var PRUNE = { hlFiles: 300, hlPerFile: 60, scroll: 400, notes: 400, noteLen: 20000, days: 400, missed: 200, dailyDone: 400, marks: 500 };
-  function keepLast(map, n) {   // ключи-даты / произвольные: оставить n последних по сортировке ключей
+  function keepLast(map, n) {   // ключи-даты («2026-09-27»): оставить n последних по сортировке ключей
     var keys = Object.keys(map);
     if (keys.length <= n) return;
     keys.sort().slice(0, keys.length - n).forEach(function (k) { delete map[k]; });
+  }
+  // Ключи-пути материалов: по алфавиту резать нельзя — пропали бы заметки к «01-…», а не старые.
+  // Оставляем сперва недавно открытые (state.recent), дальше — по порядку добавления (новые в конце).
+  function keepRecent(map, n, recent) {
+    var keys = Object.keys(map);
+    if (keys.length <= n) return;
+    var rank = {};
+    (recent || []).forEach(function (r, i) { var rel = String(r).split("#")[0]; if (rank[rel] === undefined) rank[rel] = i; });
+    var ordered = keys.map(function (k, i) { var r = rank[String(k).split("#")[0]]; return { k: k, fresh: r === undefined ? -1 : r, i: i }; });
+    ordered.sort(function (a, b) {
+      if ((a.fresh >= 0) !== (b.fresh >= 0)) return a.fresh >= 0 ? -1 : 1;   // недавние — вперёд
+      if (a.fresh >= 0) return a.fresh - b.fresh;
+      return b.i - a.i;                                                        // прочие — новые вперёд
+    });
+    ordered.slice(n).forEach(function (x) { delete map[x.k]; });
   }
   function pruneState(s, files) {
     if (files) ["scroll", "secSeen", "hl", "notes"].forEach(function (k) {   // материал удалили из доков — его хвосты тоже
       Object.keys(s[k]).forEach(function (rel) { if (!files[rel]) delete s[k][rel]; });
     });
     Object.keys(s.hl).forEach(function (rel) { if (s.hl[rel].length > PRUNE.hlPerFile) s.hl[rel] = s.hl[rel].slice(-PRUNE.hlPerFile); });
-    keepLast(s.hl, PRUNE.hlFiles);
-    keepLast(s.scroll, PRUNE.scroll);
-    keepLast(s.notes, PRUNE.notes);
+    keepRecent(s.hl, PRUNE.hlFiles, s.recent);
+    keepRecent(s.scroll, PRUNE.scroll, s.recent);
+    keepRecent(s.notes, PRUNE.notes, s.recent);
     Object.keys(s.notes).forEach(function (rel) { if (typeof s.notes[rel] !== "string") delete s.notes[rel]; else if (s.notes[rel].length > PRUNE.noteLen) s.notes[rel] = s.notes[rel].slice(0, PRUNE.noteLen); });
     keepLast(s.days, PRUNE.days);
     keepLast(s.dailyDone, PRUNE.dailyDone);
-    keepLast(s.missed, PRUNE.missed);
-    keepLast(s.marks, PRUNE.marks);
+    keepLast(s.records, PRUNE.dailyDone);
+    keepLast(s.weekly, 104);
+    keepRecent(s.missed, PRUNE.missed, null);
+    keepRecent(s.marks, PRUNE.marks, s.recent);
     return s;
   }
   function knownFiles() {
@@ -319,6 +375,7 @@
   var _saves = 0;
   function saveState() {
     state._savedAt = Math.max(Date.now(), savedAtOf(state) + 1);   // монотонно: импорт ставит метку «на минуту вперёд»
+    try { achOnSave(); } catch (e) {}                                  // новые достижения — в эту же запись
     if (++_saves % 50 === 0) { try { pruneState(state, knownFiles()); } catch (e) {} }   // растущее — подрезать изредка
     var text = JSON.stringify(state);
     // На пределе localStorage (~5 МБ на всё окно VS Code) — жертвуем восстановимым: прокрутка и
@@ -333,7 +390,7 @@
   // синхронизации окно B при сохранении затёрло бы отметки, сделанные в окне A. Событие storage
   // приходит в остальные окна — забираем оттуда прогресс (настройки вида у каждого окна свои).
   var PROGRESS_KEYS = ["dailyDone", "read", "stepsDone", "boss", "missed", "secSeen", "solved", "notes", "days", "pins",
-    "cards", "checks", "exams", "challenge", "hl", "marks"];
+    "cards", "checks", "exams", "challenge", "hl", "marks", "ach", "weekly", "records"];
   function adoptProgress(other) {
     PROGRESS_KEYS.forEach(function (k) { state[k] = plainMap(other[k]); });
     if (Array.isArray(other.recent)) state.recent = other.recent.slice(0, 50);
@@ -476,7 +533,7 @@
             Object.keys(files).forEach(function (k) { if (!Object.prototype.hasOwnProperty.call(eager, k)) eager[k] = files[k]; });
             return;
           }
-          var txt = url ? nodeRead(url) : null;
+          var txt = url ? fileRead(url) : null;
           if (txt) obj = JSON.parse(txt);
         }
       } catch (e) { obj = null; }
@@ -548,7 +605,7 @@
       return _palStickers;
     }
     var d = DATA(), url = (d && d.stickersUrl) || bootVal("stickersUrl");
-    var txt = url ? nodeRead(url) : null;
+    var txt = url ? fileRead(url) : null;
     if (!txt) return {};                 // файла нет (превью, старая сборка) — общий набор, без кэша
     _palStickers = parsePalStickers(txt);
     return _palStickers;
@@ -1863,12 +1920,14 @@
     if (shown < list.length) { list[shown].hidden = false; shown++; hb.setAttribute("data-shown", String(shown)); }
     if (shown >= list.length) btn.hidden = true;
     else btn.textContent = "💡 Подсказка " + (shown + 1) + " из " + list.length;
+    try { noteHint(hb.closest(".cd-ch")); } catch (e) {}
     syncSolution(hb.closest(".cd-ch"));
   }
   function solutionShow(btn) {
     var hb = btn.closest(".cd-hints"); if (!hb || btn.disabled) return;
     var sol = hb.querySelector(".cd-sol"); if (sol) sol.hidden = false;
     btn.hidden = true;
+    var chb = hb.closest(".cd-ch"); if (chb) { chb.__solShown = true; try { noteHint(chb); } catch (e) {} }
   }
   // Тесты формата «вход => ожидаемый вывод» (как ```tests); «#строка» — подпись.
   // «\n» внутри входа/вывода — перевод строки: так задаются многострочный ввод (getline) и вывод.
@@ -2001,11 +2060,16 @@
         if (lc === "checklist") { out.push(renderChecklist(code)); continue; } // чек-лист «усвоено»
         if (lc === "snippets") { out.push(renderSnippets(code)); continue; }   // таблица «Быстрые слова»: клик по строке — код
         if (lc === "boss") { out.push(renderBoss(code)); continue; }        // босс темы: итоговый мини-проект
+        if (lc === "quests") { out.push(renderQuestMap()); continue; }      // «Путь героя»: квесты «Подземелья» с прогрессом
+        if (lc === "lootsim") { var ls = renderLootSim(code); if (ls) { out.push(ls); continue; } }  // симулятор сундуков
+        if (lc === "bfsgrid") { var bg = renderBfsGrid(code); if (bg) { out.push(bg); continue; } }  // волна поиска пути на сетке
         if (lc === "steps") { var sp = renderSteps(code); if (sp) { out.push(sp); continue; } }  // пошаговый проигрыватель
         if (lc === "frames") { var fv = renderFrames(code); if (fv) { out.push(fv); continue; } }  // кадры: ASCII-анимация
         if (lc === "memory") { var mv = renderMemory(code); if (mv) { out.push(mv); continue; } }  // память по шагам: стек/куча/указатели
         if (lc === "live") { var lv = renderLive(code); if (lv) { out.push(lv); continue; } }  // живой пример: параметры-слайдеры
         if (lc === "challenge") { var ch = renderChallenge(code); if (ch) { out.push(ch); continue; } }  // ката: собери код / предскажи вывод
+        if (lc === "checkpoint") { var cpt = renderCheckpoint(code); if (cpt) { out.push(cpt); continue; } }  // эталон главы + сравнение с моим кодом
+        if (lc === "repeat") { out.push(renderRepeat(code)); continue; }      // «Повтори за мной»: код примера спрятан, видно поведение
         var LANG_LABEL = { cpp: "C++", "c++": "C++", cc: "C++", cxx: "C++", c: "C", bash: "Bash", sh: "Bash", shell: "Bash", txt: "текст", text: "текст", py: "Python" };
         var langLabel = escapeHtml(LANG_LABEL[(lang || "").toLowerCase()] || lang || "код");
         var codeHtml;
@@ -2016,6 +2080,24 @@
           }).join("");
         } else {
           codeHtml = highlight(code, lang);
+        }
+        // Другие применения того же приёма: следом идут блоки «```cpp alt: Подпись» — они не печатаются
+        // отдельно, а становятся слайдами этого примера (стрелки справа). Страница не растёт.
+        var alts = [], j = i;
+        for (;;) {
+          var k = j;
+          while (k < lines.length && !lines[k].trim()) k++;
+          var am = k < lines.length ? lines[k].match(/^\s*```+\s*([\w+#-]*)\s+alt:?\s*(.*?)\s*$/) : null;
+          if (!am) break;
+          var ab = [];
+          for (k++; k < lines.length && !/^\s*```+\s*$/.test(lines[k]); k++) ab.push(lines[k]);
+          alts.push({ lang: am[1] || lang, label: am[2] || "Ещё применение", code: ab.join("\n") });
+          j = k + 1;
+        }
+        if (alts.length) {
+          i = j;
+          out.push(renderCodeAlts({ lang: lang, code: code, html: codeHtml, lined: !!hlSet }, alts, langLabel, lc));
+          continue;
         }
         out.push(
           '<div class="codewrap">' +
@@ -2225,6 +2307,9 @@
     return out;
   }
   var _lastAccent = "", _accentSig = "";
+  // MoonLight custom-bg сообщает о смене акцента событием — перекрашиваемся сразу, не ждём
+  // тикера heal (иначе окно отставало от смены обоев на секунду-две).
+  try { window.addEventListener("mlbg-accent", function () { _accentSig = ""; applyAccent(); }); } catch (e) {}
   function applyAccent() {
     try {
       // Дешёвая сигнатура «могло ли что-то поменяться»: тема-класс оболочки + ручная тема +
@@ -2256,6 +2341,33 @@
     if (document.getElementById(STYLE_ID)) return;
     var st = applyNonce(el("style")); st.id = STYLE_ID;
     st.textContent = CSS;
+    (document.head || document.documentElement).appendChild(st);
+    ensureFonts();
+  }
+  // Встроенные шрифты чтения (extension/fonts/). Браузер качает файл, только когда шрифт реально
+  // выбран, и только нужный диапазон (кириллица/латиница). Папку берём из data.extDirUrl — она
+  // приходит с файлом данных, поэтому зовём и после его загрузки.
+  var FONT_RANGES = {
+    cyrillic: "U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116",
+    latin: "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD",
+  };
+  var FONT_FILES = [   // [имя семейства, файл без -<диапазон>.woff2, насыщенность]
+    ["CppDocs Inter", "inter", "400 700"], ["CppDocs Golos", "golos-text", "400 700"],
+    ["CppDocs PT Sans", "pt-sans-400", "400"], ["CppDocs PT Sans", "pt-sans-700", "700"],
+  ];
+  function ensureFonts() {
+    if (document.getElementById(STYLE_ID + "-fonts")) return;
+    var d = DATA(), dir = (d && d.extDirUrl) || bootVal("extDirUrl");
+    var base = dir ? resUrl(String(dir).replace(/\/+$/, "") + "/fonts") : null;
+    if (!base) return;
+    var css = "";
+    FONT_FILES.forEach(function (f) {
+      Object.keys(FONT_RANGES).forEach(function (r) {
+        css += "@font-face{font-family:'" + f[0] + "';font-style:normal;font-weight:" + f[2] + ";font-display:swap;" +
+          "src:url(" + base + "/" + f[1] + "-" + r + ".woff2) format('woff2');unicode-range:" + FONT_RANGES[r] + ";}\n";
+      });
+    });
+    var st = applyNonce(el("style")); st.id = STYLE_ID + "-fonts"; st.textContent = css;
     (document.head || document.documentElement).appendChild(st);
   }
 
@@ -2623,7 +2735,6 @@
   "#" + WIN_ID + " .cd-article abbr.cd-term{border-bottom:1px dotted var(--faint,#8a8a9a);cursor:help;text-decoration:none;-webkit-text-decoration:none;}" +
   "#" + WIN_ID + " .cd-article abbr.cd-term:hover{border-bottom-color:var(--ac);}" +
   // Меню настроек: заголовок
-  "#" + WIN_ID + " .cd-viewmenu .cd-vm-title{font-size:13.5px;font-weight:700;color:var(--fg);padding:2px 4px 10px;margin-bottom:2px;border-bottom:1px solid var(--bd);}" +
   // Таблица сниппетов «Быстрые слова»: клик по строке раскрывает подсвеченный код
   "#" + WIN_ID + " .cd-article table.cd-snip-table{width:100%;}" +
   "#" + WIN_ID + " .cd-article tr.cd-snip{cursor:pointer;}" +
@@ -2830,7 +2941,6 @@
   "#" + WIN_ID + " .cd-ol.seen::after{content:'✓';margin-left:5px;color:var(--ts);font-size:10px;font-weight:800;}" +
 
   // Меню вида: размер шрифта / ширина колонки / плотность списка
-  "#" + WIN_ID + " .cd-viewmenu{position:absolute;right:0;top:calc(100% + 6px);z-index:5;width:300px;max-width:calc(100vw - 24px);max-height:min(72vh,540px);overflow-y:auto;background:var(--bg);border:1px solid var(--bd);border-radius:var(--cd-r-xl);box-shadow:0 16px 42px rgba(0,0,0,.5);padding:10px 12px 12px;}" +
   "#" + WIN_ID + " .cd-vm-sec{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--ac2);margin:13px 4px 5px;}" +
   "#" + WIN_ID + " .cd-vm-sec:first-of-type{margin-top:4px;}" +
   "#" + WIN_ID + " .cd-vm-row{display:flex;align-items:center;gap:10px;padding:6px;border-radius:var(--cd-r-md);font-size:12px;color:var(--fg);}" +
@@ -3093,10 +3203,59 @@
   "#" + WIN_ID + " .cd-article .cd-run-t{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;font-size:12.5px;padding:6px 10px;border:1px solid var(--bd);border-radius:var(--cd-r-md);background:var(--bg);}" +
   "#" + WIN_ID + " .cd-article .cd-run-t.ok{border-color:color-mix(in srgb,#a6e3a1 45%,var(--bd));}" +
   "#" + WIN_ID + " .cd-article .cd-run-t.bad{border-color:color-mix(in srgb,#f38ba8 45%,var(--bd));}" +
+  "#" + WIN_ID + " .cd-article .cd-run-t.skip{opacity:.6;border-style:dashed;}" +
+  // Пример с другими применениями: вкладки-подписи над кодом, стрелки и точки справа по центру
+  "#" + WIN_ID + " .cd-alts .codehead{border-bottom:0;}" +
+  "#" + WIN_ID + " .cd-alt-count{margin-left:10px;font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ac);opacity:.85;}" +
+  "#" + WIN_ID + " .cd-alt-tabs{display:flex;gap:6px;padding:2px 12px 10px;overflow-x:auto;scrollbar-width:none;scroll-behavior:smooth;" +
+    "-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 12px,#000 calc(100% - 18px),transparent);mask-image:linear-gradient(90deg,transparent 0,#000 12px,#000 calc(100% - 18px),transparent);}" +
+  "#" + WIN_ID + " .cd-alt-tabs::-webkit-scrollbar{display:none;}" +
+  "#" + WIN_ID + " .cd-alt-tab{flex:0 0 auto;display:inline-flex;align-items:center;gap:7px;font:inherit;font-size:12px;font-weight:600;color:var(--muted);" +
+    "background:color-mix(in srgb,var(--fg) 4%,transparent);border:1px solid var(--bd);border-radius:var(--cd-r-pill);padding:4px 12px 4px 5px;cursor:pointer;white-space:nowrap;transition:all var(--cd-t-fast);}" +
+  "#" + WIN_ID + " .cd-alt-tab i{font-style:normal;display:inline-flex;align-items:center;justify-content:center;min-width:19px;height:19px;border-radius:50%;font-size:10.5px;" +
+    "background:color-mix(in srgb,var(--fg) 10%,transparent);color:var(--fg);}" +
+  "#" + WIN_ID + " .cd-alt-tab:hover{color:var(--fg);border-color:color-mix(in srgb,var(--ac) 60%,var(--bd));}" +
+  "#" + WIN_ID + " .cd-alt-tab.on{color:var(--fg);border-color:var(--ac);background:color-mix(in srgb,var(--ac) 16%,transparent);box-shadow:0 0 0 3px color-mix(in srgb,var(--ac) 12%,transparent);}" +
+  "#" + WIN_ID + " .cd-alt-tab.on i{background:var(--ac);color:#11111b;}" +
+  "#" + WIN_ID + " .cd-alt-tab:focus-visible,#" + WIN_ID + " .cd-alt-go:focus-visible{outline:2px solid var(--ac);outline-offset:2px;}" +
+  // все слайды — в одной ячейке сетки: высота = самый высокий, страница при листании не прыгает
+  "#" + WIN_ID + " .cd-alt-body{position:relative;display:grid;border-top:1px solid color-mix(in srgb,var(--bd) 70%,transparent);}" +
+  "#" + WIN_ID + " .cd-alt-pane{grid-area:1/1;min-width:0;visibility:hidden;opacity:0;pointer-events:none;}" +
+  "#" + WIN_ID + " .cd-alt-pane.on{visibility:visible;opacity:1;pointer-events:auto;}" +
+  "#" + WIN_ID + " .cd-alt-pane.in-r{animation:cdAltInR .28s cubic-bezier(.2,.8,.2,1);}" +
+  "#" + WIN_ID + " .cd-alt-pane.in-l{animation:cdAltInL .28s cubic-bezier(.2,.8,.2,1);}" +
+  "@keyframes cdAltInR{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:none}}" +
+  "@keyframes cdAltInL{from{opacity:0;transform:translateX(-18px)}to{opacity:1;transform:none}}" +
+  "#" + WIN_ID + ".no-anim .cd-alt-pane{animation:none!important;}" +
+  "#" + WIN_ID + " .cd-alt-body pre.code{padding-right:64px;margin:0;}" +
+  "#" + WIN_ID + " .cd-alt-nav{position:absolute;right:12px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;align-items:center;gap:8px;z-index:2;}" +
+  "#" + WIN_ID + " .cd-alt-go{font:inherit;font-size:22px;line-height:1;width:38px;height:38px;border-radius:50%;cursor:pointer;color:var(--fg);" +
+    "background:color-mix(in srgb,var(--panel) 72%,transparent);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);" +
+    "border:1px solid color-mix(in srgb,var(--ac) 55%,var(--bd));box-shadow:0 4px 14px rgba(0,0,0,.28);transition:transform var(--cd-t-fast),background var(--cd-t-fast),color var(--cd-t-fast),opacity var(--cd-t-fast);}" +
+  "#" + WIN_ID + " .cd-alt-go:hover:not([disabled]){background:var(--ac);color:#11111b;transform:scale(1.08);}" +
+  "#" + WIN_ID + " .cd-alt-go:active:not([disabled]){transform:scale(.95);}" +
+  "#" + WIN_ID + " .cd-alt-go[disabled]{opacity:.28;cursor:default;box-shadow:none;}" +
+  // пока ни разу не листали — стрелка «дальше» мягко зовёт
+  "#" + WIN_ID + " .cd-alts:not(.used) .cd-alt-go.next{animation:cdAltCall 2.4s ease-in-out 1s 3;}" +
+  "@keyframes cdAltCall{0%,100%{box-shadow:0 4px 14px rgba(0,0,0,.28)}50%{box-shadow:0 0 0 6px color-mix(in srgb,var(--ac) 25%,transparent),0 4px 14px rgba(0,0,0,.28)}}" +
+  "#" + WIN_ID + ".no-anim .cd-alt-go.next{animation:none!important;}" +
+  "#" + WIN_ID + " .cd-alt-dots{display:flex;flex-direction:column;gap:4px;}" +
+  "#" + WIN_ID + " .cd-alt-dots i{width:5px;height:5px;border-radius:50%;background:color-mix(in srgb,var(--fg) 25%,transparent);transition:all var(--cd-t-fast);}" +
+  "#" + WIN_ID + " .cd-alt-dots i.on{background:var(--ac);height:12px;border-radius:3px;}" +
+  // «Забегаем вперёд» под кодом
+  "#" + WIN_ID + " .cd-article .cd-ahead{margin:0;padding:9px 14px 10px;border-top:1px dashed color-mix(in srgb,#89b4fa 40%,var(--bd));" +
+    "background:color-mix(in srgb,#89b4fa 6%,transparent);font-size:12px;line-height:1.55;color:var(--muted);}" +
+  "#" + WIN_ID + " .cd-article .cd-ahead-h{display:flex;align-items:center;gap:7px;font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#89b4fa;margin-bottom:3px;}" +
+  "#" + WIN_ID + " .cd-article .cd-ahead-ic{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:color-mix(in srgb,#89b4fa 22%,transparent);font-size:12px;}" +
+  "#" + WIN_ID + " .cd-article .cd-ahead ul{margin:0;padding-left:18px;}" +
+  "#" + WIN_ID + " .cd-article .cd-ahead li{margin:2px 0;}" +
+  "#" + WIN_ID + " .cd-article .cd-ahead code{font-size:11.5px;}" +
   "#" + WIN_ID + " .cd-article .cd-run-tmark{flex:0 0 auto;font-weight:700;}" +
   "#" + WIN_ID + " .cd-article .cd-run-t.ok .cd-run-tmark{color:#a6e3a1;}" +
   "#" + WIN_ID + " .cd-article .cd-run-t.bad .cd-run-tmark{color:#f38ba8;}" +
   "#" + WIN_ID + " .cd-article .cd-run-tgot{color:var(--muted);}" +
+  "#" + WIN_ID + " .cd-article .cd-run-tcrash{flex-basis:100%;color:#f38ba8;}" +
+  "#" + WIN_ID + " .cd-article .cd-run-tcrash code{display:block;margin-top:4px;white-space:pre-wrap;}" +
   "#" + WIN_ID + " .cd-article .cd-run-t code{font-family:'Cascadia Code',Consolas,'Courier New',monospace;font-size:12px;}" +
   "#" + WIN_ID + " .cd-article .cd-run-err{margin:0;padding:10px 12px;border-radius:var(--cd-r-md);background:var(--code);border:1px solid color-mix(in srgb,#f38ba8 40%,var(--bd));overflow-x:auto;}" +
   "#" + WIN_ID + " .cd-article .cd-run-err code{font-family:'Cascadia Code',Consolas,'Courier New',monospace;font-size:12px;color:#f38ba8;white-space:pre;}" +
@@ -3138,6 +3297,119 @@
   "#" + WIN_ID + " .cd-guide-hint{font-size:12px;color:var(--muted);margin:14px 0 6px;}" +
   "#" + WIN_ID + " .cd-guide-demo{border:1px dashed var(--bd);border-radius:var(--cd-r-xl);padding:2px 14px;background:color-mix(in srgb,var(--fg) 3%,var(--panel));}" +
   "#" + WIN_ID + " .cd-guide .cd-article{padding:0;margin:0;background:none;max-width:none;font-size:13px;}" +
+
+  // Окно «Прогресс»: карта знаний, экзамен недели, достижения, рекорды (12-progress-map.js, 12-rewards.js)
+  "#" + WIN_ID + " .cd-pg-panel{width:min(900px,100%);}" +
+  "#" + WIN_ID + " .cd-pg .cd-guide-top{gap:10px;}" +
+  "#" + WIN_ID + " .cd-pg .cd-guide-title{flex:1;}" +
+  "#" + WIN_ID + " .cd-pg-anki{font:inherit;font-size:12px;color:var(--fg);background:var(--bg);border:1px solid var(--bd);border-radius:var(--cd-r-md);padding:5px 11px;cursor:pointer;}" +
+  "#" + WIN_ID + " .cd-pg-anki:hover{border-color:var(--ac);}" +
+  "#" + WIN_ID + " .cd-pg-empty{color:var(--muted);font-size:13px;}" +
+  "#" + WIN_ID + " .cd-mbar{display:inline-block;vertical-align:middle;width:90px;height:6px;border-radius:3px;background:color-mix(in srgb,var(--fg) 12%,transparent);overflow:hidden;margin:0 8px;}" +
+  "#" + WIN_ID + " .cd-mbar.sm{width:70px;height:5px;}" +
+  "#" + WIN_ID + " .cd-mbar i{display:block;height:100%;background:var(--ac);border-radius:inherit;}" +
+  "#" + WIN_ID + " .cd-mbar.m1 i{background:#f38ba8;}#" + WIN_ID + " .cd-mbar.m2 i{background:#fab387;}#" + WIN_ID + " .cd-mbar.m3 i{background:#f9e2af;}#" + WIN_ID + " .cd-mbar.m4 i{background:#a6e3a1;}" +
+  "#" + WIN_ID + " .cd-km-sum{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;font-size:13px;margin-bottom:10px;color:var(--muted);}" +
+  "#" + WIN_ID + " .cd-km-sum b{color:var(--fg);}" +
+  "#" + WIN_ID + " .cd-km-next,#" + WIN_ID + " .cd-weak-go,#" + WIN_ID + " .cd-kd-open,#" + WIN_ID + " .cd-wk-start,#" + WIN_ID + " .cd-wk-next,#" + WIN_ID + " .cd-wk-again,#" + WIN_ID + " .cd-pg-tab-go,#" + WIN_ID + " .cd-wk-quit{font:inherit;font-size:12px;font-weight:600;color:var(--fg);background:var(--bg);border:1px solid var(--ac);border-radius:var(--cd-r-md);padding:6px 12px;cursor:pointer;}" +
+  "#" + WIN_ID + " .cd-km-next:hover,#" + WIN_ID + " .cd-weak-go:hover,#" + WIN_ID + " .cd-kd-open:hover,#" + WIN_ID + " .cd-wk-start:hover,#" + WIN_ID + " .cd-wk-next:hover,#" + WIN_ID + " .cd-wk-again:hover,#" + WIN_ID + " .cd-pg-tab-go:hover{background:var(--hl);}" +
+  "#" + WIN_ID + " .cd-wk-quit{border-color:var(--bd);color:var(--muted);}" +
+  "#" + WIN_ID + " .cd-km-wrap{overflow-x:auto;border:1px solid var(--bd);border-radius:var(--cd-r-xl);background:color-mix(in srgb,var(--fg) 3%,var(--panel));padding:6px;}" +
+  "#" + WIN_ID + " .cd-km{display:block;margin:0 auto;}" +
+  "#" + WIN_ID + " .cd-km-e{fill:none;stroke:color-mix(in srgb,var(--fg) 22%,transparent);stroke-width:1.4;}" +
+  "#" + WIN_ID + " .cd-km-e.on{stroke:color-mix(in srgb,var(--ac) 70%,transparent);}" +
+  "#" + WIN_ID + " .cd-km-n{cursor:pointer;outline:none;}" +
+  "#" + WIN_ID + " .cd-km-bg{fill:var(--panel);stroke:color-mix(in srgb,var(--fg) 18%,transparent);stroke-width:4;}" +
+  "#" + WIN_ID + " .cd-km-fg{fill:none;stroke:var(--ac);stroke-width:4;stroke-linecap:round;}" +
+  "#" + WIN_ID + " .cd-km-n.m1 .cd-km-fg{stroke:#f38ba8;}#" + WIN_ID + " .cd-km-n.m2 .cd-km-fg{stroke:#fab387;}#" + WIN_ID + " .cd-km-n.m3 .cd-km-fg{stroke:#f9e2af;}#" + WIN_ID + " .cd-km-n.m4 .cd-km-fg{stroke:#a6e3a1;}" +
+  "#" + WIN_ID + " .cd-km-n.m4 .cd-km-bg{fill:color-mix(in srgb,#a6e3a1 18%,var(--panel));}" +
+  "#" + WIN_ID + " .cd-km-num{fill:var(--fg);font-size:11px;font-weight:700;text-anchor:middle;}" +
+  "#" + WIN_ID + " .cd-km-t{fill:var(--muted);font-size:10px;text-anchor:middle;}" +
+  "#" + WIN_ID + " .cd-km-n.lock{opacity:.4;}" +
+  "#" + WIN_ID + " .cd-km-n.lock .cd-km-bg{stroke-dasharray:3 3;}" +
+  "#" + WIN_ID + " .cd-km-n.next .cd-km-bg{stroke:var(--ac);animation:cdKmPulse 1.8s ease-in-out infinite;}" +
+  "#" + WIN_ID + " .cd-km-n:hover .cd-km-t,#" + WIN_ID + " .cd-km-n.sel .cd-km-t,#" + WIN_ID + " .cd-km-n:focus .cd-km-t{fill:var(--fg);font-weight:700;}" +
+  "#" + WIN_ID + " .cd-km-n.sel .cd-km-bg{stroke:var(--fg);}" +
+  "@keyframes cdKmPulse{0%,100%{stroke-opacity:1}50%{stroke-opacity:.35}}" +
+  "#" + WIN_ID + ".no-anim .cd-km-n.next .cd-km-bg{animation:none;}" +
+  "#" + WIN_ID + " .cd-km-legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:11px;color:var(--muted);margin:8px 2px;}" +
+  "#" + WIN_ID + " .cd-km-legend span::before{content:'';display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:-1px;background:color-mix(in srgb,var(--fg) 20%,transparent);}" +
+  "#" + WIN_ID + " .cd-km-legend .m1::before{background:#f38ba8;}#" + WIN_ID + " .cd-km-legend .m2::before{background:#fab387;}#" + WIN_ID + " .cd-km-legend .m3::before{background:#f9e2af;}#" + WIN_ID + " .cd-km-legend .m4::before{background:#a6e3a1;}" +
+  "#" + WIN_ID + " .cd-km-legend .lock::before{background:none;border:1px dashed var(--muted);}" +
+  "#" + WIN_ID + " .cd-km-detail{margin-top:10px;padding:12px 14px;border:1px solid var(--bd);border-radius:var(--cd-r-xl);background:var(--bg);}" +
+  "#" + WIN_ID + " .cd-kd-h{display:flex;align-items:center;flex-wrap:wrap;font-size:13px;}" +
+  "#" + WIN_ID + " .cd-kd-h em,#" + WIN_ID + " .cd-kd-parts em,#" + WIN_ID + " .cd-weak-main em{font-style:normal;font-weight:700;font-size:12px;}" +
+  "#" + WIN_ID + " .cd-kd-parts{list-style:none;margin:8px 0;padding:0;font-size:12px;}" +
+  "#" + WIN_ID + " .cd-kd-parts li{display:flex;align-items:center;gap:4px;margin:3px 0;}" +
+  "#" + WIN_ID + " .cd-kd-parts li span:first-child{flex:0 0 190px;color:var(--muted);}" +
+  "#" + WIN_ID + " .cd-kd-parts li.bad span:first-child{color:#f38ba8;}" +
+  "#" + WIN_ID + " .cd-kd-deps{font-size:12px;color:var(--muted);margin:6px 0;}" +
+  "#" + WIN_ID + " .cd-kd-btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}" +
+  // Слабые места на главной
+  "#" + WIN_ID + " .cd-weak{border:1px solid var(--bd);border-radius:var(--cd-r-xl);padding:10px 12px;margin:10px 0;background:color-mix(in srgb,var(--panel) 80%,transparent);}" +
+  "#" + WIN_ID + " .cd-weak-h{font-size:12px;font-weight:700;margin-bottom:6px;}" +
+  "#" + WIN_ID + " .cd-weak-h span{font-weight:400;color:var(--muted);margin-left:8px;}" +
+  "#" + WIN_ID + " .cd-weak-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0;border-top:1px solid color-mix(in srgb,var(--bd) 60%,transparent);}" +
+  "#" + WIN_ID + " .cd-weak-row:first-of-type{border-top:0;}" +
+  "#" + WIN_ID + " .cd-weak-main{flex:1 1 200px;font-size:12px;}" +
+  "#" + WIN_ID + " .cd-weak-main small{display:block;color:var(--muted);font-size:11px;margin-top:2px;}" +
+  "#" + WIN_ID + " .cd-home-warm.cd-weekly{border-color:color-mix(in srgb,#89b4fa 45%,var(--bd));}" +
+  // Экзамен недели
+  "#" + WIN_ID + " .cd-wk-intro p{font-size:13px;line-height:1.6;margin:0 0 10px;}" +
+  "#" + WIN_ID + " .cd-wk-hist{margin-top:16px;font-size:12px;color:var(--muted);}" +
+  "#" + WIN_ID + " .cd-wk-hist ul,#" + WIN_ID + " .cd-wk-by,#" + WIN_ID + " .cd-rec-last ul{list-style:none;padding:0;margin:6px 0;}" +
+  "#" + WIN_ID + " .cd-wk-hist li,#" + WIN_ID + " .cd-wk-by li,#" + WIN_ID + " .cd-rec-last li{display:flex;gap:10px;align-items:center;padding:3px 0;font-size:12px;}" +
+  "#" + WIN_ID + " .cd-wk-hist li span:first-child,#" + WIN_ID + " .cd-wk-by li span:first-child{flex:0 0 180px;}" +
+  "#" + WIN_ID + " .cd-wk-top{display:flex;gap:14px;align-items:center;font-size:12px;color:var(--muted);margin-bottom:10px;}" +
+  "#" + WIN_ID + " .cd-wk-timer{margin-left:auto;font-weight:700;color:var(--fg);font-variant-numeric:tabular-nums;}" +
+  "#" + WIN_ID + " .cd-wk-q{font-size:14px;line-height:1.55;margin-bottom:10px;}" +
+  "#" + WIN_ID + " .cd-wk-from{font-size:11px;color:var(--muted);margin-bottom:4px;}" +
+  "#" + WIN_ID + " .cd-wk-opts{display:flex;flex-direction:column;gap:6px;}" +
+  "#" + WIN_ID + " .cd-wk-opt{text-align:left;font:inherit;font-size:13px;color:var(--fg);background:var(--bg);border:1px solid var(--bd);border-radius:var(--cd-r-md);padding:8px 12px;cursor:pointer;}" +
+  "#" + WIN_ID + " .cd-wk-opt:hover:not([disabled]){border-color:var(--ac);}" +
+  "#" + WIN_ID + " .cd-wk-opt.right{border-color:#a6e3a1;background:color-mix(in srgb,#a6e3a1 14%,var(--bg));}" +
+  "#" + WIN_ID + " .cd-wk-opt.wrong{border-color:#f38ba8;background:color-mix(in srgb,#f38ba8 14%,var(--bg));}" +
+  "#" + WIN_ID + " .cd-wk-expl{font-size:12px;color:var(--muted);margin-top:8px;}" +
+  "#" + WIN_ID + " .cd-wk-ctl{display:flex;gap:8px;margin-top:12px;}" +
+  "#" + WIN_ID + " .cd-wk-res{text-align:center;font-size:13px;}" +
+  "#" + WIN_ID + " .cd-wk-big{font-size:38px;font-weight:800;margin:6px 0;}" +
+  "#" + WIN_ID + " .cd-wk-res .cd-wk-by{max-width:420px;margin:12px auto;text-align:left;}" +
+  "#" + WIN_ID + " .cd-wk-res .cd-wk-ctl{justify-content:center;}" +
+  // Достижения и рекорды
+  "#" + WIN_ID + " .cd-ach-sum,#" + WIN_ID + " .cd-rec-sum{font-size:13px;color:var(--muted);margin-bottom:10px;}" +
+  "#" + WIN_ID + " .cd-ach-sum b,#" + WIN_ID + " .cd-rec-sum b{color:var(--fg);}" +
+  "#" + WIN_ID + " .cd-ach-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px;}" +
+  "#" + WIN_ID + " .cd-ach{display:grid;grid-template-columns:36px 1fr;grid-template-rows:auto auto auto;column-gap:10px;padding:9px 10px;border:1px solid var(--bd);border-radius:var(--cd-r-lg);background:var(--bg);opacity:.55;filter:grayscale(1);}" +
+  "#" + WIN_ID + " .cd-ach.got{opacity:1;filter:none;border-color:color-mix(in srgb,#f9e2af 50%,var(--bd));}" +
+  "#" + WIN_ID + " .cd-ach-ic{grid-row:1/4;display:flex;align-items:center;justify-content:center;}" +
+  "#" + WIN_ID + " .cd-ach-ic .cd-emo{width:32px;height:32px;}" +
+  "#" + WIN_ID + " .cd-ach-mono{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:var(--ac);color:#11111b;font-weight:800;}" +
+  "#" + WIN_ID + " .cd-ach-t{font-size:12px;font-weight:700;}" +
+  "#" + WIN_ID + " .cd-ach-d{font-size:11px;color:var(--muted);line-height:1.4;}" +
+  "#" + WIN_ID + " .cd-ach-when{font-size:10px;color:var(--muted);margin-top:2px;}" +
+  "#" + WIN_ID + " .cd-rec-t{font-size:12px;}" +
+  "#" + WIN_ID + " .cd-rec-last{margin-top:12px;font-size:12px;color:var(--muted);}" +
+  "#" + WIN_ID + " .cd-rec-last li span:first-child{flex:0 0 90px;}" +
+  "#" + WIN_ID + " .cd-rec-last li b{flex:0 0 50px;color:var(--fg);}" +
+  // Контрольная точка и «Повтори за мной»: сравнение кода
+  "#" + WIN_ID + " .cd-article .cd-cp{border:1px solid color-mix(in srgb,#89b4fa 45%,var(--bd));border-radius:var(--cd-r-xl);padding:12px 14px;margin:16px 0;background:color-mix(in srgb,#89b4fa 6%,transparent);}" +
+  "#" + WIN_ID + " .cd-article .cd-cp-head{display:flex;gap:10px;align-items:center;margin-bottom:6px;}" +
+  "#" + WIN_ID + " .cd-article .cd-cp-stat{font-size:13px;margin:10px 0 4px;}" +
+  "#" + WIN_ID + " .cd-article .cd-cp-miss{font-size:12px;color:#fab387;margin:4px 0;}" +
+  "#" + WIN_ID + " .cd-article .cd-cp-note{font-size:12px;color:var(--muted);margin:4px 0 8px;}" +
+  "#" + WIN_ID + " .cd-article .cd-df{border:1px solid var(--bd);border-radius:var(--cd-r-md);padding:6px 0;max-height:420px;overflow:auto;background:var(--code);font-family:'Cascadia Code',Consolas,monospace;font-size:12px;}" +
+  "#" + WIN_ID + " .cd-article .cd-df-leg{display:flex;gap:14px;padding:0 10px 6px;font-family:inherit;font-size:11px;}" +
+  "#" + WIN_ID + " .cd-article .cd-df-leg .del,#" + WIN_ID + " .cd-article .cd-df-l.del i{color:#f38ba8;}" +
+  "#" + WIN_ID + " .cd-article .cd-df-leg .add,#" + WIN_ID + " .cd-article .cd-df-l.add i{color:#a6e3a1;}" +
+  "#" + WIN_ID + " .cd-article .cd-df-l{display:flex;gap:8px;padding:0 10px;white-space:pre;}" +
+  "#" + WIN_ID + " .cd-article .cd-df-l i{font-style:normal;flex:0 0 10px;color:var(--muted);}" +
+  "#" + WIN_ID + " .cd-article .cd-df-l code{background:none;padding:0;}" +
+  "#" + WIN_ID + " .cd-article .cd-df-l.del{background:color-mix(in srgb,#f38ba8 12%,transparent);}" +
+  "#" + WIN_ID + " .cd-article .cd-df-l.add{background:color-mix(in srgb,#a6e3a1 12%,transparent);}" +
+  "#" + WIN_ID + " .cd-article .cd-df-gap{padding:2px 28px;color:var(--muted);font-style:italic;font-family:inherit;}" +
+  "#" + WIN_ID + " .cd-article .cd-rep-hide{display:block;font-size:12px;color:var(--muted);margin:6px 0;cursor:pointer;}" +
+  "#" + WIN_ID + " .cd-article:has(.cd-rep.hidecode:not(.done)) pre:not(.peek){filter:blur(5px);cursor:pointer;user-select:none;}" +
+  "#" + WIN_ID + " .cd-article:has(.cd-rep.hidecode:not(.done)) .cd-rep pre{filter:none;cursor:auto;user-select:auto;}" +
 
   // Плашка-мост доки↔редактор: всплывает снизу читалки по слову под курсором
   "#" + WIN_ID + " .cd-bridge{position:sticky;bottom:12px;z-index:6;margin:14px 14px 6px;display:flex;align-items:center;gap:11px;padding:10px 13px;border:1px solid var(--ac);border-radius:var(--cd-r-xl);background:color-mix(in srgb,var(--panel) 92%,var(--ac));box-shadow:var(--cd-sh-2);}" +
@@ -3245,7 +3517,6 @@
   "#" + BTN_ID + "{animation:cd-pop .26s cubic-bezier(.2,.8,.2,1);}" +
   // Появление меню вида и второго документа
   "@keyframes cd-menu-in{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:none;}}" +
-  "#" + WIN_ID + " .cd-viewmenu{animation:cd-menu-in .14s ease-out;}" +
   "@keyframes cd-split-in{from{opacity:0;transform:translateX(16px);}to{opacity:1;transform:none;}}" +
   "#" + WIN_ID + " .cd-split{animation:cd-split-in .2s ease-out;}" +
   // Плавные ховеры и тактильный отклик на нажатие
@@ -3449,7 +3720,7 @@
   "#" + WIN_ID + "{--sh1:0 1px 2px rgba(0,0,0,.18),0 2px 6px rgba(0,0,0,.20);--sh2:0 6px 18px rgba(0,0,0,.30);--sh3:0 18px 50px rgba(0,0,0,.50);}" +
   "#" + WIN_ID + ".light{--sh1:0 1px 2px rgba(30,30,46,.06),0 2px 6px rgba(30,30,46,.08);--sh2:0 6px 18px rgba(30,30,46,.13);--sh3:0 18px 46px rgba(30,30,46,.20);}" +
   "#" + WIN_ID + "{box-shadow:var(--sh3);}" +
-  "#" + WIN_ID + " .cd-viewmenu,#" + WIN_ID + " .cd-hs-res,#" + WIN_ID + " .cd-find{box-shadow:var(--sh2);}" +
+  "#" + WIN_ID + " .cd-hs-res,#" + WIN_ID + " .cd-find{box-shadow:var(--sh2);}" +
   "#" + WIN_ID + " .cd-taskcard{box-shadow:var(--sh1);}" +
   "#" + WIN_ID + " .cd-totop{box-shadow:var(--sh2);}" +
   "#" + WIN_ID + " .cd-home-card:hover,#" + WIN_ID + " .cd-home-cont:hover,#" + WIN_ID + " .cd-home-review:hover,#" + WIN_ID + " .cd-dtile:hover{box-shadow:var(--sh2);}" +
@@ -3659,7 +3930,6 @@
   "#" + WIN_ID + " .cd-hrt>.cd-rbtn{height:28px;padding:0 10px;}" +
   "#" + WIN_ID + " .cd-hrt .cd-rgrp .cd-rbtn{height:26px;}" +
   "#" + WIN_ID + " .cd-head .cd-peek{height:30px;margin:0 0 -9px;}" +
-  "#" + WIN_ID + " .cd-head .cd-viewmenu{cursor:auto;user-select:text;font-weight:400;}" +
   // Всплывашка «Связь с редактором»
   "#" + WIN_ID + " .cd-edpop{position:absolute;top:calc(100% + 6px);z-index:30;width:320px;max-width:calc(100% - 16px);padding:10px 12px;border:1px solid var(--bd);border-radius:var(--cd-r-xl);" +
   "background:var(--bg);box-shadow:var(--sh2);cursor:auto;user-select:text;white-space:normal;font-size:12.5px;font-weight:400;color:var(--fg);animation:cd-menu-in .14s ease-out;}" +
@@ -3953,6 +4223,207 @@
   "#" + WIN_ID + " .cd-hm-foot .cd-wk-n{margin:0;}" +
   "#" + WIN_ID + " .cd-hm-leg{display:inline-flex;align-items:center;gap:3px;font-size:10px;color:var(--faint);}" +
   "#" + WIN_ID + " .cd-hm-leg .cd-hm-c{width:9px;height:9px;}" +
+  // ---- Настройки: окно с вкладками, карточки палитр с пейзажами и шрифтов ----
+  "#" + WIN_ID + " .cd-viewmenu.cd-set{position:absolute;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(8,8,14,.46);backdrop-filter:blur(6px);animation:cd-set-fade .16s ease-out;}" +
+  "#" + WIN_ID + " .cd-viewmenu.cd-set[hidden]{display:none;}" +
+  "#" + WIN_ID + " .cd-set-card{position:relative;display:flex;flex-direction:column;width:min(780px,100%);max-height:min(88%,720px);background:color-mix(in srgb,var(--bg) 94%,transparent);border:1px solid var(--bd);border-radius:18px;box-shadow:0 24px 70px rgba(0,0,0,.45),0 0 0 1px rgba(var(--ac-rgb),.10);overflow:hidden;animation:cd-set-pop .2s cubic-bezier(.2,.9,.3,1.2);cursor:auto;user-select:text;font-weight:400;}" +
+  "#" + WIN_ID + " .cd-set-card::before{content:\"\";position:absolute;inset:0 0 auto 0;height:120px;background:radial-gradient(120% 100% at 0% 0%,rgba(var(--ac-rgb),.22),transparent 70%);pointer-events:none;}" +
+  "#" + WIN_ID + " .cd-set-head{position:relative;display:flex;align-items:center;gap:12px;padding:16px 18px 14px;border-bottom:1px solid var(--bd2);}" +
+  "#" + WIN_ID + " .cd-set-ic{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:12px;background:rgba(var(--ac-rgb),.16);font-size:20px;flex:0 0 auto;}" +
+  "#" + WIN_ID + " .cd-set-ic img,#" + WIN_ID + " .cd-set-ic .cd-uiic{width:26px;height:26px;}" +
+  "#" + WIN_ID + " .cd-set-ht{display:flex;flex-direction:column;gap:1px;min-width:0;flex:1 1 auto;}" +
+  "#" + WIN_ID + " .cd-set-ht b{font-size:16px;color:var(--fg);}" +
+  "#" + WIN_ID + " .cd-set-ht span{font-size:11.5px;color:var(--faint);}" +
+  "#" + WIN_ID + " .cd-set-x{flex:0 0 auto;width:32px;height:32px;border-radius:10px;border:1px solid var(--bd);background:var(--panel);color:var(--muted);cursor:pointer;font:inherit;font-size:14px;}" +
+  "#" + WIN_ID + " .cd-set-x:hover{color:var(--fg);border-color:var(--ac);}" +
+  "#" + WIN_ID + " .cd-set-body{display:grid;grid-template-columns:170px 1fr;min-height:0;flex:1 1 auto;}" +
+  "#" + WIN_ID + " .cd-set-tabs{display:flex;flex-direction:column;gap:3px;padding:12px 10px;border-right:1px solid var(--bd2);background:color-mix(in srgb,var(--fg) 2.5%,transparent);overflow-y:auto;}" +
+  "#" + WIN_ID + " .cd-set-tab{display:flex;align-items:center;gap:10px;padding:9px 11px;border:0;border-radius:11px;background:transparent;color:var(--muted);font:inherit;font-size:13px;font-weight:600;cursor:pointer;text-align:left;transition:background .12s,color .12s,transform .12s;}" +
+  "#" + WIN_ID + " .cd-set-tab:hover{background:var(--hl);color:var(--fg);}" +
+  "#" + WIN_ID + " .cd-set-tab.on{background:rgba(var(--ac-rgb),.18);color:var(--fg);box-shadow:inset 3px 0 0 var(--ac);}" +
+  "#" + WIN_ID + " .cd-set-tic{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:8px;background:color-mix(in srgb,var(--fg) 6%,transparent);font-size:14px;flex:0 0 auto;}" +
+  "#" + WIN_ID + " .cd-set-tab.on .cd-set-tic{background:rgba(var(--ac-rgb),.28);}" +
+  "#" + WIN_ID + " .cd-set-pages{overflow-y:auto;padding:16px 20px 22px;min-width:0;}" +
+  "#" + WIN_ID + " .cd-set-page{display:flex;flex-direction:column;gap:6px;animation:cd-set-fade .18s ease-out;}" +
+  "#" + WIN_ID + " .cd-set-page[hidden]{display:none;}" +
+  "#" + WIN_ID + " .cd-set-ph{display:flex;flex-direction:column;gap:2px;margin:0 0 8px;}" +
+  "#" + WIN_ID + " .cd-set-ph b{font-size:15px;color:var(--fg);}" +
+  "#" + WIN_ID + " .cd-set-ph span{font-size:12px;color:var(--faint);}" +
+  "#" + WIN_ID + " .cd-set .cd-vm-row{padding:9px 10px;border-radius:12px;background:color-mix(in srgb,var(--fg) 3%,transparent);font-size:12.5px;}" +
+  "#" + WIN_ID + " .cd-set .cd-vm-row:hover{background:color-mix(in srgb,var(--fg) 5%,transparent);}" +
+  "#" + WIN_ID + " .cd-set .cd-vm-row.stack:not(.cards){flex-direction:row;align-items:center;flex-wrap:wrap;}" +
+  "#" + WIN_ID + " .cd-set .cd-vm-row.stack:not(.cards) .cd-seg{width:auto;flex:0 1 auto;margin-left:auto;}" +
+  "#" + WIN_ID + " .cd-set .cd-seg button{padding:6px 12px;}" +
+  "#" + WIN_ID + " .cd-set .cd-pal-note{flex-basis:100%;}" +
+  "#" + WIN_ID + " .cd-th-btn{display:inline-flex !important;flex-direction:column;align-items:center;gap:5px;padding:8px 10px !important;}" +
+  "#" + WIN_ID + " .cd-th-mini{display:flex;flex-direction:column;gap:3px;width:46px;height:30px;padding:5px;border-radius:7px;box-sizing:border-box;box-shadow:inset 0 0 0 1px rgba(128,128,128,.35);}" +
+  "#" + WIN_ID + " .cd-th-mini i{display:block;height:3px;border-radius:2px;background:currentColor;opacity:.55;}" +
+  "#" + WIN_ID + " .cd-th-mini i:first-child{width:60%;opacity:.9;}" +
+  "#" + WIN_ID + " .cd-th-mini i:last-child{width:80%;}" +
+  "#" + WIN_ID + " .cd-th-mini.th-dark{background:#1e1e2e;color:#cdd6f4;}" +
+  "#" + WIN_ID + " .cd-th-mini.th-light{background:#f5f5f7;color:#4c4f69;}" +
+  "#" + WIN_ID + " .cd-th-mini.th-sepia{background:#f1e7d0;color:#5b4636;}" +
+  "#" + WIN_ID + " .cd-th-mini.th-auto{background:linear-gradient(135deg,#f5f5f7 50%,#1e1e2e 50%);color:#888;}" +
+  "#" + WIN_ID + " .cd-pal-grid{grid-template-columns:repeat(auto-fill,minmax(128px,1fr)) !important;gap:9px !important;}" +
+  "#" + WIN_ID + " .cd-pal{flex-direction:column;align-items:stretch !important;gap:0 !important;padding:0 !important;overflow:hidden;border-radius:13px !important;transition:transform .14s,box-shadow .14s,border-color .14s;}" +
+  "#" + WIN_ID + " .cd-pal:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.28);}" +
+  "#" + WIN_ID + " .cd-pal.on{box-shadow:0 0 0 2px var(--ac),0 8px 20px rgba(0,0,0,.3) !important;}" +
+  "#" + WIN_ID + " .cd-pal-th{position:relative;display:block;height:62px;background-size:cover;background-position:center;}" +
+  "#" + WIN_ID + " .cd-pal-th::after{content:\"\";position:absolute;inset:0;background:linear-gradient(180deg,transparent 45%,rgba(0,0,0,.45));}" +
+  "#" + WIN_ID + " .cd-pal-dots{position:absolute;left:7px;bottom:6px;z-index:1;display:flex;gap:4px;}" +
+  "#" + WIN_ID + " .cd-pal-dots i{width:10px;height:10px;border-radius:50%;box-shadow:0 0 0 1.5px rgba(255,255,255,.7);}" +
+  "#" + WIN_ID + " .cd-pal-nm{padding:7px 9px 8px;font-size:12px;font-weight:600;}" +
+  "#" + WIN_ID + " .cd-pal.on .cd-pal-nm::after{content:\" ✓\";color:var(--ac);}" +
+  "#" + WIN_ID + " .cd-font-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(98px,1fr));gap:8px;}" +
+  "#" + WIN_ID + " .cd-font{position:relative;display:flex;flex-direction:column;align-items:center;gap:3px;padding:12px 6px 9px;border:1px solid var(--bd);border-radius:13px;background:var(--panel);color:var(--fg);cursor:pointer;font:inherit;transition:transform .14s,border-color .14s,box-shadow .14s;}" +
+  "#" + WIN_ID + " .cd-font:hover{transform:translateY(-2px);border-color:var(--ac);}" +
+  "#" + WIN_ID + " .cd-font.on{border-color:var(--ac);background:rgba(var(--ac-rgb),.12);box-shadow:0 0 0 1px var(--ac);}" +
+  "#" + WIN_ID + " .cd-font-aa{font-size:26px;line-height:1.1;font-weight:600;}" +
+  "#" + WIN_ID + " .cd-font-nm{font-size:11.5px;color:var(--muted);}" +
+  "#" + WIN_ID + " .cd-font-tag{position:absolute;top:5px;right:6px;font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--ac);opacity:.85;}" +
+  "#" + WIN_ID + " .cd-set-sample{margin:0 0 6px;padding:14px 16px;border-radius:14px;border:1px dashed rgba(var(--ac-rgb),.45);background:color-mix(in srgb,var(--panel) 80%,transparent);color:var(--fg);font-size:14px;line-height:1.6;}" +
+  "#" + WIN_ID + " .cd-set-sample.cd-lh-tight{line-height:1.4;}" +
+  "#" + WIN_ID + " .cd-set-sample.cd-lh-roomy{line-height:1.85;}" +
+  "#" + WIN_ID + " .cd-set-sample .cd-ss-h{font-size:16px;font-weight:700;margin-bottom:4px;}" +
+  "#" + WIN_ID + " .cd-set-sample p{margin:0 0 8px;}" +
+  "#" + WIN_ID + " .cd-set-sample code{font-family:'Cascadia Code',Consolas,monospace;font-size:.9em;padding:1px 5px;border-radius:5px;background:var(--code);}" +
+  "#" + WIN_ID + " .cd-set-sample pre{margin:0;padding:9px 12px;border-radius:10px;background:var(--code);white-space:pre;overflow:auto;line-height:1.5;}" +
+  "#" + WIN_ID + " .cd-set-sample pre code{padding:0;background:none;font-size:inherit;}" +
+  "#" + WIN_ID + " .cd-setbtn .cd-ic,#" + WIN_ID + " .cd-setbtn .cd-uiic{transition:transform .3s ease;}" +
+  "#" + WIN_ID + " .cd-setbtn:hover .cd-ic,#" + WIN_ID + " .cd-setbtn:hover .cd-uiic{transform:rotate(60deg);}" +
+  "#" + WIN_ID + ".no-anim .cd-set-card,#" + WIN_ID + ".no-anim .cd-viewmenu.cd-set,#" + WIN_ID + ".no-anim .cd-set-page{animation:none !important;}" +
+  // окно узкое (класс tiny ставит applyResponsive) — вкладки строкой сверху
+  "#" + WIN_ID + ".tiny .cd-set-body{grid-template-columns:1fr;}#" + WIN_ID + ".tiny .cd-set-tabs{flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--bd2);padding:8px;}#" + WIN_ID + ".tiny .cd-set-tab{flex:0 0 auto;padding:7px 10px;}" +
+  "@keyframes cd-set-fade{from{opacity:0}to{opacity:1}}@keyframes cd-set-pop{from{opacity:0;transform:translateY(10px) scale(.97)}to{opacity:1;transform:none}}" +
+  // ---- Повторение карточек: дорожка оценок, цветные кнопки, «сначала вспомни», итог сессии ----
+  "#" + WIN_ID + " .cd-review.has-bg::before{content:\"\";position:fixed;inset:0;pointer-events:none;background:var(--rv-bg) center/cover no-repeat;opacity:.22;filter:blur(2px) saturate(1.1);}" +
+  "#" + WIN_ID + " .cd-review.has-bg::after{content:\"\";position:fixed;inset:0;pointer-events:none;background:radial-gradient(90% 70% at 50% 35%,transparent,var(--bg) 92%);}" +
+  "#" + WIN_ID + " .cd-review .cd-rv-inner{position:relative;z-index:1;}" +
+  "#" + WIN_ID + ".reviewing .cd-rv-inner{max-width:780px;padding-top:6vh;}" +
+  "#" + WIN_ID + " .cd-rv-top{gap:10px;}" +
+  "#" + WIN_ID + " .cd-rv-count{flex:0 0 auto;font-weight:600;}" +
+  "#" + WIN_ID + " .cd-rv-track{flex:1 1 auto;display:flex;gap:4px;align-items:center;min-width:0;}" +
+  "#" + WIN_ID + " .cd-rv-track i{flex:1 1 0;max-width:34px;height:7px;border-radius:4px;background:var(--bd);transition:background .25s,transform .25s;}" +
+  "#" + WIN_ID + " .cd-rv-track i.cur{background:rgba(var(--ac-rgb),.55);transform:scaleY(1.35);animation:cd-rv-pulse 1.4s ease-in-out infinite;}" +
+  "#" + WIN_ID + " .cd-rv-track i.g0{background:var(--tp);}" +
+  "#" + WIN_ID + " .cd-rv-track i.g1{background:var(--tn);}" +
+  "#" + WIN_ID + " .cd-rv-track i.g2{background:var(--ts);}" +
+  "#" + WIN_ID + " .cd-rv-track i.again{outline:1px dashed rgba(var(--ac-rgb),.6);outline-offset:1px;}" +
+  "#" + WIN_ID + " .cd-rv-undo{flex:0 0 auto;cursor:pointer;border:1px solid var(--bd);background:var(--panel);color:var(--muted);font:inherit;font-size:12px;border-radius:var(--cd-r-md);padding:5px 10px;}" +
+  "#" + WIN_ID + " .cd-rv-undo:hover{color:var(--fg);border-color:var(--ac);}" +
+  "#" + WIN_ID + " .cd-rv-card{position:relative;overflow:hidden;border-top:3px solid var(--rvg,var(--ac));background:color-mix(in srgb,var(--panel) 92%,transparent);backdrop-filter:blur(8px);}" +
+  "#" + WIN_ID + " .cd-rv-card.flipped{animation:cd-rv-flip .32s cubic-bezier(.2,.8,.3,1);}" +
+  "#" + WIN_ID + " .cd-rv-meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:-6px 0 14px;}" +
+  "#" + WIN_ID + " .cd-rv-meta .cd-rv-from{margin:0;padding:3px 9px;border-radius:999px;background:color-mix(in srgb,var(--rvg,var(--ac)) 14%,transparent);color:var(--muted);}" +
+  "#" + WIN_ID + " .cd-rv-badge{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:3px 8px;border-radius:999px;background:rgba(var(--ac-rgb),.18);color:var(--ac);}" +
+  "#" + WIN_ID + " .cd-rv-badge.new{background:color-mix(in srgb,var(--ts) 18%,transparent);color:var(--ts);}" +
+  "#" + WIN_ID + " .cd-rv-streak{margin-left:auto;font-size:12px;font-weight:700;color:var(--tn);}" +
+  "#" + WIN_ID + " .cd-rv-recall{margin-top:14px;}" +
+  "#" + WIN_ID + " .cd-rv-own summary{cursor:pointer;font-size:12px;color:var(--faint);list-style:none;}" +
+  "#" + WIN_ID + " .cd-rv-own summary::-webkit-details-marker{display:none;}" +
+  "#" + WIN_ID + " .cd-rv-own summary:hover{color:var(--ac);}" +
+  "#" + WIN_ID + " .cd-rv-in{display:block;width:100%;box-sizing:border-box;margin-top:8px;padding:10px 12px;border:1px solid var(--bd);border-radius:12px;background:var(--bg);color:var(--fg);font:inherit;font-size:14px;line-height:1.5;resize:vertical;}" +
+  "#" + WIN_ID + " .cd-rv-in:focus{outline:none;border-color:var(--ac);box-shadow:0 0 0 3px rgba(var(--ac-rgb),.18);}" +
+  "#" + WIN_ID + " .cd-rv-mine{margin-bottom:12px;padding:10px 12px;border-radius:12px;background:color-mix(in srgb,var(--fg) 4%,transparent);border-left:3px solid var(--faint);}" +
+  "#" + WIN_ID + " .cd-rv-mine span{display:block;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--faint);margin-bottom:3px;}" +
+  "#" + WIN_ID + " .cd-rv-mt{white-space:pre-wrap;color:var(--fg);font-size:14px;}" +
+  "#" + WIN_ID + " .cd-rv-al{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--ts);margin-bottom:4px;}" +
+  "#" + WIN_ID + " .cd-rv-a{color:var(--fg);}" +
+  "#" + WIN_ID + " .cd-rv-show{padding:11px 26px;font-size:14px;box-shadow:0 6px 18px rgba(var(--ac-rgb),.28);transition:transform .12s,box-shadow .12s;}" +
+  "#" + WIN_ID + " .cd-rv-show:hover{transform:translateY(-1px);box-shadow:0 9px 22px rgba(var(--ac-rgb),.36);}" +
+  "#" + WIN_ID + " .cd-rv-rate{gap:10px;}" +
+  "#" + WIN_ID + " .cd-rv-grade{flex-direction:row !important;align-items:center !important;gap:9px !important;padding:9px 16px 9px 10px !important;border-width:1.5px !important;transition:transform .12s,background .12s,border-color .12s;}" +
+  "#" + WIN_ID + " .cd-rv-grade:hover{transform:translateY(-2px);}" +
+  "#" + WIN_ID + " .cd-rv-gi{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;font-weight:800;font-size:14px;color:#11111b;}" +
+  "#" + WIN_ID + " .cd-rv-gt{display:flex;flex-direction:column;align-items:flex-start;line-height:1.2;font-weight:600;}" +
+  "#" + WIN_ID + " .cd-rv-grade.g0{border-color:color-mix(in srgb,var(--tp) 45%,transparent) !important;}" +
+  "#" + WIN_ID + " .cd-rv-grade.g0 .cd-rv-gi{background:var(--tp);}" +
+  "#" + WIN_ID + " .cd-rv-grade.g0:hover{background:color-mix(in srgb,var(--tp) 12%,var(--bg)) !important;}" +
+  "#" + WIN_ID + " .cd-rv-grade.g1{border-color:color-mix(in srgb,var(--tn) 45%,transparent) !important;}" +
+  "#" + WIN_ID + " .cd-rv-grade.g1 .cd-rv-gi{background:var(--tn);}" +
+  "#" + WIN_ID + " .cd-rv-grade.g1:hover{background:color-mix(in srgb,var(--tn) 12%,var(--bg)) !important;}" +
+  "#" + WIN_ID + " .cd-rv-grade.g2{border-color:color-mix(in srgb,var(--ts) 45%,transparent) !important;}" +
+  "#" + WIN_ID + " .cd-rv-grade.g2 .cd-rv-gi{background:var(--ts);}" +
+  "#" + WIN_ID + " .cd-rv-grade.g2:hover{background:color-mix(in srgb,var(--ts) 12%,var(--bg)) !important;}" +
+  "#" + WIN_ID + " .cd-rv-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;max-width:520px;margin:4px auto 16px;}" +
+  "#" + WIN_ID + " .cd-rv-st{display:flex;flex-direction:column;align-items:center;gap:2px;padding:12px 6px;border-radius:14px;border:1px solid var(--bd);background:color-mix(in srgb,var(--panel) 90%,transparent);}" +
+  "#" + WIN_ID + " .cd-rv-st b{font-size:22px;line-height:1.1;}" +
+  "#" + WIN_ID + " .cd-rv-st span{font-size:11px;color:var(--faint);}" +
+  "#" + WIN_ID + " .cd-rv-st.g2 b{color:var(--ts);}" +
+  "#" + WIN_ID + " .cd-rv-st.g1 b{color:var(--tn);}" +
+  "#" + WIN_ID + " .cd-rv-st.g0 b{color:var(--tp);}" +
+  "#" + WIN_ID + " .cd-rv-st.acc b{color:var(--ac);}" +
+  "#" + WIN_ID + " .cd-rv-ret{font-size:12.5px;color:var(--muted);margin-bottom:14px;}" +
+  "#" + WIN_ID + " .cd-rv-weak{max-width:560px;margin:0 auto 18px;text-align:left;}" +
+  "#" + WIN_ID + " .cd-rv-wh{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--faint);margin:0 0 6px 2px;}" +
+  "#" + WIN_ID + " .cd-rv-wi{display:flex;align-items:center;gap:10px;padding:9px 12px;margin-bottom:6px;border-radius:12px;background:color-mix(in srgb,var(--panel) 90%,transparent);border-left:3px solid var(--tn);font-size:13px;}" +
+  "#" + WIN_ID + " .cd-rv-wi.g0{border-left-color:var(--tp);}" +
+  "#" + WIN_ID + " .cd-rv-wq{flex:1 1 auto;min-width:0;}" +
+  "#" + WIN_ID + " .cd-rv-wi .cd-rv-open{flex:0 0 auto;margin-left:0;max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}" +
+  "#" + WIN_ID + " .cd-rv-done-btns{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;}" +
+  "#" + WIN_ID + " .cd-rv-more{cursor:pointer;border:none;background:var(--ac);color:#11111b;font:inherit;font-weight:700;border-radius:var(--cd-r-md);padding:6px 14px;}" +
+  "#" + WIN_ID + ".no-anim .cd-rv-card.flipped,#" + WIN_ID + ".no-anim .cd-rv-track i.cur{animation:none;}" +
+  "@keyframes cd-rv-flip{0%{transform:perspective(900px) rotateX(8deg);opacity:.6}100%{transform:none;opacity:1}}@keyframes cd-rv-pulse{0%,100%{opacity:1}50%{opacity:.45}}" +
+  "#" + WIN_ID + " .cd-set-tic img.cd-emo{width:22px;height:22px;object-fit:contain;}#" + WIN_ID + " .cd-rv-streak img.cd-emo,#" + WIN_ID + " .cd-rv-ret img.cd-emo,#" + WIN_ID + " .cd-rv-own img.cd-emo{width:18px;height:18px;vertical-align:-4px;}" +
+  // ---- Игровые блоки: «Путь героя» (```quests), сундуки (```lootsim), волна поиска пути (```bfsgrid) ----
+  "#" + WIN_ID + " .cd-qmap{margin:18px 0;padding:18px 18px 14px;border:1px solid var(--bd);border-radius:18px;background:radial-gradient(120% 90% at 100% 0%,color-mix(in srgb,#eab308 14%,transparent),transparent 60%),var(--panel);}" +
+  "#" + WIN_ID + " .cd-qmap-empty{color:var(--faint);font-size:13px;}" +
+  "#" + WIN_ID + " .cd-qm-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;}" +
+  "#" + WIN_ID + " .cd-qm-ttl{font-size:17px;font-weight:800;}" +
+  "#" + WIN_ID + " .cd-qm-sum{font-size:12.5px;color:var(--muted);}" +
+  "#" + WIN_ID + " .cd-qm-sum b{color:#eab308;font-size:15px;}" +
+  "#" + WIN_ID + " .cd-qm-bar{height:8px;border-radius:5px;background:var(--bd2);overflow:hidden;margin:9px 0 14px;}" +
+  "#" + WIN_ID + " .cd-qm-bar i{display:block;height:100%;border-radius:5px;background:linear-gradient(90deg,#eab308,#f97316);transition:width .4s;}" +
+  "#" + WIN_ID + " .cd-qm-ch{margin:0 0 12px;}" +
+  "#" + WIN_ID + " .cd-qm-chn{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:7px;}" +
+  "#" + WIN_ID + " .cd-qm-chc{margin-left:auto;font-size:11px;color:var(--faint);font-variant-numeric:tabular-nums;}" +
+  "#" + WIN_ID + " .cd-qm-path{position:relative;display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:8px;}" +
+  "#" + WIN_ID + " .cd-qm-node{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:12px;border:1px solid var(--bd);background:var(--bg);color:var(--fg) !important;text-decoration:none !important;font-size:12px;line-height:1.25;transition:transform .12s,border-color .12s;}" +
+  "#" + WIN_ID + " .cd-qm-node:hover{transform:translateY(-2px);border-color:#eab308;}" +
+  "#" + WIN_ID + " .cd-qm-dot{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;font-weight:800;font-size:12px;background:conic-gradient(#eab308 calc(var(--qp)*1%),var(--bd2) 0);color:var(--fg);box-shadow:inset 0 0 0 3px var(--bg);}" +
+  "#" + WIN_ID + " .cd-qm-nm{min-width:0;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}" +
+  "#" + WIN_ID + " .cd-qm-node.done{border-color:color-mix(in srgb,var(--ts) 45%,transparent);background:color-mix(in srgb,var(--ts) 9%,var(--bg));}" +
+  "#" + WIN_ID + " .cd-qm-node.done .cd-qm-dot{background:var(--ts);color:#11111b;box-shadow:none;}" +
+  "#" + WIN_ID + " .cd-qm-node.next{border-color:#eab308;box-shadow:0 0 0 1px #eab308,0 6px 18px color-mix(in srgb,#eab308 22%,transparent);}" +
+  "#" + WIN_ID + " .cd-qm-node.next .cd-qm-dot{animation:cd-qm-pulse 1.6s ease-in-out infinite;}" +
+  "#" + WIN_ID + " .cd-qm-node.todo:not(.next){opacity:.72;}" +
+  "#" + WIN_ID + " .cd-qm-next{display:block;margin-top:6px;padding:10px 12px;border-radius:12px;background:color-mix(in srgb,#eab308 12%,transparent);color:var(--fg) !important;text-decoration:none !important;font-size:13px;}" +
+  "#" + WIN_ID + " .cd-qm-next:hover{background:color-mix(in srgb,#eab308 20%,transparent);}" +
+  "#" + WIN_ID + " .cd-qm-note{margin-top:8px;font-size:11px;color:var(--faint);}" +
+  "#" + WIN_ID + " .cd-lootsim,#" + WIN_ID + " .cd-bfs{margin:16px 0;padding:14px 16px;border:1px solid var(--bd);border-radius:16px;background:var(--panel);}" +
+  "#" + WIN_ID + " .cd-ls-head,#" + WIN_ID + " .cd-bfs-head{font-size:12.5px;font-weight:700;color:var(--muted);margin-bottom:10px;}" +
+  "#" + WIN_ID + " .cd-ls-row{display:grid;grid-template-columns:minmax(90px,1.1fr) 70px minmax(90px,2fr) minmax(76px,auto);align-items:center;gap:10px;padding:5px 0;font-size:13px;}" +
+  "#" + WIN_ID + " .cd-ls-nm{font-weight:700;}" +
+  "#" + WIN_ID + " .cd-ls-want{font-size:11.5px;color:var(--faint);}" +
+  "#" + WIN_ID + " .cd-ls-bar{position:relative;height:12px;border-radius:7px;background:var(--bd2);overflow:hidden;}" +
+  "#" + WIN_ID + " .cd-ls-bar b{display:block;height:100%;border-radius:7px;background:var(--lc);transition:width .35s;}" +
+  "#" + WIN_ID + " .cd-ls-exp{position:absolute;top:-2px;bottom:-2px;width:2px;margin-left:-1px;background:var(--fg);opacity:.55;z-index:1;}" +
+  "#" + WIN_ID + " .cd-ls-got{font-size:12px;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums;}" +
+  "#" + WIN_ID + " .cd-ls-row.r0,#" + WIN_ID + " .cd-ls-trail i.r0{--lc:#9ca3af;}" +
+  "#" + WIN_ID + " .cd-ls-row.r1,#" + WIN_ID + " .cd-ls-trail i.r1{--lc:#60a5fa;}" +
+  "#" + WIN_ID + " .cd-ls-row.r2,#" + WIN_ID + " .cd-ls-trail i.r2{--lc:#c084fc;}" +
+  "#" + WIN_ID + " .cd-ls-row.r3,#" + WIN_ID + " .cd-ls-trail i.r3{--lc:#fbbf24;}" +
+  "#" + WIN_ID + " .cd-ls-row.r4,#" + WIN_ID + " .cd-ls-trail i.r4{--lc:#f87171;}" +
+  "#" + WIN_ID + " .cd-ls-row.r5,#" + WIN_ID + " .cd-ls-trail i.r5{--lc:#34d399;}" +
+  "#" + WIN_ID + " .cd-ls-trail{display:flex;gap:4px;min-height:14px;margin:10px 0 4px;flex-wrap:wrap;}" +
+  "#" + WIN_ID + " .cd-ls-trail i{width:14px;height:14px;border-radius:4px;background:var(--lc);box-shadow:inset 0 -2px 0 rgba(0,0,0,.25);}" +
+  "#" + WIN_ID + " .cd-ls-ctl,#" + WIN_ID + " .cd-bfs-ctl{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px;}" +
+  "#" + WIN_ID + " .cd-ls-ctl button,#" + WIN_ID + " .cd-bfs-ctl button{cursor:pointer;border:1px solid var(--bd);background:var(--bg);color:var(--fg);font:inherit;font-size:12.5px;font-weight:600;padding:6px 12px;border-radius:10px;}" +
+  "#" + WIN_ID + " .cd-ls-ctl button:hover,#" + WIN_ID + " .cd-bfs-ctl button:hover{border-color:var(--ac);}" +
+  "#" + WIN_ID + " .cd-ls-open[data-n='1'],#" + WIN_ID + " .cd-bfs-play{background:var(--ac) !important;color:#11111b !important;border-color:transparent !important;}" +
+  "#" + WIN_ID + " .cd-ls-pityl{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer;}" +
+  "#" + WIN_ID + " .cd-ls-reset,#" + WIN_ID + " .cd-bfs-reset{margin-left:auto;}" +
+  "#" + WIN_ID + " .cd-ls-stat,#" + WIN_ID + " .cd-bfs-st{margin-top:8px;font-size:12px;color:var(--muted);}" +
+  "#" + WIN_ID + " .cd-bfs-grid{display:grid;grid-template-columns:repeat(var(--cols),minmax(0,34px));gap:3px;justify-content:start;overflow-x:auto;}" +
+  "#" + WIN_ID + " .cd-bfs-c{aspect-ratio:1;min-width:0;padding:0;border:0;border-radius:6px;cursor:pointer;font:inherit;font-size:11.5px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--fg);background:color-mix(in srgb,var(--fg) 5%,transparent);transition:background .18s,transform .1s;}" +
+  "#" + WIN_ID + " .cd-bfs-c:hover{transform:scale(1.08);}" +
+  "#" + WIN_ID + " .cd-bfs-c.wall{background:color-mix(in srgb,var(--fg) 26%,var(--bg));box-shadow:inset 0 -3px 0 rgba(0,0,0,.25);}" +
+  "#" + WIN_ID + " .cd-bfs-c.floor.on{background:color-mix(in srgb,var(--ac) calc(62% - var(--t)*0.5%),transparent);}" +
+  "#" + WIN_ID + " .cd-bfs-c.path{background:color-mix(in srgb,#f97316 70%,transparent) !important;color:#11111b;}" +
+  "#" + WIN_ID + " .cd-bfs-c.start{background:var(--ts);color:#11111b;cursor:default;}" +
+  "#" + WIN_ID + " .cd-bfs-c.enemy{background:var(--tp);color:#11111b;cursor:default;}" +
+  "#" + WIN_ID + ".no-anim .cd-qm-node.next .cd-qm-dot{animation:none;}" +
+  "@keyframes cd-qm-pulse{0%,100%{box-shadow:inset 0 0 0 3px var(--bg),0 0 0 0 rgba(234,179,8,.5)}50%{box-shadow:inset 0 0 0 3px var(--bg),0 0 0 6px rgba(234,179,8,0)}}" +
   paletteCss();
 
   // ==== runtime/06-window.js — построение окна: шапка, навигатор, статья ====
@@ -3990,6 +4461,7 @@
   var findBtn = null, findBar = null, findInput = null, findCountEl = null;  // поиск по тексту материала
   var findHits = [], findIdx = -1;   // найденные <mark> и текущий
   var reviewEl = null, reviewQueue = [], reviewPos = 0, reviewOk = 0, reviewWarmup = false;  // сессия повторения карточек (+ это «Разминка дня»?)
+  var reviewLog = [], reviewUndo = null, reviewStreak = 0, reviewTyped = "";   // оценки сессии, «↶ Назад», серия, «сначала вспомни»
   var backBtn = null, fwdBtn = null;     // навигация по истории переходов
   var fillEl = null, ptextEl = null, continueBtn = null;
   var current = null;        // текущий файл (объект из data)
@@ -4176,14 +4648,15 @@
     reader.appendChild(tabsEl);
     readBtn = el("button", null); readBtn.className = "cd-rbtn cd-readbtn"; setHTML(readBtn, uiLabel("read-off", "○", "Изучено"));
     readBtn.title = "Отметить материал изученным";
-    // меню вида: шрифт / ширина / плотность
-    var viewWrap = el("div", null); viewWrap.className = "cd-tocwrap";
-    viewBtn = el("button", null); viewBtn.className = "cd-rbtn"; setHTML(viewBtn, uiLabel("settings", "⚙")); viewBtn.title = "Настройки: шрифт, ширина, разборы, подсказки, анимации";
-    viewMenu = el("div", null); viewMenu.className = "cd-viewmenu"; viewMenu.hidden = true;
-    viewWrap.appendChild(viewBtn); viewWrap.appendChild(viewMenu);
+    // Настройки — отдельная кнопка, видна ВСЕГДА (на главной, в повторении, в материале); сама
+    // панель — окно поверх всего окна документации (кладём его в корень окна в wireViewMenu).
+    viewBtn = el("button", null); viewBtn.className = "cd-rbtn cd-setbtn"; viewBtn.type = "button";
+    setHTML(viewBtn, uiLabel("settings", "⚙")); viewBtn.title = "Настройки: тема, палитра, шрифт, поведение";
+    viewBtn.setAttribute("aria-label", "Настройки"); viewBtn.setAttribute("aria-haspopup", "dialog");
+    viewMenu = el("div", null); viewMenu.className = "cd-viewmenu cd-set"; viewMenu.hidden = true;
     tocBtn = el("button", null); tocBtn.className = "cd-rbtn cd-file-only"; setHTML(tocBtn, uiLabel("sections", "☰", "Разделы"));
     tocBtn.title = "Оглавление файла сбоку (показать/скрыть)";
-    viewWrap.classList.add("cd-file-only"); readBtn.classList.add("cd-file-only");
+    readBtn.classList.add("cd-file-only");
     // кнопка возврата на главный экран (приветствие) — всегда видна
     homeBtn = el("button", null); homeBtn.className = "cd-rbtn cd-hb-home"; homeBtn.type = "button"; setHTML(homeBtn, uiLabel("home", "⌂", "Главная"));
     homeBtn.title = "На главную (приветствие и быстрый доступ)";
@@ -4197,9 +4670,9 @@
     findBtn = el("button", null); findBtn.className = "cd-rbtn cd-file-only"; findBtn.type = "button"; setHTML(findBtn, uiLabel("find", "⌕"));
     findBtn.title = "Найти в этом материале"; findBtn.setAttribute("aria-label", "Найти в материале");
     findBtn.addEventListener("click", function () { toggleFind(); });
-    // Инструменты (настройки, поиск, копировать) — одной сегментированной капсулой.
+    // Инструменты материала (поиск, копировать) — одной сегментированной капсулой.
     var tools = el("div", null); tools.className = "cd-rgrp cd-file-only";
-    tools.appendChild(viewWrap); tools.appendChild(findBtn); tools.appendChild(copyDocBtn);
+    tools.appendChild(findBtn); tools.appendChild(copyDocBtn);
     // Маскот выглядывает из-за нижней кромки шапки — рядом с кнопками (декор, не кликается).
     if ((typeof STICKERS !== "undefined" && STICKERS && STICKERS["ui-peek"])) {
       var peek = el("img", null); peek.className = "cd-peek"; peek.alt = ""; peek.src = STICKERS["ui-peek"];
@@ -4207,7 +4680,7 @@
       hrt.appendChild(peek);
     }
     // Бывшая вторая полоса «панель темы» живёт в шапке окна (одна полоса — больше места под текст).
-    hrt.appendChild(homeBtn); hrt.appendChild(tocBtn); hrt.appendChild(tools); hrt.appendChild(readBtn);
+    hrt.appendChild(homeBtn); hrt.appendChild(viewBtn); hrt.appendChild(tocBtn); hrt.appendChild(tools); hrt.appendChild(readBtn);
 
     // тонкая полоса прогресса чтения текущего файла
     var rprog = el("div", null); rprog.className = "cd-rprog";
@@ -4341,7 +4814,9 @@
     // При открытии окна показываем главный экран (приветствие). Файл уже загружен под ним —
     // клик по «Продолжить»/карточке/навигатору просто скрывает оверлей и открывает материал.
     showHome();
-    if (!state.tourDone) setTimeout(function () { startTour(); }, 700);   // первое открытие — знакомство в 3 шага
+    // первое открытие — знакомство в 3 шага; только если главная ещё на экране (материал могли
+    // открыть за эти 0,7 с — например, «Найти в справочнике» из редактора; тогда тур — в следующий раз)
+    if (!state.tourDone) setTimeout(function () { if (homeEl && !homeEl.hidden) startTour(); }, 700);
 
     // Esc закрывает окно (и меню разделов).
     document.addEventListener("keydown", onKey, true);
@@ -5101,16 +5576,32 @@
   }
 
   // ==== runtime/08-view.js — меню настроек, подсказки-термины, история, маршрут ====
-  // ------- меню вида: шрифт / ширина / плотность -------
+  // ------- настройки: окно поверх окна документации, с вкладками -------
   function wireViewMenu() {
+    if (winEl && viewMenu.parentNode !== winEl) winEl.appendChild(viewMenu);
     buildViewMenu();
     viewBtn.addEventListener("click", function (e) {
       e.stopPropagation();
-      viewMenu.hidden = !viewMenu.hidden;
+      if (viewMenu.hidden) openSettings(); else viewMenu.hidden = true;
     });
-    document.addEventListener("mousedown", function (e) {
-      if (viewMenu && !viewMenu.hidden && !viewMenu.contains(e.target) && e.target !== viewBtn) viewMenu.hidden = true;
-    }, true);
+    // клик по затемнению вокруг карточки — закрыть
+    viewMenu.addEventListener("mousedown", function (e) { if (e.target === viewMenu) viewMenu.hidden = true; });
+  }
+  function openSettings(tab) {
+    if (!viewMenu) return;
+    buildViewMenu();                                  // картинки палитр и отметки — свежие
+    if (tab) showSetTab(tab);
+    viewMenu.hidden = false;
+    try { var c = viewMenu.querySelector(".cd-set-x"); if (c) c.focus(); } catch (e) {}
+  }
+  var setTab = "look";
+  function showSetTab(k) {
+    setTab = k;
+    viewMenu.querySelectorAll(".cd-set-tab").forEach(function (b) {
+      var on = b.getAttribute("data-tab") === k;
+      b.classList.toggle("on", on); b.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    viewMenu.querySelectorAll(".cd-set-page").forEach(function (pg) { pg.hidden = pg.getAttribute("data-tab") !== k; });
   }
   function segRow(label, buttons) {
     // 3+ кнопок (или длинные подписи) не влезают в строку — кладём контрол под подпись на всю ширину.
@@ -5121,12 +5612,15 @@
     row.appendChild(seg);
     return row;
   }
-  function vmSection(title) {
-    var s = el("div", null, title); s.className = "cd-vm-sec"; viewMenu.appendChild(s);
+  // Пейзаж палитры для карточки (та же картинка, что на главной); файла нет — null.
+  function palThumb(k) {
+    var d = DATA(), dir = (d && d.extDirUrl) || bootVal("extDirUrl");
+    var have = (d && Array.isArray(d.bgImages)) ? d.bgImages : [];
+    var name = have.indexOf("bg-" + k + ".webp") !== -1 ? "bg-" + k + ".webp" : (have.indexOf("bg-default.webp") !== -1 ? "bg-default.webp" : "");
+    return dir && name ? resUrl(String(dir).replace(/\/+$/, "") + "/" + name) : null;
   }
   function buildViewMenu() {
     viewMenu.textContent = "";
-    var mtitle = el("div", null, "Настройки"); mtitle.className = "cd-vm-title"; viewMenu.appendChild(mtitle);
     // шрифт
     var minus = el("button", null, "A−"); minus.type = "button"; minus.title = "Меньше";
     var val = el("button", null, ""); val.type = "button"; val.disabled = true; val.style.cursor = "default";
@@ -5136,7 +5630,7 @@
     minus.addEventListener("click", function () { stepFs(-0.1); });
     plus.addEventListener("click", function () { stepFs(0.1); });
     showFs();
-    var rowFont = segRow("Шрифт", [minus, val, plus]);
+    var rowFont = segRow("Размер текста", [minus, val, plus]);
     // ширина
     var wN = el("button", null, "Уже"); var wW = el("button", null, "Шире");
     wN.type = "button"; wW.type = "button";
@@ -5163,7 +5657,7 @@
     cMinus.addEventListener("click", function () { stepCfs(-0.5); });
     cPlus.addEventListener("click", function () { stepCfs(0.5); });
     showCfs();
-    var rowCodeFs = segRow("Код", [cMinus, cVal, cPlus]);
+    var rowCodeFs = segRow("Размер кода", [cMinus, cVal, cPlus]);
     // режим фокуса: скрыть навигацию и оглавление, оставить только текст
     var fcOn = el("button", null, "Вкл"); var fcOff = el("button", null, "Выкл");
     fcOn.type = "button"; fcOff.type = "button";
@@ -5222,6 +5716,10 @@
     var tA = el("button", null, "Авто"); var tL = el("button", null, "Светлая"); var tD = el("button", null, "Тёмная"); var tSep = el("button", null, "Сепия");
     tA.type = "button"; tL.type = "button"; tD.type = "button"; tSep.type = "button";
     tSep.title = "Тёплый «бумажный» фон — мягче для глаз";
+    [[tA, "auto"], [tL, "light"], [tD, "dark"], [tSep, "sepia"]].forEach(function (p) {   // мини-окно темы на кнопке
+      var mini = el("span", null); mini.className = "cd-th-mini th-" + p[1];
+      setHTML(mini, "<i></i><i></i><i></i>"); p[0].insertBefore(mini, p[0].firstChild); p[0].classList.add("cd-th-btn");
+    });
     function showT() {
       tA.classList.toggle("on", state.theme === "auto");
       tL.classList.toggle("on", state.theme === "light");
@@ -5236,17 +5734,23 @@
     showT();
     var rowTheme = segRow("Тема", [tA, tL, tD, tSep]);
     // палитра: «как в редакторе» или готовый набор (фон + акцент + цвета кода)
-    var rowPal = el("div", null); rowPal.className = "cd-vm-row stack";
+    var rowPal = el("div", null); rowPal.className = "cd-vm-row stack cards";
     var palLbl = el("span", null, "Палитра"); palLbl.className = "cd-vm-lbl"; rowPal.appendChild(palLbl);
     var palGrid = el("div", null); palGrid.className = "cd-pal-grid"; rowPal.appendChild(palGrid);
     var palBtns = [];
     ["auto"].concat(Object.keys(PALETTES)).forEach(function (k) {
       var P = PALETTES[k];
       var b = el("button", null); b.type = "button"; b.className = "cd-pal";
-      var sw = el("span", null); sw.className = "cd-pal-sw";
-      sw.style.background = P ? "linear-gradient(135deg," + P.bg + " 48%," + P.ac + " 52%," + P.glow + ")"
-        : "linear-gradient(135deg,#1e1e2e 48%,var(--cppdocs-ac,#89b4fa) 52%)";
-      b.appendChild(sw); b.appendChild(el("span", null, P ? P.name : "Как в редакторе"));
+      // карточка: пейзаж палитры (если есть) + точки её цветов + имя
+      var th = el("span", null); th.className = "cd-pal-th";
+      var img = palThumb(k);
+      th.style.backgroundImage = img ? "url(" + img + ")" : (P ? "linear-gradient(135deg," + P.bg + " 40%," + P.ac + " 75%," + P.glow + ")"
+        : "linear-gradient(135deg,#1e1e2e 40%,var(--cppdocs-ac,#89b4fa) 80%)");
+      var dots = el("span", null); dots.className = "cd-pal-dots";
+      (P ? [P.ac, P.glow, P.ts, P.tn] : ["var(--cppdocs-ac,#89b4fa)"]).forEach(function (c) { var i = el("i", null); i.style.background = c; dots.appendChild(i); });
+      th.appendChild(dots);
+      b.appendChild(th);
+      var nm = el("span", null, P ? P.name : "Как в редакторе"); nm.className = "cd-pal-nm"; b.appendChild(nm);
       b.title = P ? "Фон, акцент и подсветка кода «" + P.name + "»" : "Акцент из темы VS Code / обоев custom-bg";
       b.setAttribute("data-pal", k);
       b.addEventListener("click", function () {
@@ -5261,7 +5765,7 @@
       b.classList.toggle("on", (state.palette || "auto") === k);
       palBtns.push(b); palGrid.appendChild(b);
     });
-    var palNote = el("div", null, "В светлой теме и сепии палитра меняет только акцент."); palNote.className = "cd-pal-note";
+    var palNote = el("div", null, "В светлой теме и сепии палитра меняет только акцент. Картинка — фон главной (режим «Пейзаж»)."); palNote.className = "cd-pal-note";
     rowPal.appendChild(palNote);
     // фон главной: пейзаж под палитру / звёздное небо прогресса / без рисунка
     var hbI = el("button", null, "Пейзаж"), hbS = el("button", null, "Звёзды"), hbN = el("button", null, "Пусто");
@@ -5290,19 +5794,26 @@
     var rowCelebrate = segRow("Праздник", [cOn, cOff]);
     // шрифт чтения
     var fontBtns = [];
+    var rowRead = el("div", null); rowRead.className = "cd-vm-row stack cards";
+    var frLbl = el("span", null, "Шрифт текста"); frLbl.className = "cd-vm-lbl"; rowRead.appendChild(frLbl);
+    var fontGrid = el("div", null); fontGrid.className = "cd-font-grid"; rowRead.appendChild(fontGrid);
     Object.keys(RFONTS).forEach(function (key) {
-      var b = el("button", null, RFONTS[key].label); b.type = "button";
-      b.className = (state.rfont === key ? "on" : "");
-      if (RFONTS[key].stack) b.style.fontFamily = RFONTS[key].stack;  // превью прямо на кнопке
+      var F = RFONTS[key];
+      var b = el("button", null); b.type = "button"; b.className = "cd-font" + ((state.rfont || "system") === key ? " on" : "");
+      var aa = el("span", null, "Аа"); aa.className = "cd-font-aa";
+      if (F.stack) aa.style.fontFamily = F.stack;                     // образец прямо на карточке
+      b.appendChild(aa);
+      var nm = el("span", null, F.label); nm.className = "cd-font-nm"; b.appendChild(nm);
+      if (F.sample) { var tag = el("span", null, "встроен"); tag.className = "cd-font-tag"; b.appendChild(tag); }
+      b.title = F.sample ? F.label + " — " + F.sample.toLowerCase() + " (встроен в расширение)" : F.label;
       b.addEventListener("click", function () {
         state.rfont = key; saveState(); applyReaderPrefs();
         fontBtns.forEach(function (x) { x.classList.remove("on"); });
         b.classList.add("on");
       });
-      fontBtns.push(b);
+      fontBtns.push(b); fontGrid.appendChild(b);
     });
-    var rowRead = segRow("Шрифт", fontBtns);
-    var fNote = el("div", null, "Inter, PT Root и Golos берутся, если установлены в системе; иначе — системный."); fNote.className = "cd-pal-note";
+    var fNote = el("div", null, "Inter, PT Sans и Golos встроены в расширение — устанавливать их не нужно."); fNote.className = "cd-pal-note";
     rowRead.appendChild(fNote);
     // обложки тем
     var cvOn = el("button", null, "Вкл"), cvOff = el("button", null, "Выкл");
@@ -5323,10 +5834,20 @@
     bsSec.addEventListener("click", function () { setBs(true); });
     showBs();
     var rowBySec = segRow("Длинные темы", [bsAll, bsSec]);
-    // Раскладка по секциям — чтобы 11 настроек читались, а не сливались в один список.
-    vmSection("Текст");        viewMenu.appendChild(rowFont); viewMenu.appendChild(rowCodeFs); viewMenu.appendChild(rowInterval); viewMenu.appendChild(rowWidth); viewMenu.appendChild(rowRead); viewMenu.appendChild(rowBySec);
-    vmSection("Оформление");   viewMenu.appendChild(rowTheme); viewMenu.appendChild(rowPal); viewMenu.appendChild(rowHomeBg); viewMenu.appendChild(rowCovers); viewMenu.appendChild(rowFocus); viewMenu.appendChild(rowGhost); viewMenu.appendChild(rowList);
-    vmSection("Поведение");    viewMenu.appendChild(rowNotes); viewMenu.appendChild(rowHints); viewMenu.appendChild(rowAnim); viewMenu.appendChild(rowCelebrate);
+    // Живой образец текста: видно, как ляжет шрифт/размер/интервал, не выходя из настроек.
+    var sample = el("div", null); sample.className = "cd-set-sample";
+    setHTML(sample, '<div class="cd-ss-h">Переменная — коробка с именем</div>' +
+      '<p>Сначала объяви, потом используй: <code>int score = 0;</code> — и счёт готов.</p>' +
+      '<pre class="cd-ss-code"><code>for (int i = 0; i &lt; 3; ++i)\n    std::cout &lt;&lt; i &lt;&lt; " ";</code></pre>');
+    function syncSample() {
+      var rf = RFONTS[state.rfont] || RFONTS.system;
+      sample.style.fontFamily = rf.stack || "inherit";
+      sample.style.zoom = String(state.fs || 1);
+      sample.classList.toggle("cd-lh-tight", state.lh === "tight");
+      sample.classList.toggle("cd-lh-roomy", state.lh === "roomy");
+      var pre = sample.querySelector("pre"); if (pre) pre.style.fontSize = (state.codeFs || 12.5) + "px";
+    }
+    syncSample();
     // Прогресс: копия в файл и загрузка из файла (диалоги показывает расширение)
     var pExp = el("button", null, "Сохранить копию…"), pImp = el("button", null, "Загрузить…");
     pExp.type = pImp.type = "button";
@@ -5341,7 +5862,43 @@
     var pNote = el("div", null, "Копия делается и сама — раз в день, последние 14 дней."); pNote.className = "cd-pal-note";
     var rowProgress = segRow("Резервная копия прогресса", [pExp, pImp]);
     rowProgress.appendChild(pNote);
-    vmSection("Прогресс");     viewMenu.appendChild(rowProgress);
+    // Окно настроек: шапка + вкладки слева + страница справа.
+    viewMenu.setAttribute("role", "dialog"); viewMenu.setAttribute("aria-label", "Настройки");
+    var card = el("div", null); card.className = "cd-set-card";
+    var head = el("div", null); head.className = "cd-set-head";
+    setHTML(head, '<span class="cd-set-ic">' + emo("ui-settings", "⚙") + '</span><div class="cd-set-ht"><b>Настройки</b>' +
+      "<span>Всё меняется сразу — сохранять не нужно</span></div>" +
+      '<button class="cd-set-x" type="button" title="Закрыть" aria-label="Закрыть">✕</button>');
+    head.querySelector(".cd-set-x").addEventListener("click", function () { viewMenu.hidden = true; });
+    card.appendChild(head);
+    var bodyEl = el("div", null); bodyEl.className = "cd-set-body";
+    var tabs = el("div", null); tabs.className = "cd-set-tabs"; tabs.setAttribute("role", "tablist");
+    var pagesEl = el("div", null); pagesEl.className = "cd-set-pages";
+    var PAGES = [
+      ["look", emo("ui-tab-look", "🎨"), "Вид", "Тема, палитра и фон главной", [rowTheme, rowPal, rowHomeBg, rowCovers]],
+      ["text", emo("ui-tab-text", "🔤"), "Текст", "Шрифт и размеры — образец меняется сразу", [sample, rowRead, rowFont, rowCodeFs, rowInterval, rowWidth, rowBySec]],
+      ["window", emo("ui-tab-window", "🪟"), "Окно", "Как окно ведёт себя поверх редактора", [rowFocus, rowGhost, rowList]],
+      ["behave", emo("ui-tab-behave", "✨"), "Поведение", "Разборы, подсказки и анимации", [rowNotes, rowHints, rowAnim, rowCelebrate]],
+      ["progress", emo("ui-tab-progress", "💾"), "Прогресс", "Резервная копия изученного", [rowProgress]],
+    ];
+    PAGES.forEach(function (P) {
+      var t = el("button", null); t.type = "button"; t.className = "cd-set-tab"; t.setAttribute("role", "tab"); t.setAttribute("data-tab", P[0]);
+      setHTML(t, '<span class="cd-set-tic">' + P[1] + "</span><span>" + escapeHtml(P[2]) + "</span>");
+      t.addEventListener("click", function () { showSetTab(P[0]); });
+      tabs.appendChild(t);
+      var pg = el("div", null); pg.className = "cd-set-page"; pg.setAttribute("data-tab", P[0]); pg.setAttribute("role", "tabpanel");
+      var ph = el("div", null); ph.className = "cd-set-ph";
+      setHTML(ph, "<b>" + escapeHtml(P[2]) + "</b><span>" + escapeHtml(P[3]) + "</span>");
+      pg.appendChild(ph);
+      P[4].forEach(function (r) { pg.appendChild(r); });
+      pagesEl.appendChild(pg);
+    });
+    bodyEl.appendChild(tabs); bodyEl.appendChild(pagesEl);
+    card.appendChild(bodyEl);
+    viewMenu.appendChild(card);
+    // Любой клик в настройках мог поменять шрифт/размер — обновим образец (обработчики кнопок уже отработали).
+    card.addEventListener("click", syncSample);
+    showSetTab(setTab);
   }
   // Классы темы окна: сепия — отдельный тёплый набор; светлая — когда не сепия и тема светлая.
   // ---- Знакомство в 3 шага (первое открытие окна) ----
@@ -5398,6 +5955,11 @@
     else { tip.style.top = "auto"; tip.style.bottom = (wr.height - above) + "px"; }
     try { tourEl.querySelector(".cd-tour-next").focus(); } catch (e) {}
   }
+  // Материал открылся поверх тура (из редактора, по ссылке): подсветка указывала бы в пустоту —
+  // прячем тур, не отмечая его пройденным.
+  function hideTour() {
+    if (tourEl && !tourEl.hidden) { tourEl.hidden = true; if (tourEl.parentNode) tourEl.parentNode.removeChild(tourEl); }
+  }
   function endTour() {
     if (tourEl) { tourEl.hidden = true; if (tourEl.parentNode) tourEl.parentNode.removeChild(tourEl); }
     state.tourDone = true; saveState();
@@ -5427,6 +5989,7 @@
       articleEl.classList.toggle("cd-lh-roomy", state.lh === "roomy");
     }
     applyThemeClasses();
+    try { ensureFonts(); } catch (e) {}                  // данные с адресом папки могли прийти позже
     var rf = RFONTS[state.rfont] || RFONTS.system;
     winEl.style.setProperty("--cd-rfont", rf.stack || "inherit");
     applyResponsive();
@@ -5441,6 +6004,7 @@
     if (nav && getComputedStyle(nav).display !== "none") navW = nav.offsetWidth;
     var narrow = winEl.offsetWidth < 860 || winEl.offsetWidth - navW - 198 < 640;
     winEl.classList.toggle("narrow", narrow);
+    winEl.classList.toggle("tiny", winEl.offsetWidth < 640);          // совсем узко: настройки — вкладки строкой
     winEl.classList.toggle("tightbar", winEl.offsetWidth < 1050);   // маскоту у кнопок нужна ширина — иначе прячем
     winEl.classList.toggle("short", winEl.offsetHeight < 720);
     if (!narrow) winEl.classList.remove("ol-peek");
@@ -5840,6 +6404,7 @@
     if (splitTitleEl) splitTitleEl.textContent = f.title || f.name;
     setHTML(splitArticle, renderMarkdown(f.md || "", null));
     resolveImagesIn(splitArticle, f);
+    try { annotateAhead(splitArticle, f.rel); } catch (e) { reportError("забегаем вперёд", e); }
     var box = splitArticle.parentNode;
     if (hash) {
       var t = splitArticle.querySelector('[id="' + cssEscape(decodeURIComponent(String(hash).replace(/^#/, ""))) + '"]');
@@ -5983,10 +6548,11 @@
     if (state.whatsnew !== WHATSNEW) {
       newsHtml = '<div class="cd-whatsnew"><div class="cd-wn-h">' + emo("ui-news", "✨") + ' Что нового</div>' +
         '<ul class="cd-wn-list">' +
-        '<li><b>▶ По шагам</b> — код проигрывается строка за строкой: видно переменные и вывод на каждом шаге (циклы, функции, рекурсия, указатели, вектор, RAII)</li>' +
-        '<li><b>🤔 Загадки в разборах</b> — угадайте значение переменной до следующего шага; <b>👑 Босс темы</b> — итоговый мини-проект, открывается отметкой «Изучено»</li>' +
-        '<li><b>🕹️ Раздел «Создание игр»</b> — 9 тем: время и FPS, меню и пауза, поиск пути, лут, бой, консоль, сохранения, ИИ врагов, физика прыжка</li>' +
-        '<li><b>🎮 Сквозной проект «Подземелье»</b> — одна игра на весь курс; ошибки в загадках возвращаются в «Разминку»; на главной — <b>«Вы остановились»</b></li>' +
+        '<li><b>🏞️ Пейзажи</b> — у каждой палитры своя картинка на главной и в повторении карточек</li>' +
+        '<li><b>⚙ Новые настройки</b> — кнопка всегда в шапке; вкладки, палитры с картинками, образец текста прямо в окне</li>' +
+        '<li><b>🔤 Шрифты в комплекте</b> — Inter, PT Sans и Golos работают сразу, устанавливать не нужно</li>' +
+        '<li><b>🎴 Повторение карточек</b> — «сначала вспомни», «↶ Назад», «не помню» возвращается в конце сессии, итог с разбором</li>' +
+        '<li><b>▶ Запустить</b> — упавшая программа больше не засчитывается; причина падения — простыми словами</li>' +
         '</ul><button class="cd-wn-ok" type="button">Понятно</button></div>';
     }
 
@@ -6004,6 +6570,7 @@
     if (ts.total) qab += '<button class="cd-qa cd-qa-rand" type="button">' + emo("ui-dice", "🎲") + " Случайная задача</button>";
     if (cc.due + cc.neu > 0) qab += '<button class="cd-qa cd-qa-rev" type="button">' + emo("ui-cards", "🎴") + " Повторить" + (cc.due ? " · " + cc.due : "") + "</button>";
     qab += '<button class="cd-qa cd-qa-find" type="button">⌕ Найти</button>';
+    qab += '<button class="cd-qa cd-qa-prog" type="button">' + emo("icon-route", "") + " Прогресс</button>";
     qab += '<button class="cd-qa cd-qa-guide" type="button">' + emo("ui-guide", "📖") + " Обучение</button>";
     qaHtml = '<div class="cd-qabar">' + qab + "</div>";
 
@@ -6029,6 +6596,7 @@
       }
     }
     cardsHtml += dailyCardHtml();
+    try { cardsHtml += weeklyHomeHtml() + weakHomeHtml(); } catch (e) { reportError("главная: прогресс", e); }
     var planHtml = "", trackHtml = courseTrack();
 
     if (allDone) {
@@ -6241,6 +6809,16 @@
     }
     var qaFind = homeEl.querySelector(".cd-qa-find");
     if (qaFind && hsIn) qaFind.addEventListener("click", function () { hsIn.focus(); hsIn.select(); });
+    var qaProg = homeEl.querySelector(".cd-qa-prog");
+    if (qaProg) qaProg.addEventListener("click", function () { showProgress("map"); });
+    var wkBtn = homeEl.querySelector(".cd-weekly");
+    if (wkBtn) {
+      wkBtn.addEventListener("click", function () { showProgress("weekly"); });
+      wkBtn.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); showProgress("weekly"); } });
+    }
+    homeEl.querySelectorAll(".cd-weak-go").forEach(function (b) {
+      b.addEventListener("click", function () { runWeakAction(b.getAttribute("data-wrel"), b.getAttribute("data-wk"), b.getAttribute("data-wx")); });
+    });
     var qaGuide = homeEl.querySelector(".cd-qa-guide");
     if (qaGuide) qaGuide.addEventListener("click", function () { showGuide(); });
     if (hsIn && hsRes) {
@@ -6426,6 +7004,7 @@
       rnameEl.textContent = reviewing ? "Повторение карточек" : "Главная";
       rnameEl.removeAttribute("title");
       if (crumbEl.textContent) crumbEl.textContent = "";
+      if (secProgEl) secProgEl.hidden = true;   // «0/8 ●●●» прошлого материала не должен висеть на главной и в повторении
     }
     // Цвет раздела: кромка и лёгкий тон шапки. На главной — обычный акцент.
     var col = reading && current.groupColor;
@@ -6682,7 +7261,7 @@
   }
   function guideAction(act) {
     if (act === "sepia") { state.theme = (state.theme === "sepia" ? "auto" : "sepia"); saveState(); applyThemeClasses(); applyAccent(); }
-    else if (act === "settings") { hideGuide(); if (viewMenu) viewMenu.hidden = false; }
+    else if (act === "settings") { hideGuide(); openSettings(); }
     else if (act === "tour") { hideGuide(); showHome(); setTimeout(startTour, 300); }
     else if (act === "search") { hideGuide(); if (searchInput) { try { searchInput.focus(); searchInput.select(); } catch (e) {} } }
     else if (act === "live" || act === "kata" || act === "steps") {
@@ -6729,6 +7308,7 @@
   // ненулевой прогресс по тому, что пользователь ещё не открывал.
   function openFile(rel, hash, silent) {
     hideHome();
+    hideTour();
     var map = fileMap();
     var f = map[String(rel).toLowerCase()];
     if (!f) return;
@@ -6761,6 +7341,7 @@
     // мягкое проявление статьи
     articleEl.classList.remove("fade"); void articleEl.offsetWidth; articleEl.classList.add("fade");
     resolveImages();
+    try { annotateAhead(articleEl, f.rel); } catch (e) { reportError("забегаем вперёд", e); }
     buildOutline(headings);
     collectHeadings();
     buildRouteNav(f);
@@ -6819,7 +7400,7 @@
   }
   // Значки разделов (рисованные, без лиц). Группы без значка — с цветной точкой, как раньше.
   var GROUP_BADGE = {
-    "Справочник по темам": "badge-ref", "Задачник": "badge-tasks", "Примеры программ": "badge-examples",
+    "Справочник по темам": "badge-ref", "Справка и словари": "badge-ref", "Задачник": "badge-tasks", "Примеры программ": "badge-examples",
     "Сквозной проект": "badge-proekt", "Создание игр": "badge-igry", "Главное": "badge-main", "Мои заметки": "badge-notes"
   };
   function groupBadge(label) {
@@ -7453,7 +8034,7 @@
   }
   function startReview() {
     reviewQueue = buildReviewQueue();
-    reviewPos = 0; reviewOk = 0; reviewWarmup = false;
+    resetReviewSession(false);
     if (!reviewQueue.length) return;
     showReview();
   }
@@ -7485,8 +8066,11 @@
   }
   function dailyChallenge() {
     var today = cdDate(0);
-    if (state.daily && state.daily.date === today && lookupFile(state.daily.rel)) return state.daily;
-    var all = collectChallenges();
+    if (state.daily && state.daily.date === today && lookupFile(state.daily.rel) &&
+        (state.daily.type !== "run" || (DATA() && DATA().run && DATA().run.enabled))) return state.daily;
+    // «Напиши и запусти» без cppDocs.localRun решить нельзя — такая задача дня сожгла бы серию.
+    var runOn = !!(DATA() && DATA().run && DATA().run.enabled);
+    var all = collectChallenges().filter(function (c) { return runOn || c.type !== "run"; });
     if (!all.length) return null;
     var opened = all.filter(function (c) { return state.read[c.rel] || (state.recent || []).indexOf(c.rel) !== -1; });
     var pool = opened.length ? opened : all.filter(function (c) { return topicNum(c.rel) <= 3; });
@@ -7510,6 +8094,7 @@
   }
   function openDaily() {
     var dc = dailyChallenge(); if (!dc) return;
+    try { noteDailyOpened(); } catch (e) {}
     openFile(dc.rel);
     setTimeout(function () {
       var box = articleEl && articleEl.querySelector('[data-id="' + cssEscape(dc.id) + '"]');
@@ -7526,7 +8111,8 @@
       '<span class="cd-hw-ic">' + (done ? "✓" : emo("ui-dice", "🎯")) + "</span>" +
       '<div class="cd-hc-main"><div class="cd-hc-lbl">Задача дня · ' + escapeHtml(DAILY_TYPES[dc.type] || "задание") + (done ? " · решена" : "") + "</div>" +
       '<div class="cd-hc-title">' + escapeHtml(dc.prompt || "Задание из темы") + "</div>" +
-      '<div class="cd-hc-meta">' + escapeHtml(dc.title) + (streak ? " · серия " + streak + " " + plural(streak, ["день", "дня", "дней"]) : " · реши — начнётся серия") + "</div></div>" +
+      '<div class="cd-hc-meta">' + escapeHtml(dc.title) + (streak ? " · серия " + streak + " " + plural(streak, ["день", "дня", "дней"]) : " · реши — начнётся серия") +
+      (function () { var r = ""; try { r = dailyRecordLine(dc.type); } catch (e) {} return r ? " · " + escapeHtml(r) : ""; })() + "</div></div>" +
       (done ? "" : '<div class="cd-hc-arrow">→</div>') + "</div>";
   }
   function buildWarmupQueue() {
@@ -7549,48 +8135,136 @@
   function warmupDoneToday() { return state.warmupDone === cdDate(0); }
   function startWarmup() {
     reviewQueue = buildWarmupQueue();
-    reviewPos = 0; reviewOk = 0; reviewWarmup = true;
+    resetReviewSession(true);
     if (!reviewQueue.length) return;
     showReview();
+  }
+  function resetReviewSession(warm) {
+    reviewPos = 0; reviewOk = 0; reviewWarmup = !!warm;
+    reviewLog = []; reviewUndo = null; reviewStreak = 0; reviewTyped = "";
+  }
+  var RV_GRADES = [   // [подпись, значок, класс]
+    ["Не помню", "✗", "g0"], ["Трудно", "~", "g1"], ["Помню", "✓", "g2"],
+  ];
+  // Дорожка сессии: точка на карточку, отвеченные окрашены оценкой, текущая пульсирует.
+  function reviewTrackHtml() {
+    var n = reviewQueue.length;
+    if (n > 24) {
+      return '<span class="cd-rv-prog"><i style="width:' + Math.round(reviewPos / n * 100) + '%"></i></span>';
+    }
+    var html = '<span class="cd-rv-track">';
+    for (var i = 0; i < n; i++) {
+      var lg = reviewLog[i], cls = lg ? "g" + lg.g : (i === reviewPos ? "cur" : "");
+      if (reviewQueue[i] && reviewQueue[i].again) cls += " again";
+      html += '<i class="' + cls + '"></i>';
+    }
+    return html + "</span>";
+  }
+  function reviewTopHtml() {
+    return '<div class="cd-rv-top">' +
+      '<span class="cd-rv-count">' + (reviewWarmup ? "Разминка · " : "Повторение · ") + Math.min(reviewPos + 1, reviewQueue.length) + " / " + reviewQueue.length + "</span>" +
+      reviewTrackHtml() +
+      (reviewUndo ? '<button class="cd-rv-undo" type="button" title="Отменить последнюю оценку">↶ Назад</button>' : "") +
+      '<button class="cd-rv-close" type="button" title="Закрыть">✕</button></div>';
+  }
+  // Сколько карточек этой сессии вернётся завтра и на этой неделе (по свежему расписанию).
+  function reviewReturns() {
+    var t1 = cdDate(1), t7 = cdDate(7), tomorrow = 0, week = 0, seen = {};
+    reviewLog.forEach(function (l) {
+      if (!l.id || seen[l.id]) return; seen[l.id] = true;
+      var rec = state.cards[l.id]; if (!rec || !rec.due) return;
+      if (String(rec.due) <= t1) tomorrow++; else if (String(rec.due) <= t7) week++;
+    });
+    return { tomorrow: tomorrow, week: week };
+  }
+  function reviewDoneHtml() {
+    var wm = (typeof STICKERS !== "undefined" && STICKERS && STICKERS["mascot-win"]) ? "mascot-win" : "mascot-done";
+    var cnt = [0, 0, 0], weak = [], seenWeak = {};
+    reviewLog.forEach(function (l) {
+      if (l.again) return;                                  // повтор внутри сессии не считаем второй раз
+      cnt[l.g]++;
+      if (l.g < 2 && !seenWeak[l.key]) { seenWeak[l.key] = true; weak.push(l); }
+    });
+    var total = cnt[0] + cnt[1] + cnt[2], acc = total ? Math.round((cnt[1] + cnt[2]) / total * 100) : 0;
+    var ret = reviewReturns(), cc = null;
+    try { cc = cardCounts(); } catch (e) {}
+    var more = cc && !reviewWarmup ? cc.due + cc.neu : (cc ? cc.due : 0);
+    var title = (reviewWarmup ? "Разминка сделана! " : "") + (total ? "Повторено " + total + " " + plural(total, ["карточка", "карточки", "карточек"]) : "Готово");
+    var sub = !total ? "" : acc === 100 ? "Все вспомнил — отличная память." : acc >= 70 ? "Хороший результат: большинство — в голове." :
+      "Ничего страшного: трудные карточки вернутся раньше, и с каждым разом будет легче.";
+    var tile = function (k, v, lbl) { return '<div class="cd-rv-st ' + k + '"><b>' + v + "</b><span>" + lbl + "</span></div>"; };
+    var weakHtml = weak.length ? '<div class="cd-rv-weak"><div class="cd-rv-wh">Стоит перечитать</div>' + weak.slice(0, 5).map(function (l) {
+      var cf = lookupFile(l.rel);
+      return '<div class="cd-rv-wi g' + l.g + '"><span class="cd-rv-wq">' + inline(String(l.q || "").replace(/^🤔\s*/, "")) + "</span>" +
+        (cf ? '<button class="cd-rv-open" type="button" data-rel="' + escapeHtml(l.rel) + '" data-hash="' + (l.slug ? "#" + escapeHtml(l.slug) : "") + '">' +
+          escapeHtml(cf.title || cf.name) + " ↗</button>" : "") + "</div>";
+    }).join("") + "</div>" : "";
+    var retTxt = (ret.tomorrow || ret.week) ? '<div class="cd-rv-ret">' + emo("ui-calendar", "📅") + " " +
+      (ret.tomorrow ? "Завтра вернётся " + ret.tomorrow + " " + plural(ret.tomorrow, ["карточка", "карточки", "карточек"]) : "") +
+      (ret.tomorrow && ret.week ? ", " : "") + (ret.week ? (ret.tomorrow ? "" : "На этой неделе вернётся ") + (ret.tomorrow ? "на неделе ещё " : "") + ret.week : "") + "</div>" : "";
+    return '<div class="cd-rv-inner">' + reviewTopHtml() + '<div class="cd-rv-done">' +
+      '<div class="cd-rv-art">' + stickerMarkup(wm, 96) + "</div>" +
+      '<div class="cd-rv-done-t">' + escapeHtml(title) + "</div>" +
+      (sub ? '<div class="cd-rv-done-s">' + escapeHtml(sub) + "</div>" : "") +
+      (total ? '<div class="cd-rv-stats">' + tile("g2", cnt[2], "помню") + tile("g1", cnt[1], "трудно") + tile("g0", cnt[0], "не помню") +
+        tile("acc", acc + "%", "вспомнил") + "</div>" : "") +
+      retTxt + weakHtml +
+      '<div class="cd-rv-done-btns"><button class="cd-rv-close2" type="button">На главную</button>' +
+      (more ? '<button class="cd-rv-more" type="button">Ещё карточки (' + more + ")</button>" : "") + "</div>" +
+      "</div></div>";
   }
   function renderReviewCard() {
     if (!reviewEl) return;
     syncReviewBell();
     if (reviewPos >= reviewQueue.length) {          // сессия окончена — итог
-      var wm = (typeof STICKERS !== "undefined" && STICKERS && STICKERS["mascot-win"]) ? "mascot-win" : "mascot-done";
       if (reviewWarmup) state.warmupDone = cdDate(0);
-      setHTML(reviewEl, '<div class="cd-rv-inner"><div class="cd-rv-done">' +
-        '<div class="cd-rv-art">' + stickerMarkup(wm, 96) + "</div>" +
-        '<div class="cd-rv-done-t">' + (reviewWarmup ? "Разминка сделана! " : "") + "Повторено " + reviewOk + " " + plural(reviewOk, ["карточка", "карточки", "карточек"]) + "!</div>" +
-        '<div class="cd-rv-done-s">' + (reviewWarmup ? "Мозг разогрет — самое время для новой темы." : "Отлично. Возвращайся завтра — интервалы уже назначены.") + "</div>" +
-        '<button class="cd-rv-close2" type="button">На главную</button></div></div>');
+      setHTML(reviewEl, reviewDoneHtml());
       recordActivity(); saveState();
       return;
     }
     var c = reviewQueue[reviewPos];
     var cf = lookupFile(c.rel);
     var from = cf ? escapeHtml(cf.title || cf.name) + (c.sec ? " → " + escapeHtml(c.sec) : "") : "";
-    var pct = Math.round(reviewPos / reviewQueue.length * 100);
-    function gradeBtn(g, txt) {
-      var sub = c.missed ? ["через день", "через 3 дня", "больше не спрашивать"][g] : ivlLabel(cdPreview(c.id, g));
-      return '<button class="cd-rv-grade" data-g="' + g + '" type="button">' + txt + '<small>' + escapeHtml(sub) + "</small></button>";
+    var gcol = cf && cf.groupColor ? ' style="--rvg:' + escapeHtml(cf.groupColor) + '"' : "";
+    function gradeBtn(g) {
+      var sub = c.again ? ["не вышло", "почти", "закрепил"][g] : c.missed ? ["через день", "через 3 дня", "больше не спрашивать"][g] : ivlLabel(cdPreview(c.id, g));
+      var G = RV_GRADES[g];
+      return '<button class="cd-rv-grade ' + G[2] + '" data-g="' + g + '" type="button"><span class="cd-rv-gi">' + G[1] + "</span>" +
+        '<span class="cd-rv-gt">' + G[0] + "<small>" + escapeHtml(sub) + "</small></span></button>";
     }
-    setHTML(reviewEl, '<div class="cd-rv-inner">' +
-      '<div class="cd-rv-top"><span class="cd-rv-count">' + (reviewWarmup ? "Разминка · " : "") + (reviewPos + 1) + " / " + reviewQueue.length + "</span>" +
-      '<span class="cd-rv-prog"><i style="width:' + pct + '%"></i></span>' +
-      '<button class="cd-rv-close" type="button" title="Закрыть">✕</button></div>' +
-      '<div class="cd-rv-card">' +
-      (from ? '<div class="cd-rv-from">из темы: ' + from + "</div>" : "") +
+    var streak = reviewStreak >= 3 ? '<span class="cd-rv-streak" title="Подряд без «не помню»">' + emo("ui-streak", "🔥") + " " + reviewStreak + " подряд</span>" : "";
+    setHTML(reviewEl, '<div class="cd-rv-inner">' + reviewTopHtml() +
+      '<div class="cd-rv-card"' + gcol + ">" +
+      '<div class="cd-rv-meta">' + (from ? '<span class="cd-rv-from">' + from + "</span>" : "") +
+      (c.again ? '<span class="cd-rv-badge">повтор</span>' : (cdCardState(c.id).status === "new" && !c.missed ? '<span class="cd-rv-badge new">новая</span>' : "")) + streak + "</div>" +
       '<div class="cd-rv-q">' + (c.md ? renderMarkdown(c.q, null) : inline(c.q)) + "</div>" +
-      '<div class="cd-rv-a" hidden>' + (c.md ? renderMarkdown(c.a, null) : inline(c.a)) + "</div>" +
+      '<div class="cd-rv-recall"><details class="cd-rv-own"' + (reviewTyped ? " open" : "") + "><summary>" + emo("ui-pencil", "✎") + " Сначала вспомни — запиши ответ своими словами (необязательно)</summary>" +
+      '<textarea class="cd-rv-in" rows="2" placeholder="Как объяснил бы другу?"></textarea></details></div>' +
+      '<div class="cd-rv-a" hidden>' + '<div class="cd-rv-mine" hidden><span>Твой ответ</span><div class="cd-rv-mt"></div></div>' +
+      '<div class="cd-rv-al">Ответ</div>' + (c.md ? renderMarkdown(c.a, null) : inline(c.a)) + "</div>" +
       '<div class="cd-rv-ctl"><button class="cd-rv-show" type="button">Показать ответ</button>' +
-      '<span class="cd-rv-rate" hidden>' + gradeBtn(0, "Не помню") + gradeBtn(1, "Трудно") + gradeBtn(2, "Помню") + "</span>" +
+      '<span class="cd-rv-rate" hidden>' + gradeBtn(0) + gradeBtn(1) + gradeBtn(2) + "</span>" +
       (cf ? '<button class="cd-rv-open" type="button" data-rel="' + escapeHtml(c.rel) + '" data-hash="' + (c.slug ? "#" + escapeHtml(c.slug) : "") + '" title="Прочитать раздел, откуда эта карточка">открыть раздел ↗</button>' : "") +
       "</div></div>" +
-      '<div class="cd-rv-hint">Отвечай честно: от оценки зависит, когда карточка вернётся.</div></div>');
+      '<div class="cd-rv-hint">' + (c.again ? "Эта карточка уже была «не помню» — закрепляем, расписание не меняется." : "Отвечай честно: от оценки зависит, когда карточка вернётся.") + "</div></div>");
+    var ta = reviewEl.querySelector(".cd-rv-in");
+    if (ta) { ta.value = reviewTyped; ta.addEventListener("input", function () { reviewTyped = ta.value; }); }
   }
+  function cloneOrUndef(v) { return v === undefined ? undefined : JSON.parse(JSON.stringify(v)); }
   function reviewGrade(g) {
     var c = reviewQueue[reviewPos]; if (!c) return;
+    // снимок для «↶ Назад»: всё, что меняет оценка
+    reviewUndo = {
+      pos: reviewPos, ok: reviewOk, streak: reviewStreak, logLen: reviewLog.length, queueLen: reviewQueue.length,
+      id: c.id, card: cloneOrUndef(state.cards[c.id]), missedKey: c.missed || "", missed: c.missed ? cloneOrUndef(state.missed[c.missed]) : undefined,
+      newToday: cloneOrUndef(state.newToday), warm: state.warmupDone, typed: reviewTyped,
+    };
+    reviewLog[reviewPos] = { g: g, id: c.missed ? "" : c.id, key: c.id, q: c.q, rel: c.rel, slug: c.slug, again: !!c.again };
+    reviewStreak = g >= 1 ? reviewStreak + 1 : 0;
+    reviewTyped = "";
+    if (c.again) {                    // повтор внутри сессии: расписание уже назначено первой оценкой
+      reviewPos++; renderReviewCard(); return;
+    }
     if (c.missed) {                   // загадка из разбора: своё простое расписание
       if (g >= 2) delete state.missed[c.missed];
       else if (state.missed[c.missed]) state.missed[c.missed].due = cdDate(g ? 3 : 1);
@@ -7600,17 +8274,39 @@
     }
     if (cdCardState(c.id).status === "new") noteNewSeen();
     cdSchedule(c.id, g);
+    try { bumpCount("graded"); } catch (e) {}
     if (g >= 1) reviewOk++;          // «трудно»/«помню» считаем как повторённую
+    // «Не помню» — ещё раз в конце этой же сессии (один раз): вспомнить, пока ответ свежий, полезнее всего
+    if (g === 0) reviewQueue.push(Object.assign({}, c, { again: true }));
     reviewPos++;
     renderReviewCard();
+  }
+  function reviewUndoLast() {
+    var u = reviewUndo; if (!u) return;
+    if (u.id && !u.missedKey) { if (u.card === undefined) delete state.cards[u.id]; else state.cards[u.id] = u.card; }
+    if (u.missedKey) { if (u.missed === undefined) delete state.missed[u.missedKey]; else state.missed[u.missedKey] = u.missed; }
+    if (u.newToday === undefined) delete state.newToday; else state.newToday = u.newToday;
+    state.warmupDone = u.warm;
+    reviewQueue.length = u.queueLen; reviewLog.length = u.logLen;
+    reviewPos = u.pos; reviewOk = u.ok; reviewStreak = u.streak; reviewTyped = u.typed || "";
+    reviewUndo = null;
+    saveState(); renderReviewCard();
   }
   function onReviewClick(e) {
     var t = e.target;
     if (t.closest && t.closest(".cd-rv-close, .cd-rv-close2")) { hideReview(); showHome(); return; }
+    if (t.closest && t.closest(".cd-rv-undo")) { reviewUndoLast(); return; }
+    if (t.closest && t.closest(".cd-rv-more")) { startReview(); return; }
     if (t.closest && t.closest(".cd-rv-show")) {
       var card = reviewEl.querySelector(".cd-rv-card");
-      if (card) { var a = card.querySelector(".cd-rv-a"), rate = card.querySelector(".cd-rv-rate"), show = card.querySelector(".cd-rv-show");
-        if (a) a.hidden = false; if (rate) rate.hidden = false; if (show) show.hidden = true; }
+      if (card) {
+        var a = card.querySelector(".cd-rv-a"), rate = card.querySelector(".cd-rv-rate"), show = card.querySelector(".cd-rv-show");
+        var mine = card.querySelector(".cd-rv-mine"), own = card.querySelector(".cd-rv-recall");
+        if (mine && reviewTyped.trim()) { mine.hidden = false; mine.querySelector(".cd-rv-mt").textContent = reviewTyped.trim(); }
+        if (own) own.hidden = true;
+        if (a) a.hidden = false; if (rate) rate.hidden = false; if (show) show.hidden = true;
+        card.classList.add("flipped");
+      }
       return;
     }
     var gb = t.closest && t.closest(".cd-rv-grade");
@@ -7623,6 +8319,10 @@
     if (homeEl) homeEl.hidden = true;
     reviewEl.hidden = false; winEl.classList.add("home");
     winEl.classList.add("reviewing");   // режим повторения: без списка материалов, карточка крупнее
+    // пейзаж палитры — приглушённым фоном (если на главной выбран «Пейзаж»)
+    var bg = state.homeBg === "none" || state.homeBg === "stars" ? null : homeBgImage();
+    reviewEl.classList.toggle("has-bg", !!bg);
+    if (bg) reviewEl.style.setProperty("--rv-bg", "url(" + bg + ")"); else reviewEl.style.removeProperty("--rv-bg");
     renderReviewCard();
     syncHead();
   }
@@ -7645,7 +8345,14 @@
       }
       var res = resolveRel(f.rel, src);
       var base = (d.root || "").replace(/\\/g, "/");
-      if (base) img.src = "file:///" + (base + "/" + res.rel).replace(/^\/+/, "");
+      // Оболочка VS Code отклоняет file:// — картинку отдаёт vscode-file:// (resUrl; сегменты кодируются).
+      if (base) {
+        var fu = "file:///" + (base + "/" + res.rel).replace(/^\/+/, "").split("/").map(function (seg) {
+          try { return encodeURIComponent(decodeURIComponent(seg)).replace(/%3A/gi, ":"); } catch (e) { return encodeURIComponent(seg); }
+        }).join("/");
+        var ru = resUrl(fu);
+        if (ru) img.src = ru;
+      }
     });
   }
   function resolveImages() { resolveImagesIn(articleEl, current); }
@@ -7676,6 +8383,1278 @@
     try {
       navigator.clipboard.writeText(text).then(function () { flashCopy(btn); }, function () { legacyCopy(text); flashCopy(btn); });
     } catch (err) { legacyCopy(text); flashCopy(btn); }
+  }
+  // ==== runtime/12-progress-map.js — освоение тем, карта знаний, слабые места, экзамен недели ====
+  // ---------------------------------------------------------------------------
+  //  Темы справочника как граф: у каждой ref/*.md в шапке есть строка «**Опирается на:** [..](..)» —
+  //  из неё берутся связи. Освоение темы (0–100) складывается из того, что ученик реально сделал:
+  //  отметка «Изучено», прочитанные разделы, крепость карточек, решённые задания и задачи, босс,
+  //  итоговая проверка; ошибки в разборах, ещё не отработанные, немного снижают оценку.
+  // ---------------------------------------------------------------------------
+  var _topics = { sig: "", list: [] };
+  function shortTitle(f) { return String(f.title || f.name || "").replace(/`/g, "").split(/[:(—]/)[0].trim(); }
+  // Все ```-блоки нужного вида в Markdown → тела блоков.
+  function fenceBodies(md, kind) {
+    var out = [], re = new RegExp("^```+[ \\t]*" + kind + "[^\\n]*\\n([\\s\\S]*?)\\n```+[ \\t]*$", "gim"), m;
+    md = String(md || "").replace(/\r\n?/g, "\n");
+    while ((m = re.exec(md))) out.push(m[1]);
+    return out;
+  }
+  // Ключ босса — тот же, что у renderBoss: «@id» или хэш от «boss:<название>».
+  function bossIdOf(src) {
+    var raw = String(src).replace(/\r\n?/g, "\n").replace(/^\n+|\n+$/g, ""), title = "Итоговое задание";
+    var m = raw.match(/^#\s+(.*)\n?/);
+    if (m) { title = m[1].trim(); raw = raw.slice(m[0].length); }
+    return fenceKey(raw, function () { return "boss:" + title; }).id;
+  }
+  function progressTopics() {
+    var d = DATA(); if (!d || d.lazy) return [];
+    var sig = d.generatedAt + ":" + d.files.length;
+    if (_topics.sig === sig) return _topics.list;
+    var list = [], byRel = {};
+    d.files.forEach(function (f) {
+      if (!/^ref\//i.test(f.rel)) return;
+      var head = String(f.md || "").slice(0, 4000);
+      var m = head.match(/\*\*Опирается на:\*\*([^\n]*)/);
+      if (!m) return;                                       // словари и справка — не темы курса
+      var deps = [], re = /\]\(([^)#\s]+\.md)/g, x;
+      while ((x = re.exec(m[1]))) deps.push(resolveRel(f.rel, x[1]).rel.toLowerCase());
+      var lv = head.match(/\*\*Уровень:\*\*([^\n·]*)/);
+      // метки уровня в доках — красный/жёлтый кружок (U+1F534 / U+1F7E1)
+      var level = lv && /🔴/.test(lv[1]) ? 3 : lv && /🟡/.test(lv[1]) ? 2 : 1;
+      var t = { rel: f.rel, f: f, deps: deps, level: level, n: topicNum(f.rel), short: shortTitle(f), cards: [], ch: [], boss: [], tasks: [] };
+      list.push(t); byRel[f.rel.toLowerCase()] = t;
+    });
+    list.forEach(function (t) {
+      t.deps = t.deps.filter(function (r) { return byRel[r] && byRel[r] !== t; }).map(function (r) { return byRel[r].rel; });
+    });
+    // Глубина = самый длинный путь от корня (колонка на карте). Цикл в ссылках не зациклит расчёт.
+    var depth = {};
+    function dep(t, seen) {
+      if (depth[t.rel] !== undefined) return depth[t.rel];
+      if (seen[t.rel]) return 0;
+      seen[t.rel] = 1;
+      var v = 0;
+      t.deps.forEach(function (r) { v = Math.max(v, dep(byRel[r.toLowerCase()], seen) + 1); });
+      depth[t.rel] = v;
+      return v;
+    }
+    list.forEach(function (t) { t.depth = dep(t, {}); });
+    // Что в теме можно «сделать»: карточки, задания, боссы — и задачи задачника той же темы.
+    collectAllCards().forEach(function (c) { var t = byRel[String(c.rel).toLowerCase()]; if (t && t.cards.indexOf(c.id) === -1) t.cards.push(c.id); });
+    collectChallenges().forEach(function (c) { var t = byRel[String(c.rel).toLowerCase()]; if (t) t.ch.push(c.id); });
+    list.forEach(function (t) { fenceBodies(t.f.md, "boss").forEach(function (b) { t.boss.push(bossIdOf(b)); }); });
+    collectTasks(false).forEach(function (k) {
+      var base = String(k.rel).toLowerCase().split("/").pop();
+      list.forEach(function (t) { if (String(t.rel).toLowerCase().split("/").pop() === base) t.tasks.push(k.key); });
+    });
+    list.sort(function (a, b) { return a.depth - b.depth || a.n - b.n; });
+    _topics = { sig: sig, list: list };
+    return list;
+  }
+  function topicByRel(rel) {
+    var l = progressTopics(), r = String(rel || "").toLowerCase();
+    for (var i = 0; i < l.length; i++) if (l[i].rel.toLowerCase() === r) return l[i];
+    return null;
+  }
+  function missedIn(rel) {
+    var n = 0;
+    Object.keys(state.missed).forEach(function (k) { var m = state.missed[k]; if (m && m.rel === rel) n++; });
+    return n;
+  }
+  // Карточка «крепкая», когда интервал повторения дорос до двух недель.
+  function cardStrength(id) { var r = state.cards[id]; return r && r.ivl ? Math.min(1, r.ivl / 14) : 0; }
+  // Освоение темы: { pct, parts: [[название, доля 0..1]], miss }.
+  function topicMastery(t) {
+    var parts = [], rel = t.rel;
+    function add(name, v, w) { parts.push([name, Math.max(0, Math.min(1, v)), w]); }
+    add("отмечена «Изучено»", state.read[rel] ? 1 : 0, 3);
+    if (t.f.sections) add("прочитано разделов", Object.keys(state.secSeen[rel] || {}).length / t.f.sections, 1);
+    if (t.cards.length) add("крепость карточек", t.cards.reduce(function (s, id) { return s + cardStrength(id); }, 0) / t.cards.length, 3);
+    if (t.ch.length) add("решено заданий", t.ch.filter(function (id) { return state.challenge[id]; }).length / t.ch.length, 2);
+    if (t.tasks.length) add("решено задач задачника", t.tasks.filter(function (k) { return state.solved[k]; }).length / t.tasks.length, 2);
+    if (t.boss.length) add("босс темы", t.boss.filter(function (id) { return state.boss[id]; }).length / t.boss.length, 2);
+    if (examPassedTopics()[t.n] && t.n) add("итоговая проверка", 1, 1);
+    var v = 0, w = 0;
+    parts.forEach(function (p) { v += p[1] * p[2]; w += p[2]; });
+    var miss = missedIn(rel);
+    var pct = w ? Math.round(Math.max(0, v / w - Math.min(0.2, miss * 0.05)) * 100) : 0;
+    return { pct: pct, parts: parts, miss: miss };
+  }
+  function masteryPct(t) { return topicMastery(t).pct; }
+  // Тема «открыта», когда её опоры освоены хотя бы на 40 % (или она уже начата сама).
+  var UNLOCK_AT = 40;
+  function topicUnlocked(t) {
+    if (!t.deps.length || state.read[t.rel] || masteryPct(t) > 0) return true;
+    return t.deps.every(function (r) { var d = topicByRel(r); return !d || state.read[d.rel] || masteryPct(d) >= UNLOCK_AT; });
+  }
+  function masteryTone(p) { return p >= 80 ? "m4" : p >= 60 ? "m3" : p >= 35 ? "m2" : p > 0 ? "m1" : "m0"; }
+
+  // ---- Слабые места: начатые темы с низким освоением и конкретный следующий шаг ----
+  function weakSpots(limit) {
+    var recent = state.recent || [];
+    var out = progressTopics().map(function (t) {
+      var m = topicMastery(t);
+      var started = state.read[t.rel] || m.pct > 0 || recent.indexOf(t.rel) !== -1;
+      return { t: t, m: m, started: started };
+    }).filter(function (x) { return x.started && x.m.pct < 60; });
+    out.sort(function (a, b) { return a.m.pct - b.m.pct; });
+    return out.slice(0, limit || 3).map(function (x) { x.act = weakAction(x.t, x.m); return x; });
+  }
+  // Что сделать с темой прямо сейчас — самое полезное из доступного.
+  function weakAction(t, m) {
+    var due = t.cards.filter(function (id) { var s = cdCardState(id).status; return s === "due"; }).length;
+    var weakCards = t.cards.filter(function (id) { return cardStrength(id) < 0.5; }).length;
+    if (due) return { kind: "cards", label: "Повторить карточки темы · " + due, why: due + " " + plural(due, ["карточка ждёт", "карточки ждут", "карточек ждут"]) + " повторения" };
+    if (m.miss) return { kind: "miss", label: "Разобрать ошибки · " + m.miss, why: "ошибки в разборах этой темы ещё не отработаны" };
+    var sec = nextSection(t.f);
+    if (!state.read[t.rel] && sec) return { kind: "read", label: "Дочитать: «" + sec.text + "»", hash: sec.slug, why: "тема не дочитана" };
+    var ch = t.ch.filter(function (id) { return !state.challenge[id]; });
+    if (ch.length) return { kind: "task", label: "Решить задание темы", id: ch[0], why: "задания темы не решены" };
+    if (weakCards) return { kind: "cards", label: "Закрепить карточки · " + weakCards, why: "карточки ещё не окрепли" };
+    return { kind: "read", label: "Перечитать тему", hash: "", why: "освоение пока ниже 60 %" };
+  }
+  function runWeakAction(rel, kind, extra) {
+    var t = topicByRel(rel); if (!t) return;
+    hideProgress();
+    if (kind === "cards") { startTopicReview(t); return; }
+    if (kind === "miss") { startWarmup(); return; }
+    if (kind === "task" && extra) {
+      openFile(t.rel);
+      setTimeout(function () {
+        var box = articleEl && articleEl.querySelector('[data-id="' + cssEscape(extra) + '"]');
+        if (box) { unfoldContaining(box); box.scrollIntoView({ block: "center", behavior: "smooth" }); }
+      }, 120);
+      return;
+    }
+    openFile(t.rel, extra ? "#" + extra : undefined);
+  }
+  // Повторение только по одной теме: сперва «пора», потом слабые, потом новые (в пределах лимита дня).
+  function startTopicReview(t) {
+    var all = collectAllCards().filter(function (c) { return t.cards.indexOf(c.id) !== -1; }), seen = {}, due = [], weak = [], neu = [];
+    all.forEach(function (c) {
+      if (seen[c.id]) return; seen[c.id] = 1;
+      var s = cdCardState(c.id).status;
+      if (s === "due") due.push(c); else if (s === "new") neu.push(c); else if (cardStrength(c.id) < 0.5) weak.push(c);
+    });
+    reviewQueue = due.concat(weak, neu.slice(0, Math.max(3, newLeftToday()))).slice(0, 20);
+    resetReviewSession(false);
+    if (!reviewQueue.length) { openFile(t.rel); return; }
+    showReview();
+  }
+  function weakHomeHtml() {
+    var ws = []; try { ws = weakSpots(3); } catch (e) {}
+    if (!ws.length) return "";
+    return '<div class="cd-weak"><div class="cd-weak-h">Слабые места<span>что подтянуть</span></div>' + ws.map(function (x) {
+      return '<div class="cd-weak-row"><div class="cd-weak-main"><b>' + escapeHtml(x.t.short) + "</b>" +
+        '<span class="cd-mbar ' + masteryTone(x.m.pct) + '"><i style="width:' + x.m.pct + '%"></i></span><em>' + x.m.pct + "%</em>" +
+        '<small>' + escapeHtml(x.act.why) + "</small></div>" +
+        '<button class="cd-weak-go" type="button" data-wrel="' + escapeHtml(x.t.rel) + '" data-wk="' + x.act.kind + '" data-wx="' +
+        escapeHtml(x.act.hash || x.act.id || "") + '">' + escapeHtml(x.act.label) + " →</button></div>";
+    }).join("") + "</div>";
+  }
+
+  // ---- Карта знаний (SVG): колонки — глубина по «Опирается на», цвет — освоение ----
+  function knowledgeMapHtml() {
+    var list = progressTopics();
+    if (list.length < 2) return '<p class="cd-pg-empty">Карта появится, когда загрузятся материалы справочника.</p>';
+    var cols = {};
+    list.forEach(function (t) { (cols[t.depth] = cols[t.depth] || []).push(t); });
+    var depths = Object.keys(cols).map(Number).sort(function (a, b) { return a - b; });
+    var maxRows = Math.max.apply(null, depths.map(function (k) { return cols[k].length; }));
+    var CW = 128, RH = 62, W = depths.length * CW + 20, H = maxRows * RH + 30, pos = {};
+    depths.forEach(function (k, ci) {
+      var col = cols[k], off = (maxRows - col.length) * RH / 2;
+      col.forEach(function (t, ri) { pos[t.rel] = { x: 20 + ci * CW + 40, y: 26 + off + ri * RH }; });
+    });
+    var next = null;
+    for (var i = 0; i < list.length && !next; i++) if (!state.read[list[i].rel] && topicUnlocked(list[i])) next = list[i];
+    var edges = "", nodes = "";
+    list.forEach(function (t) {
+      var p = pos[t.rel];
+      t.deps.forEach(function (r) {
+        var q = pos[r]; if (!q) return;
+        var mx = (q.x + p.x) / 2;
+        edges += '<path class="cd-km-e' + (state.read[r] || masteryPct(topicByRel(r)) >= UNLOCK_AT ? " on" : "") + '" d="M' + (q.x + 13) + " " + q.y + " C" + mx + " " + q.y + " " + mx + " " + p.y + " " + (p.x - 13) + " " + p.y + '"/>';
+      });
+    });
+    list.forEach(function (t) {
+      var p = pos[t.rel], pct = masteryPct(t), open = topicUnlocked(t);
+      var C = 2 * Math.PI * 15, off = C * (1 - pct / 100);
+      var label = t.short.length > 16 ? t.short.slice(0, 15) + "…" : t.short;
+      nodes += '<g class="cd-km-n ' + masteryTone(pct) + (open ? "" : " lock") + (t === next ? " next" : "") + '" data-krel="' + escapeHtml(t.rel) + '" tabindex="0" role="button">' +
+        "<title>" + escapeHtml(t.f.title || t.short) + " — освоено " + pct + "%" + (open ? "" : " · сначала опоры: " + t.deps.map(function (r) { var d = topicByRel(r); return d ? d.short : r; }).join(", ")) + "</title>" +
+        '<circle class="cd-km-bg" cx="' + p.x + '" cy="' + p.y + '" r="15"/>' +
+        '<circle class="cd-km-fg" cx="' + p.x + '" cy="' + p.y + '" r="15" style="stroke-dasharray:' + C.toFixed(1) + ";stroke-dashoffset:" + off.toFixed(1) + '" transform="rotate(-90 ' + p.x + " " + p.y + ')"/>' +
+        '<text class="cd-km-num" x="' + p.x + '" y="' + (p.y + 4) + '">' + (t.n || "•") + "</text>" +
+        '<text class="cd-km-t" x="' + p.x + '" y="' + (p.y + 30) + '">' + escapeHtml(label) + "</text></g>";
+    });
+    var masteredN = list.filter(function (t) { return masteryPct(t) >= 80; }).length;
+    var avg = Math.round(list.reduce(function (s, t) { return s + masteryPct(t); }, 0) / list.length);
+    return '<div class="cd-km-sum"><span><b>' + masteredN + "</b> из " + list.length + " тем освоено на 80 %+</span><span>среднее освоение <b>" + avg + "%</b></span>" +
+      (next ? '<button class="cd-km-next" type="button" data-krel="' + escapeHtml(next.rel) + '">Дальше: ' + escapeHtml(next.short) + " →</button>" : "") + "</div>" +
+      '<div class="cd-km-wrap"><svg class="cd-km" viewBox="0 0 ' + W + " " + H + '" width="' + W + '" height="' + H + '" aria-label="Карта знаний">' + edges + nodes + "</svg></div>" +
+      '<div class="cd-km-legend"><span class="m0">не начата</span><span class="m1">начата</span><span class="m2">35 %+</span><span class="m3">60 %+</span><span class="m4">освоена</span><span class="lock">бледная — сначала опоры: изучить или освоить на ' + UNLOCK_AT + " %</span></div>" +
+      '<div class="cd-km-detail" hidden></div>';
+  }
+  function kmDetailHtml(rel) {
+    var t = topicByRel(rel); if (!t) return "";
+    var m = topicMastery(t), act = weakAction(t, m);
+    return '<div class="cd-kd-h"><b>' + escapeHtml(t.f.title || t.short) + '</b><span class="cd-mbar ' + masteryTone(m.pct) + '"><i style="width:' + m.pct + '%"></i></span><em>' + m.pct + "%</em></div>" +
+      '<ul class="cd-kd-parts">' + m.parts.map(function (p) {
+        return "<li><span>" + escapeHtml(p[0]) + '</span><span class="cd-mbar sm"><i style="width:' + Math.round(p[1] * 100) + '%"></i></span><em>' + Math.round(p[1] * 100) + "%</em></li>";
+      }).join("") + (m.miss ? '<li class="bad"><span>неотработанных ошибок</span><em>' + m.miss + "</em></li>" : "") + "</ul>" +
+      (t.deps.length ? '<div class="cd-kd-deps">Опирается на: ' + t.deps.map(function (r) { var d = topicByRel(r); return d ? escapeHtml(d.short) + " (" + masteryPct(d) + "%)" : ""; }).join(", ") + "</div>" : "") +
+      '<div class="cd-kd-btns"><button class="cd-weak-go" type="button" data-wrel="' + escapeHtml(t.rel) + '" data-wk="' + act.kind + '" data-wx="' + escapeHtml(act.hash || act.id || "") + '">' + escapeHtml(act.label) + " →</button>" +
+      '<button class="cd-kd-open" type="button" data-krel2="' + escapeHtml(t.rel) + '">Открыть тему</button></div>';
+  }
+
+  // ---- Экзамен недели: 10 вопросов из слабых тем, 10 минут, первый ответ засчитывается ----
+  var WEEKLY_N = 10, WEEKLY_MS = 10 * 60000;
+  function weekKey(dt) {
+    var d = new Date(dt || Date.now()); d.setHours(12, 0, 0, 0);
+    d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);                // четверг этой недели (ISO)
+    var y = d.getFullYear(), jan4 = new Date(y, 0, 4, 12);
+    var w = 1 + Math.round(((d - jan4) / 86400000 - 3 + (jan4.getDay() + 6) % 7) / 7);
+    return y + "-W" + (w < 10 ? "0" + w : w);
+  }
+  // Вопросы ```quiz темы: { q, opts: [{ok, text}], expl, rel }.
+  function quizQuestionsOf(f) {
+    var out = [];
+    fenceBodies(f.md, "quiz").forEach(function (src) {
+      var lines = String(src).split("\n");
+      if (/^@exam\s/.test((lines[0] || "").trim())) lines.shift();
+      var cur = null;
+      function flush() { if (cur && cur.opts.length > 1 && cur.opts.some(function (o) { return o.ok; })) out.push(cur); cur = null; }
+      lines.forEach(function (ln) {
+        var t = ln.trim();
+        var mq = t.match(/^(?:В|Q|Вопрос)\s*[:.)]\s*(.*)$/i);
+        if (mq) { flush(); cur = { q: mq[1], opts: [], expl: "", rel: f.rel }; return; }
+        if (!cur) { if (t) cur = { q: t, opts: [], expl: "", rel: f.rel }; return; }
+        var mo = t.match(/^([+\-])\s+(.*)$/);
+        if (mo) { cur.opts.push({ ok: mo[1] === "+", text: mo[2] }); return; }
+        var me = t.match(/^[=>]\s+(.*)$/);
+        if (me) { cur.expl += (cur.expl ? " " : "") + me[1]; return; }
+        if (t && !cur.opts.length) cur.q += " " + t;
+      });
+      flush();
+    });
+    return out;
+  }
+  function buildWeeklyExam() {
+    var wk = weekKey(), rnd = seededRand("weekly:" + wk);
+    var topics = progressTopics().map(function (t) { return { t: t, p: masteryPct(t), qs: quizQuestionsOf(t.f) }; })
+      .filter(function (x) { return x.qs.length; });
+    var started = topics.filter(function (x) { return state.read[x.t.rel] || x.p > 0; });
+    var pool = (started.length ? started : topics.slice(0, 3)).sort(function (a, b) { return a.p - b.p; });
+    // Слабые темы — первыми и почаще: круговой отбор по отсортированному списку.
+    pool.forEach(function (x) {
+      for (var i = x.qs.length - 1; i > 0; i--) { var j = Math.floor(rnd() * (i + 1)), tmp = x.qs[i]; x.qs[i] = x.qs[j]; x.qs[j] = tmp; }
+    });
+    var out = [], round = 0;
+    while (out.length < WEEKLY_N && round < 20) {
+      var took = false;
+      for (var k = 0; k < pool.length && out.length < WEEKLY_N; k++) {
+        if (round < pool[k].qs.length && (k < 3 || round < 2)) { out.push(pool[k].qs[round]); took = true; }
+      }
+      if (!took) break;
+      round++;
+    }
+    if (out.length < WEEKLY_N) {
+      topics.forEach(function (x) { x.qs.forEach(function (q) { if (out.length < WEEKLY_N && out.indexOf(q) === -1) out.push(q); }); });
+    }
+    out.forEach(function (q) {                                   // варианты — в своём порядке на эту неделю
+      for (var i = q.opts.length - 1; i > 0; i--) { var j = Math.floor(rnd() * (i + 1)), tmp = q.opts[i]; q.opts[i] = q.opts[j]; q.opts[j] = tmp; }
+    });
+    return { wk: wk, qs: out };
+  }
+  var weekly = null;   // идущий экзамен: { wk, qs, i, right, answers, t0, timer }
+  function weeklyBest() { var r = state.weekly[weekKey()]; return r && typeof r.best === "number" ? r : null; }
+  function weeklyHomeHtml() {
+    var r = weeklyBest(), prog = progressTopics();
+    if (!prog.length || !prog.some(function (t) { return quizQuestionsOf(t.f).length; })) return "";
+    return '<div class="cd-home-warm cd-weekly' + (r ? " done" : "") + '" role="button" tabindex="0"><span class="cd-hw-ic">' + emo("icon-route", "") + "</span>" +
+      '<div class="cd-hc-main"><div class="cd-hc-lbl">Экзамен недели' + (r ? " · сдан" : "") + "</div>" +
+      '<div class="cd-hc-title">' + (r ? "Лучший результат: " + r.best + " из " + r.total : WEEKLY_N + " вопросов из слабых тем · 10 минут") + "</div>" +
+      '<div class="cd-hc-meta">' + (r ? "можно пересдать — засчитается лучший" : "первый ответ на вопрос засчитывается, ошибки вернутся в разминку") + "</div></div>" +
+      '<div class="cd-hc-arrow">→</div></div>';
+  }
+  function weeklyIntroHtml() {
+    var ex = buildWeeklyExam(), r = weeklyBest(), rels = {};
+    ex.qs.forEach(function (q) { rels[q.rel] = 1; });
+    var names = Object.keys(rels).map(function (rel) { var t = topicByRel(rel); return t ? t.short : rel; });
+    if (!ex.qs.length) return '<p class="cd-pg-empty">Нет вопросов для экзамена: в темах пока нет блоков «Проверь себя».</p>';
+    var hist = Object.keys(state.weekly).sort().reverse().slice(0, 6).map(function (k) {
+      var h = state.weekly[k]; return "<li><span>" + escapeHtml(k.replace("-W", ", неделя ")) + "</span><b>" + h.best + " / " + h.total + "</b></li>";
+    }).join("");
+    return '<div class="cd-wk-intro"><p>' + ex.qs.length + " " + plural(ex.qs.length, ["вопрос", "вопроса", "вопросов"]) + " на " + (WEEKLY_MS / 60000) +
+      " минут. Темы этой недели: <b>" + escapeHtml(names.join(", ")) + "</b> — сначала самые слабые.</p>" +
+      "<p>Засчитывается первый ответ. Вопросы, где ошибёшься, придут в «Разминку дня».</p>" +
+      (r ? '<p class="cd-wk-best">На этой неделе лучший результат: <b>' + r.best + " из " + r.total + "</b></p>" : "") +
+      '<button class="cd-wk-start" type="button">' + (r ? "Пересдать" : "Начать экзамен") + "</button>" +
+      (hist ? '<div class="cd-wk-hist"><div>Прошлые недели</div><ul>' + hist + "</ul></div>" : "") + "</div>";
+  }
+  function weeklyStart() {
+    var ex = buildWeeklyExam(); if (!ex.qs.length) return;
+    weeklyStop();
+    weekly = { wk: ex.wk, qs: ex.qs, i: 0, right: 0, answers: [], t0: Date.now(), timer: null };
+    weeklyArm();
+    renderWeekly();
+  }
+  function weeklyArm() { if (weekly && !weekly.done) weekly.timer = setTimeout(function () { weeklyTick(); weeklyArm(); }, 1000); }
+  function weeklyStop() { if (weekly && weekly.timer) clearTimeout(weekly.timer); if (weekly) weekly.timer = null; }
+  function weeklyLeft() { return weekly ? Math.max(0, WEEKLY_MS - (Date.now() - weekly.t0)) : 0; }
+  function mmss(ms) { var s = Math.round(ms / 1000); return Math.floor(s / 60) + ":" + (s % 60 < 10 ? "0" : "") + (s % 60); }
+  function weeklyTick() {
+    if (!weekly || weekly.done) { weeklyStop(); return; }
+    var tEl = progressEl && progressEl.querySelector(".cd-wk-timer");
+    if (tEl) tEl.textContent = mmss(weeklyLeft());
+    if (weeklyLeft() <= 0) weeklyFinish(true);
+  }
+  function renderWeekly() {
+    var box = progressEl && progressEl.querySelector('.cd-pg-page[data-pg="weekly"]'); if (!box || !weekly) return;
+    if (weekly.done) { setHTML(box, weeklyResultHtml()); return; }
+    var q = weekly.qs[weekly.i], a = weekly.answers[weekly.i], t = topicByRel(q.rel);
+    var opts = q.opts.map(function (o, k) {
+      var cls = a == null ? "" : (o.ok ? " right" : (a === k ? " wrong" : ""));
+      return '<button class="cd-wk-opt' + cls + '" type="button" data-k="' + k + '"' + (a == null ? "" : " disabled") + ">" + inline(o.text) + "</button>";
+    }).join("");
+    setHTML(box, '<div class="cd-wk-top"><span>Вопрос ' + (weekly.i + 1) + " из " + weekly.qs.length + '</span><span class="cd-wk-score">верно ' + weekly.right + "</span>" +
+      '<span class="cd-wk-timer">' + mmss(weeklyLeft()) + "</span></div>" +
+      '<div class="cd-wk-q"><div class="cd-wk-from">' + escapeHtml(t ? t.short : q.rel) + "</div>" + inline(q.q) + "</div>" +
+      '<div class="cd-wk-opts">' + opts + "</div>" +
+      (a != null && q.expl ? '<div class="cd-wk-expl">' + inline(q.expl) + "</div>" : "") +
+      '<div class="cd-wk-ctl">' + (a != null ? '<button class="cd-wk-next" type="button">' + (weekly.i + 1 < weekly.qs.length ? "Дальше →" : "Итог") + "</button>" : "") +
+      '<button class="cd-wk-quit" type="button">Сдать досрочно</button></div>');
+  }
+  function weeklyAnswer(k) {
+    if (!weekly || weekly.done || weekly.answers[weekly.i] != null) return;
+    var q = weekly.qs[weekly.i];
+    weekly.answers[weekly.i] = k;
+    if (q.opts[k] && q.opts[k].ok) weekly.right++;
+    else {
+      // ошибка → в «Разминку дня» (как и в обычных опросах)
+      var right = q.opts.filter(function (o) { return o.ok; }).map(function (o) { return o.text; }).join("; ");
+      state.missed["quiz:" + cdHash(q.q)] = { rel: q.rel, hash: "", q: String(q.q).slice(0, 4000), a: (right + (q.expl ? " — " + q.expl : "")).slice(0, 4000), due: cdDate(1), kind: "quiz", md: 0 };
+    }
+    renderWeekly();
+  }
+  function weeklyFinish(timeout) {
+    if (!weekly || weekly.done) return;
+    weeklyStop();
+    weekly.done = true; weekly.timeout = !!timeout; weekly.ms = Date.now() - weekly.t0;
+    var prev = state.weekly[weekly.wk] || {};
+    state.weekly[weekly.wk] = { best: Math.max(prev.best || 0, weekly.right), total: weekly.qs.length, ms: weekly.ms, tries: (prev.tries || 0) + 1, at: Date.now() };
+    keepLast(state.weekly, 104);
+    bumpCount("weekly");
+    if (weekly.right === weekly.qs.length) bumpCount("weeklyPerfect");
+    recordActivity(); saveState();
+    renderWeekly();
+  }
+  function weeklyResultHtml() {
+    var w = weekly, n = w.qs.length, pct = n ? Math.round(w.right / n * 100) : 0, by = {};
+    w.qs.forEach(function (q, i) {
+      var r = by[q.rel] || (by[q.rel] = { ok: 0, n: 0 });
+      r.n++; if (w.answers[i] != null && q.opts[w.answers[i]] && q.opts[w.answers[i]].ok) r.ok++;
+    });
+    var rows = Object.keys(by).map(function (rel) {
+      var t = topicByRel(rel), r = by[rel];
+      return "<li><span>" + escapeHtml(t ? t.short : rel) + '</span><span class="cd-mbar sm ' + masteryTone(Math.round(r.ok / r.n * 100)) + '"><i style="width:' + Math.round(r.ok / r.n * 100) + '%"></i></span><b>' + r.ok + " / " + r.n + "</b></li>";
+    }).join("");
+    return '<div class="cd-wk-res"><div class="cd-wk-big">' + w.right + " / " + n + "</div>" +
+      "<div>" + (w.timeout ? "Время вышло. " : "") + (pct === 100 ? "Без единой ошибки!" : pct >= 80 ? "Отличный результат." : pct >= 50 ? "Неплохо — ошибки уже в разминке." : "Темы стоит повторить — начни со слабых мест.") +
+      " Время: " + mmss(w.ms) + "</div><ul class=\"cd-wk-by\">" + rows + "</ul>" +
+      '<div class="cd-wk-ctl"><button class="cd-wk-again" type="button">Ещё раз</button><button class="cd-pg-tab-go" type="button" data-go="map">К карте знаний</button></div></div>';
+  }
+  // ==== runtime/12-rewards.js — окно «Прогресс»: карта, экзамен недели, достижения, рекорды; Anki ====
+  // ---------------------------------------------------------------------------
+  //  Достижения — за реальные действия (собрал, починил, решил без подсказок), а не за клики.
+  //  Счётчики событий — state.ach.n, полученные — state.ach.got { id: дата }.
+  // ---------------------------------------------------------------------------
+  function achState() {
+    if (!state.ach || typeof state.ach !== "object" || Array.isArray(state.ach)) state.ach = {};
+    if (!state.ach.got || typeof state.ach.got !== "object" || Array.isArray(state.ach.got)) state.ach.got = {};
+    if (!state.ach.n || typeof state.ach.n !== "object" || Array.isArray(state.ach.n)) state.ach.n = {};
+    return state.ach;
+  }
+  function achN(k) { var v = achState().n[k]; return typeof v === "number" && isFinite(v) ? v : 0; }
+  function bumpCount(k, by) { var a = achState(); a.n[k] = achN(k) + (by || 1); achSoon(); }
+  var _achBusy = false;
+  // Зовёт saveState: проверка — не чаще раза в секунду (сохранения идут пачками при прокрутке).
+  var _achAt = 0;
+  function achOnSave() {
+    if (_achBusy || Date.now() - _achAt < 1000 && _achT) return;
+    _achBusy = true; _achAt = Date.now();
+    try { checkAchievements(false); } catch (e) { reportError("достижения", e); } finally { _achBusy = false; }
+  }
+  function countMap(m) { return Object.keys(m || {}).filter(function (k) { return m[k]; }).length; }
+  function masteredCount(p) { try { return progressTopics().filter(function (t) { return masteryPct(t) >= p; }).length; } catch (e) { return 0; } }
+  function coreTopicsRead() {
+    var d = DATA(); if (!d) return false;
+    var n = 0;
+    for (var k = 1; k <= 8; k++) if (d.files.some(function (f) { return /^ref\//i.test(f.rel) && topicNum(f.rel) === k && state.read[f.rel]; })) n++;
+    return n >= 8;
+  }
+  function bestDailyMs() {
+    var best = 0;
+    Object.keys(state.records).forEach(function (k) { var r = state.records[k]; if (r && r.ms > 0 && (!best || r.ms < best)) best = r.ms; });
+    return best;
+  }
+  var ACH = [
+    { id: "read1", ic: "ui-read", t: "Первая тема", d: "Отметить первую тему «Изучено»", ok: function () { return countMap(state.read) >= 1; } },
+    { id: "read10", ic: "ui-learned", t: "Десять тем", d: "Отметить «Изучено» десять материалов", ok: function () { return countMap(state.read) >= 10; } },
+    { id: "core", ic: "icon-ref", t: "Фундамент", d: "Изучены темы 1–8 справочника", ok: coreTopicsRead },
+    { id: "run1", ic: "ui-steps", t: "Первая сборка", d: "Программа собралась прямо в окне", ok: function () { return achN("compiled") >= 1; } },
+    { id: "pass1", ic: "ui-solve", t: "Все тесты зелёные", d: "Решить первое «напиши и запусти»", ok: function () { return achN("runPass") >= 1; } },
+    { id: "fix5", ic: "ui-hint", t: "Чиню сборку", d: "Пять раз исправить ошибку компиляции и собрать заново", ok: function () { return achN("compileFix") >= 5; } },
+    { id: "crash", ic: "mascot-think", t: "Укротитель падений", d: "Программа упала, а после правки прошла все тесты", ok: function () { return achN("crashFix") >= 1; } },
+    { id: "hang", ic: "ui-shuffle", t: "Вечный цикл пойман", d: "Программа зависла, а после правки прошла тесты", ok: function () { return achN("hangFix") >= 1; } },
+    { id: "nohint10", ic: "mascot-search", t: "Без подсказок", d: "Десять заданий подряд решено без подсказок и эталона", ok: function () { return achN("noHintBest") >= 10; } },
+    { id: "cards100", ic: "ui-cards", t: "Сто повторений", d: "Оценить карточки сто раз", ok: function () { return achN("graded") >= 100; } },
+    { id: "streak7", ic: "ui-streak", t: "Неделя подряд", d: "Заниматься семь дней без пропуска", ok: function () { return streakDays() >= 7; } },
+    { id: "streak30", ic: "ui-streak", t: "Месяц подряд", d: "Тридцать дней без пропуска", ok: function () { return streakDays() >= 30; } },
+    { id: "daily7", ic: "ui-dice", t: "Задача дня ×7", d: "Решать задачу дня неделю подряд", ok: function () { return dailyStreak() >= 7; } },
+    { id: "fast", ic: "ui-warm", t: "Молния", d: "Решить задачу дня быстрее двух минут", ok: function () { var b = bestDailyMs(); return b > 0 && b < 120000; } },
+    { id: "boss1", ic: "icon-tasks", t: "Первый босс", d: "Победить босса темы", ok: function () { return countMap(state.boss) >= 1; } },
+    { id: "boss5", ic: "icon-tasks", t: "Пять боссов", d: "Победить пять боссов", ok: function () { return countMap(state.boss) >= 5; } },
+    { id: "exam1", ic: "ui-learned", t: "Зачёт", d: "Сдать итоговую проверку этапа", ok: function () { return Object.keys(state.exams).some(function (k) { return state.exams[k] && state.exams[k].passed; }); } },
+    { id: "weekly1", ic: "icon-route", t: "Экзамен недели", d: "Пройти экзамен недели", ok: function () { return achN("weekly") >= 1; } },
+    { id: "weekly100", ic: "mascot-win", t: "Без единой ошибки", d: "Экзамен недели на все вопросы", ok: function () { return achN("weeklyPerfect") >= 1; } },
+    { id: "master1", ic: "icon-start", t: "Тема освоена", d: "Освоить тему на 80 % и больше", ok: function () { return masteredCount(80) >= 1; } },
+    { id: "master5", ic: "mascot-done", t: "Пять освоенных тем", d: "Пять тем на 80 %+", ok: function () { return masteredCount(80) >= 5; } },
+    { id: "repeat1", ic: "icon-examples", t: "Повторил за мной", d: "Написать пример программы самому по её поведению", ok: function () { return achN("repeat") >= 1; } },
+    { id: "check1", ic: "ui-peek", t: "Сверился с эталоном", d: "Сравнить свою игру с контрольной точкой главы", ok: function () { return achN("checkpoint") >= 1; } },
+  ];
+  // Достижения проверяет saveState (перед записью — одна метка времени у localStorage и зеркала).
+  // Счётчики, которые меняются без сохранения, просят сохранение с задержкой.
+  var _achT = null;
+  function achSoon() { clearTimeout(_achT); _achT = setTimeout(function () { _achT = null; saveState(); }, 700); }
+  // Новые достижения → в state.ach.got + тост. Первый запуск этой версии — молча (старые заслуги не сыплются тостами).
+  function checkAchievements(silent) {
+    var a = achState(), fresh = [];
+    var quiet = silent || !a.init;
+    ACH.forEach(function (x) {
+      if (a.got[x.id]) return;
+      var ok = false; try { ok = !!x.ok(); } catch (e) {}
+      if (ok) { a.got[x.id] = cdDate(0); fresh.push(x); }
+    });
+    a.init = 1;
+    if (!quiet && fresh.length) setTimeout(function () {
+      toast("Достижение: " + fresh.map(function (x) { return x.t; }).join(", ") + "!");
+      try { if (winEl) celebrate(winEl.querySelector(".cd-head") || winEl, "#f9e2af"); } catch (e) {}
+    }, 0);
+    return fresh;
+  }
+  function achHtml() {
+    var a = achState(), got = ACH.filter(function (x) { return a.got[x.id]; }).length;
+    return '<div class="cd-ach-sum"><b>' + got + "</b> из " + ACH.length + " достижений</div>" +
+      '<div class="cd-ach-grid">' + ACH.map(function (x) {
+        var d = a.got[x.id];
+        // значок — наклейка; нет её — первая буква названия в кружке; не получено — бледный
+        return '<div class="cd-ach' + (d ? " got" : "") + '"><span class="cd-ach-ic">' + emo(x.ic, '<span class="cd-ach-mono">' + escapeHtml(x.t.charAt(0)) + "</span>") + "</span>" +
+          '<span class="cd-ach-t">' + escapeHtml(x.t) + "</span><span class=\"cd-ach-d\">" + escapeHtml(x.d) + "</span>" +
+          (d ? '<span class="cd-ach-when">' + escapeHtml(d) + "</span>" : "") + "</div>";
+      }).join("") + "</div>";
+  }
+
+  // ---- Счётчики из «Запустить» и решений: зовут 13-interactive.js ----
+  function noteRunResult(box, res) {
+    if (!box || !res) return;
+    if (res.stage === "compile") { box.__hadCompileErr = true; return; }
+    if (res.stage !== "run") return;
+    bumpCount("compiled");
+    if (box.__hadCompileErr) { box.__hadCompileErr = false; bumpCount("compileFix"); }
+    var tests = res.tests || [];
+    if (tests.some(function (t) { return t.crash; })) box.__hadCrash = true;
+    if (res.stopped === "hang") box.__hadHang = true;
+    if (res.ok && tests.length) {
+      bumpCount("runPass");
+      if (box.__hadCrash) { box.__hadCrash = false; bumpCount("crashFix"); }
+      if (box.__hadHang) { box.__hadHang = false; bumpCount("hangFix"); }
+      if (box.classList && box.classList.contains("cd-rep")) bumpCount("repeat");
+    }
+    if (!res.ok) noteAttempt(box, false);
+  }
+  // Подсказки: открыл подсказку или эталон — задание решено «с помощью».
+  function boxHinted(box) {
+    var hb = box && box.querySelector && box.querySelector(".cd-hints");
+    return !!(box && (box.__solShown || box.__revealed || (hb && +hb.getAttribute("data-shown") > 0)));
+  }
+  function noteSolvedFirst(box) {
+    if (boxHinted(box)) { achState().n.noHintRun = 0; }
+    else {
+      var run = achN("noHintRun") + 1;
+      achState().n.noHintRun = run;
+      if (run > achN("noHintBest")) achState().n.noHintBest = run;
+    }
+    achSoon();
+  }
+
+  // ---- Рекорды задачи дня: время, попытки, без подсказок ----
+  function dailyFor(box) {
+    var id = box && box.getAttribute && box.getAttribute("data-id");
+    return id && state.daily && state.daily.id === id && state.daily.date === cdDate(0) ? state.daily : null;
+  }
+  function noteDailyOpened() {
+    if (state.daily && state.daily.date === cdDate(0) && !state.daily.startAt && !state.dailyDone[cdDate(0)]) {
+      state.daily.startAt = Date.now(); state.daily.tries = 0; state.daily.hint = false; saveState();
+    }
+  }
+  function noteAttempt(box, ok) { var dc = dailyFor(box); if (dc && !ok) { dc.tries = (dc.tries | 0) + 1; saveState(); } }
+  function noteHint(box) { var dc = dailyFor(box); if (dc) { dc.hint = true; saveState(); } }
+  function typeBest(type, skipDate) {
+    var best = null;
+    Object.keys(state.records).forEach(function (k) {
+      var r = state.records[k];
+      if (!r || k === skipDate || r.type !== type || !(r.ms > 0)) return;
+      if (!best || r.ms < best.ms) best = r;
+    });
+    return best;
+  }
+  function noteDailySolved(box) {
+    var dc = dailyFor(box); if (!dc) return;
+    var today = cdDate(0);
+    if (state.records[today]) return;
+    var rec = { type: dc.type, ms: dc.startAt ? Date.now() - dc.startAt : 0, tries: (dc.tries | 0) + 1, hint: !!(dc.hint || boxHinted(box)) };
+    var prev = typeBest(dc.type, today);
+    state.records[today] = rec;
+    keepLast(state.records, 400);
+    saveState();
+    if (rec.ms > 0 && (!prev || rec.ms < prev.ms)) {
+      setTimeout(function () { toast("Новый рекорд «" + (DAILY_TYPES[rec.type] || "задание") + "»: " + mmss(rec.ms) + (prev ? " (было " + mmss(prev.ms) + ")" : "")); }, 2700);
+    }
+  }
+  function dailyRecordLine(type) {
+    var b = typeBest(type, null), t = state.records[cdDate(0)];
+    if (t && t.ms) return "сегодня " + mmss(t.ms) + (t.tries > 1 ? ", попыток " + t.tries : ", с первой попытки") + (b && b !== t ? " · рекорд " + mmss(b.ms) : "");
+    return b ? "рекорд " + mmss(b.ms) : "";
+  }
+  function recordsHtml() {
+    var keys = Object.keys(state.records).sort().reverse();
+    if (!keys.length) return '<p class="cd-pg-empty">Рекордов пока нет. Реши задачу дня с главной — время засекается с момента, как ты её открыл.</p>';
+    var rows = Object.keys(DAILY_TYPES).map(function (type) {
+      var list = keys.map(function (k) { return state.records[k]; }).filter(function (r) { return r && r.type === type; });
+      if (!list.length) return "";
+      var b = typeBest(type, null), avgTries = list.slice(0, 30).reduce(function (s, r) { return s + (r.tries || 1); }, 0) / Math.min(30, list.length);
+      var clean = list.filter(function (r) { return !r.hint && (r.tries || 1) === 1; }).length;
+      return "<tr><td>" + escapeHtml(DAILY_TYPES[type]) + "</td><td>" + list.length + "</td><td><b>" + (b ? mmss(b.ms) : "—") + "</b></td><td>" +
+        avgTries.toFixed(1) + "</td><td>" + clean + "</td></tr>";
+    }).join("");
+    var last = keys.slice(0, 14).map(function (k) {
+      var r = state.records[k];
+      return "<li><span>" + escapeHtml(k) + "</span><span>" + escapeHtml(DAILY_TYPES[r.type] || "") + "</span><b>" + (r.ms ? mmss(r.ms) : "—") + "</b><span>" +
+        (r.tries || 1) + " " + plural(r.tries || 1, ["попытка", "попытки", "попыток"]) + (r.hint ? " · с подсказкой" : "") + "</span></li>";
+    }).join("");
+    return '<div class="cd-rec-sum">Серия задачи дня: <b>' + dailyStreak() + "</b> · всего решено: <b>" + keys.length + "</b></div>" +
+      '<div class="tablewrap"><table class="cd-rec-t"><thead><tr><th>Вид</th><th>Решено</th><th>Лучшее время</th><th>Попыток в среднем</th><th>С первой без подсказок</th></tr></thead><tbody>' +
+      rows + "</tbody></table></div>" + '<div class="cd-rec-last"><div>Последние дни</div><ul>' + last + "</ul></div>";
+  }
+
+  // ---- Экспорт карточек в Anki: текст с табуляцией (вопрос, ответ, метки) ----
+  function ankiField(s) {
+    return escapeHtml(String(s || "")).replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+      .replace(/\t/g, " ").replace(/\r?\n/g, "<br>");
+  }
+  function ankiExportText() {
+    var seen = {}, lines = ["#separator:tab", "#html:true", "#tags column:3"];
+    collectAllCards().forEach(function (c) {
+      if (seen[c.id]) return; seen[c.id] = 1;
+      var tag = "cpp-docs " + String(c.rel).replace(/\.md$/i, "").replace(/[^\wа-яё-]+/gi, "_");
+      lines.push(ankiField(c.q) + "\t" + ankiField(c.a) + "\t" + tag);
+    });
+    return { text: lines.join("\n") + "\n", count: lines.length - 3 };
+  }
+  function exportAnki() {
+    var ex = ankiExportText();
+    if (!ex.count) { toast("Карточек пока нет — они появятся, когда загрузятся материалы", true); return; }
+    sendAction({ kind: "export-anki", text: ex.text, count: ex.count }, function (res) {
+      if (res.ok) toast("Выбери, куда сохранить колоду (" + ex.count + " карточек)");
+      else toast("Не получилось: " + (res.error || "нет связи с расширением"), true);
+    });
+  }
+
+  // ---- Окно «Прогресс» поверх окна документации (как «Обучение») ----
+  var progressEl = null;
+  var PG_TABS = [["map", "Карта знаний"], ["weekly", "Экзамен недели"], ["ach", "Достижения"], ["rec", "Рекорды"]];
+  function showProgress(tab) {
+    if (!winEl) return;
+    if (!progressEl) {
+      progressEl = el("div", null); progressEl.className = "cd-guide cd-pg"; progressEl.hidden = true;
+      progressEl.setAttribute("role", "dialog"); progressEl.setAttribute("aria-label", "Прогресс");
+      progressEl.addEventListener("click", onProgressClick);
+      progressEl.addEventListener("keydown", function (e) {
+        var n = e.target && e.target.closest && e.target.closest(".cd-km-n");
+        if (n && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); kmSelect(n.getAttribute("data-krel")); }
+      });
+      winEl.appendChild(progressEl);
+    }
+    try { if (checkAchievements(false).length) saveState(); } catch (e) {}
+    setHTML(progressEl, '<div class="cd-guide-panel cd-pg-panel"><div class="cd-guide-top"><div class="cd-guide-title">Прогресс</div>' +
+      '<button class="cd-pg-anki" type="button" title="Все карточки справочника — файлом для Anki">Карточки в Anki</button>' +
+      '<button class="cd-guide-close" type="button" title="Закрыть" aria-label="Закрыть">×</button></div>' +
+      '<div class="cd-guide-tabs">' + PG_TABS.map(function (t) { return '<button class="cd-guide-chip" type="button" data-pgt="' + t[0] + '">' + t[1] + "</button>"; }).join("") + "</div>" +
+      '<div class="cd-guide-scroll">' + PG_TABS.map(function (t) { return '<div class="cd-pg-page" data-pg="' + t[0] + '" hidden></div>'; }).join("") + "</div></div>");
+    progressEl.hidden = false;
+    progressTab(tab || "map");
+  }
+  function progressTab(tab) {
+    if (!progressEl) return;
+    progressEl.querySelectorAll(".cd-guide-chip").forEach(function (c) { c.classList.toggle("on", c.getAttribute("data-pgt") === tab); });
+    progressEl.querySelectorAll(".cd-pg-page").forEach(function (p) {
+      var on = p.getAttribute("data-pg") === tab;
+      p.hidden = !on;
+      if (!on) return;
+      if (tab === "map") setHTML(p, knowledgeMapHtml());
+      else if (tab === "weekly") { if (weekly && !weekly.done) renderWeekly(); else if (weekly && weekly.done) renderWeekly(); else setHTML(p, weeklyIntroHtml()); }
+      else if (tab === "ach") setHTML(p, achHtml());
+      else if (tab === "rec") setHTML(p, recordsHtml());
+    });
+    var sc = progressEl.querySelector(".cd-guide-scroll"); if (sc) sc.scrollTop = 0;
+  }
+  function kmSelect(rel) {
+    var det = progressEl && progressEl.querySelector(".cd-km-detail"); if (!det) return;
+    progressEl.querySelectorAll(".cd-km-n").forEach(function (n) { n.classList.toggle("sel", n.getAttribute("data-krel") === rel); });
+    setHTML(det, kmDetailHtml(rel)); det.hidden = false;
+  }
+  function onProgressClick(e) {
+    var t = e.target; if (!t) return;
+    if (t === progressEl) { hideProgress(); return; }
+    if (!t.closest) return;
+    if (t.closest(".cd-guide-close")) { hideProgress(); return; }
+    if (t.closest(".cd-pg-anki")) { exportAnki(); return; }
+    var chip = t.closest(".cd-guide-chip"); if (chip) { progressTab(chip.getAttribute("data-pgt")); return; }
+    var go = t.closest(".cd-pg-tab-go"); if (go) { if (weekly && weekly.done) weekly = null; progressTab(go.getAttribute("data-go")); return; }
+    var node = t.closest(".cd-km-n"); if (node) { kmSelect(node.getAttribute("data-krel")); return; }
+    var nx = t.closest(".cd-km-next"); if (nx) { hideProgress(); openFile(nx.getAttribute("data-krel")); return; }
+    var op = t.closest(".cd-kd-open"); if (op) { hideProgress(); openFile(op.getAttribute("data-krel2")); return; }
+    var wg = t.closest(".cd-weak-go"); if (wg) { runWeakAction(wg.getAttribute("data-wrel"), wg.getAttribute("data-wk"), wg.getAttribute("data-wx")); return; }
+    if (t.closest(".cd-wk-start") || t.closest(".cd-wk-again")) { weeklyStart(); return; }
+    var opt = t.closest(".cd-wk-opt"); if (opt) { weeklyAnswer(+opt.getAttribute("data-k")); return; }
+    if (t.closest(".cd-wk-next")) { if (weekly.i + 1 < weekly.qs.length) { weekly.i++; renderWeekly(); } else weeklyFinish(false); return; }
+    if (t.closest(".cd-wk-quit")) { weeklyFinish(false); return; }
+  }
+  function hideProgress() { if (progressEl) progressEl.hidden = true; }
+  function progressOpen() { return !!(progressEl && !progressEl.hidden); }
+  // ==== runtime/13-checkpoint.js — «Контрольная точка главы» и «Повтори за мной», сравнение кода ====
+  // ---------------------------------------------------------------------------
+  //  ```checkpoint — эталон игры «Подземелье» на конец главы. «Сравнить с моим кодом» берёт открытый
+  //  в редакторе .cpp (действие окна editor-text) и показывает построчное сравнение: что совпало,
+  //  чего нет у тебя, что у тебя своё, — и каких функций/типов эталона у тебя пока нет.
+  //    # Название
+  //    Что должно быть готово к концу главы (Markdown)
+  //    ---
+  //    код эталона
+  //
+  //  ```repeat — «Повтори за мной» в примерах: код примера спрятан (размыт), видно только поведение
+  //  программы — тесты «ввод => что должно появиться в выводе». Ученик пишет свою версию, окно
+  //  собирает и проверяет её (режим contains: подсказки ввода у каждого свои), потом — сравнение с
+  //  кодом примера.
+  //    @id ключ
+  //    @hint подсказка (сколько угодно)
+  //    Условие
+  //    ---
+  //    ввод => строка вывода\nещё строка
+  // ---------------------------------------------------------------------------
+  function renderCheckpoint(src) {
+    var raw = String(src).replace(/\r\n?/g, "\n").replace(/^\n+|\n+$/g, ""), title = "Контрольная точка";
+    var m = raw.match(/^#\s+(.*)\n?/);
+    if (m) { title = m[1].trim(); raw = raw.slice(m[0].length); }
+    var parts = raw.split(/^\s*---\s*$/m);
+    var code = (parts.slice(1).join("---") || "").replace(/^\n+|\n+$/g, "");
+    if (!code) return "";
+    return '<div class="cd-cp" data-code="' + encodeURIComponent(code) + '">' +
+      '<div class="cd-cp-head"><span class="cd-ch-badge">контрольная точка</span><b>' + inline(title) + "</b></div>" +
+      '<div class="cd-cp-body">' + renderMarkdown(parts[0] || "", null) + "</div>" +
+      '<div class="cd-ch-ctl"><button class="cd-cp-cmp" type="button">Сравнить с моим кодом</button>' +
+      '<button class="cd-cp-show" type="button">Показать эталон</button><span class="cd-ch-msg"></span></div>' +
+      '<div class="cd-cp-res" hidden></div>' +
+      '<div class="cd-cp-ref" hidden><pre class="code"><code>' + highlight(code, "cpp") + "</code></pre></div></div>";
+  }
+  function renderRepeat(src) {
+    var fk = fenceKey(String(src).replace(/\r\n?/g, "\n")), secs = fk.body.split(/^\s*---\s*$/m);
+    var prompt = [], hints = [];
+    (secs[0] || "").split("\n").forEach(function (ln) {
+      var mh = ln.match(/^\s*@hint\s+(.+)$/i);
+      if (mh) { hints.push(mh[1].trim()); return; }
+      if (/^\s*@ref\s/i.test(ln)) return;              // файл эталона — для scripts/check-challenges.js
+      if (ln.trim()) prompt.push(ln.trim());
+    });
+    var tests = parseTestLines(secs[1] || ""), id = fk.id, done = !!state.challenge[id];
+    var enabled = !!(DATA() && DATA().run && DATA().run.enabled);
+    var rows = tests.map(function (t) {
+      return "<tr><td><code>" + testShow(t["in"] || "∅") + "</code></td><td><code>" + testShow(t["out"]) + "</code></td></tr>";
+    }).join("");
+    var behave = rows ? '<div class="cd-ch-lab">как ведёт себя программа — ввод и что должно появиться в выводе (подсказки ввода пиши свои):</div>' +
+      '<div class="tablewrap"><table><thead><tr><th>Ввод</th><th>В выводе есть</th></tr></thead><tbody>' + rows + "</tbody></table></div>" : "";
+    var hide = state.repeatShowCode ? "" : " hidecode";
+    var head = '<div class="cd-ch-head"><span class="cd-ch-badge">повтори за мной</span>' + inline(prompt.join(" ") || "Напиши эту программу сам — по её поведению") + "</div>" +
+      '<label class="cd-rep-hide"><input type="checkbox" class="cd-rep-hidebox"' + (hide ? " checked" : "") + "> прятать код примера, пока решаю (клик по коду — подсмотреть)</label>";
+    var starter = "#include <iostream>\n#include <string>\n\nint main() {\n    \n}\n";
+    var cmp = '<button class="cd-rep-cmp" type="button"' + (done ? "" : " hidden") + ">Сравнить с кодом примера</button>";
+    if (!enabled) {
+      return '<div class="cd-ch cd-rep' + hide + (done ? " done" : "") + '" data-id="' + escapeHtml(id) + '">' + head + behave +
+        '<div class="cd-run-hint">Проверка в один клик выключена: включи <code>cppDocs.localRun</code> и поставь компилятор. А пока — напиши программу в редакторе и сверь её поведение с таблицей.</div></div>';
+    }
+    return '<div class="cd-ch cd-ch-run cd-rep' + hide + (done ? " done" : "") + '" data-id="' + escapeHtml(id) + '" data-mode="contains" data-tests="' +
+      encodeURIComponent(JSON.stringify(tests)) + '">' + head + behave +
+      '<textarea class="cd-run-code" spellcheck="false" autocomplete="off" autocapitalize="off" rows="14">' + escapeHtml(starter) + "</textarea>" +
+      '<div class="cd-ch-ctl"><button class="cd-run-go" type="button">Запустить</button>' +
+      (tests.length ? '<span class="cd-run-tinfo">' + tests.length + " " + plural(tests.length, ["тест", "теста", "тестов"]) + "</span>" : "") +
+      cmp + '<span class="cd-ch-msg"></span></div><div class="cd-run-out" hidden></div>' +
+      '<div class="cd-cp-res" hidden></div>' + hintsHtml(hints, null, done) + "</div>";
+  }
+  // Код примера: первый ```cpp в разделе «Код целиком» (иначе — первый с main).
+  function exampleRefCode(md) {
+    var s = String(md || "").replace(/\r\n?/g, "\n");
+    var after = s.split(/^##\s+Код целиком.*$/m)[1];
+    var re = /```(?:cpp|c\+\+)[^\n]*\n([\s\S]*?)\n```/g, m;
+    if (after) { m = re.exec(after); if (m) return m[1]; }
+    re.lastIndex = 0;
+    while ((m = re.exec(s))) if (/\bint\s+main\s*\(/.test(m[1])) return m[1];
+    return "";
+  }
+
+  // ---- Сравнение кода: значимые строки (без пустых, комментариев и одиноких скобок), LCS ----
+  function codeLines(text) {
+    var out = [];
+    String(text || "").replace(/\r\n?/g, "\n").split("\n").forEach(function (raw) {
+      var ln = raw, q = 0, cut = -1;
+      for (var i = 0; i < ln.length - 1; i++) {
+        var c = ln.charAt(i);
+        if (c === '"' && ln.charAt(i - 1) !== "\\") q ^= 1;
+        if (!q && c === "/" && ln.charAt(i + 1) === "/") { cut = i; break; }
+      }
+      if (cut >= 0) ln = ln.slice(0, cut);
+      var norm = ln.replace(/\s+/g, " ").trim();
+      if (!norm || /^[{}();]+$/.test(norm)) return;
+      out.push({ raw: raw.replace(/\s+$/, ""), key: norm.replace(/\s*([(){}\[\];,<>=+\-*\/&|!:])\s*/g, "$1") });
+    });
+    return out.slice(0, 700);
+  }
+  function lcsOps(a, b) {
+    var n = a.length, m = b.length, dp = [];
+    for (var i = 0; i <= n; i++) { dp.push(new Uint16Array(m + 1)); }
+    for (i = n - 1; i >= 0; i--) for (var j = m - 1; j >= 0; j--) {
+      dp[i][j] = a[i].key === b[j].key ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+    var ops = []; i = 0; j = 0;
+    while (i < n && j < m) {
+      if (a[i].key === b[j].key) { ops.push(["=", b[j].raw]); i++; j++; }
+      else if (dp[i + 1][j] >= dp[i][j + 1]) { ops.push(["-", a[i].raw]); i++; }
+      else { ops.push(["+", b[j].raw]); j++; }
+    }
+    for (; i < n; i++) ops.push(["-", a[i].raw]);
+    for (; j < m; j++) ops.push(["+", b[j].raw]);
+    return { ops: ops, same: dp[0][0] };
+  }
+  // Функции и типы верхнего уровня: «чего из эталона у тебя нет».
+  function codeNames(text) {
+    var fn = {}, ty = {};
+    String(text || "").split(/\r?\n/).forEach(function (ln) {
+      var t = ln.match(/^(?:struct|class|enum(?:\s+class)?)\s+([A-Za-z_]\w*)/);
+      if (t) ty[t[1]] = 1;
+      // «тип имя(параметры) [const] {» — тело может идти в той же строке
+      var f = ln.match(/^[A-Za-z_][\w:<>,\s*&]*?[\s*&]([A-Za-z_]\w*)\s*\([^;{}]*?\)\s*(?:const\s*)?(?:\{.*)?$/);
+      if (f && !/^(if|for|while|switch|return|else)$/.test(f[1]) && f[1] !== "main") fn[f[1]] = 1;
+    });
+    return { fn: Object.keys(fn), ty: Object.keys(ty) };
+  }
+  function diffHtml(refText, mineText, refLabel) {
+    var a = codeLines(refText), b = codeLines(mineText);
+    if (!b.length) return '<div class="cd-cp-note">В твоём файле пока нет кода.</div>';
+    var r = lcsOps(a, b), pct = a.length ? Math.round(r.same / a.length * 100) : 0;
+    var rn = codeNames(refText), mn = codeNames(mineText);
+    var missFn = rn.fn.filter(function (x) { return mn.fn.indexOf(x) === -1; });
+    var missTy = rn.ty.filter(function (x) { return mn.ty.indexOf(x) === -1; });
+    var rows = "", run = [];
+    function flushSame() {
+      if (run.length > 6) {
+        rows += run.slice(0, 2).map(sameRow).join("") + '<div class="cd-df-gap">… ещё ' + (run.length - 4) + " совпадающих строк …</div>" + run.slice(-2).map(sameRow).join("");
+      } else rows += run.map(sameRow).join("");
+      run = [];
+    }
+    function sameRow(x) { return '<div class="cd-df-l"><i> </i><code>' + escapeHtml(x) + "</code></div>"; }
+    r.ops.forEach(function (o) {
+      if (o[0] === "=") { run.push(o[1]); return; }
+      flushSame();
+      rows += '<div class="cd-df-l ' + (o[0] === "-" ? "del" : "add") + '"><i>' + (o[0] === "-" ? "−" : "+") + "</i><code>" + escapeHtml(o[1]) + "</code></div>";
+    });
+    flushSame();
+    return '<div class="cd-cp-stat"><b>' + pct + "%</b> строк " + escapeHtml(refLabel) + " есть и у тебя (" + r.same + " из " + a.length + "; пустые строки, комментарии и отступы не считаются)</div>" +
+      (missFn.length || missTy.length ? '<div class="cd-cp-miss">В эталоне есть, у тебя пока нет: ' +
+        missTy.map(function (x) { return "<code>" + escapeHtml(x) + "</code> (тип)"; }).concat(missFn.map(function (x) { return "<code>" + escapeHtml(x) + "()</code>"; })).join(", ") + "</div>" : "") +
+      '<div class="cd-cp-note">Совпадать дословно не нужно: у каждого свои имена и тексты. Смотри на устройство — какие функции, какие типы, где цикл.</div>' +
+      '<div class="cd-df"><div class="cd-df-leg"><span class="del">− только в эталоне</span><span class="add">+ только у тебя</span></div>' + rows + "</div>";
+  }
+
+  function checkpointClick(t) {
+    var cmp = t.closest(".cd-cp-cmp"), show = t.closest(".cd-cp-show");
+    if (show) {
+      var box = show.closest(".cd-cp"), ref = box && box.querySelector(".cd-cp-ref");
+      if (ref) { ref.hidden = !ref.hidden; show.textContent = ref.hidden ? "Показать эталон" : "Спрятать эталон"; }
+      return true;
+    }
+    if (!cmp) return false;
+    var cb = cmp.closest(".cd-cp"), msg = cb.querySelector(".cd-ch-msg"), res = cb.querySelector(".cd-cp-res");
+    var code = decodeURIComponent(cb.getAttribute("data-code") || "");
+    cmp.disabled = true; if (msg) { msg.textContent = "Беру код из редактора…"; msg.className = "cd-ch-msg"; }
+    sendAction({ kind: "editor-text" }, function (r) {
+      cmp.disabled = false;
+      if (!r.ok) { if (msg) { msg.textContent = r.error || "Не получилось взять код из редактора"; msg.className = "cd-ch-msg err"; } return; }
+      if (msg) { msg.textContent = "Сравнил с файлом " + (r.name || ""); msg.className = "cd-ch-msg ok"; }
+      setHTML(res, diffHtml(code, r.text, "эталона")); res.hidden = false;
+      bumpCount("checkpoint"); saveState();
+    });
+    return true;
+  }
+  function repeatClick(t, e) {
+    var hb = t.closest(".cd-rep-hidebox");
+    if (hb) {
+      var box = hb.closest(".cd-rep");
+      box.classList.toggle("hidecode", hb.checked);
+      state.repeatShowCode = !hb.checked; saveState();
+      return false;   // чекбокс переключается сам
+    }
+    var cmp = t.closest(".cd-rep-cmp");
+    if (cmp) {
+      var rb = cmp.closest(".cd-rep"), res = rb.querySelector(".cd-cp-res"), ta = rb.querySelector(".cd-run-code");
+      var ref = exampleRefCode(current && current.md);
+      if (!ref) { toast("В материале нет кода примера для сравнения", true); return true; }
+      setHTML(res, diffHtml(ref, ta ? ta.value : "", "примера")); res.hidden = false;
+      return true;
+    }
+    // размытый код примера: клик — подсмотреть этот блок
+    var pre = t.closest("pre");
+    if (pre && !pre.closest(".cd-rep") && !pre.classList.contains("peek") && articleEl &&
+        articleEl.querySelector(".cd-rep.hidecode:not(.done)")) {
+      pre.classList.add("peek");
+      if (e) e.stopPropagation();
+      return true;
+    }
+    return false;
+  }
+  // Задача решена — кнопка сравнения появляется (зовёт challengeSolved через noteRunResult).
+  function repeatSolved(box) {
+    var b = box && box.classList && box.classList.contains("cd-rep") ? box.querySelector(".cd-rep-cmp") : null;
+    if (b) b.hidden = false;
+  }
+  // ==== runtime/13-code-alts.js — другие применения примера; «Забегаем вперёд» под кодом ====
+  // ---------------------------------------------------------------------------
+  //  Один пример — несколько применений того же приёма. В Markdown сразу после блока кода идут
+  //  блоки «```cpp alt: Подпись»; окно собирает их в один блок-карусель:
+  //    • вкладки с подписями над кодом (где это встречается) — клик переключает;
+  //    • стрелки ‹ › справа по центру кода и точки-индикатор; ← → с клавиатуры, когда блок в фокусе;
+  //    • все слайды лежат в одной ячейке сетки — высота блока = самый высокий слайд, страница не прыгает;
+  //    • «копировать» и «в редактор» берут показанный слайд.
+  // ---------------------------------------------------------------------------
+  function renderCodeAlts(main, alts, langLabel, lc) {
+    var slides = [{ label: "Пример из текста", code: main.code, html: main.html, lined: main.lined }].concat(alts.map(function (a) {
+      return { label: a.label, code: a.code, html: highlight(a.code, a.lang), lined: false };
+    }));
+    var n = slides.length;
+    var tabs = slides.map(function (s, k) {
+      return '<button class="cd-alt-tab' + (k ? "" : " on") + '" type="button" role="tab" data-k="' + k + '" aria-selected="' + (k ? "false" : "true") + '">' +
+        '<i>' + (k + 1) + "</i>" + escapeHtml(s.label) + "</button>";
+    }).join("");
+    var panes = slides.map(function (s, k) {
+      return '<div class="cd-alt-pane' + (k ? "" : " on") + '" role="tabpanel" data-k="' + k + '" data-label="' + escapeHtml(s.label) + '" data-code="' + escapeHtml(s.code) + '"' +
+        (k ? ' aria-hidden="true"' : "") + '><pre class="code' + (s.lined ? " cd-lined" : "") + '"><code>' + s.html + "</code></pre></div>";
+    }).join("");
+    var dots = "";
+    for (var d = 0; d < n; d++) dots += '<i class="' + (d ? "" : "on") + '"></i>';
+    return '<div class="codewrap cd-alts" data-k="0" data-n="' + n + '">' +
+      '<div class="codehead"><span class="codelang">' + langLabel + "</span>" +
+      '<span class="cd-alt-count">' + n + " " + plural(n, ["применение", "применения", "применений"]) + "</span>" +
+      '<span class="cd-codebtns">' + (TOED_LANGS[lc] ? toEditorBtn(main.code) : "") +
+      '<button class="cd-wrapbtn" type="button" title="Переносить длинные строки (для всех блоков кода)">↩ перенос</button>' +
+      '<button class="copybtn" type="button" title="Копировать показанный код" data-code="' + escapeHtml(main.code) + '"><span class="cb-ic">⧉</span> копировать</button></span></div>' +
+      '<div class="cd-alt-tabs" role="tablist" aria-label="Применения этого приёма">' + tabs + "</div>" +
+      '<div class="cd-alt-body">' + panes +
+      '<div class="cd-alt-nav">' +
+      '<button class="cd-alt-go" data-d="-1" type="button" title="Предыдущее применение" aria-label="Предыдущее применение" disabled>‹</button>' +
+      '<span class="cd-alt-dots" aria-hidden="true">' + dots + "</span>" +
+      '<button class="cd-alt-go next" data-d="1" type="button" title="Дальше: ' + escapeHtml(slides[1].label) + '" aria-label="Следующее применение">›</button>' +
+      "</div></div></div>";
+  }
+  // Показать слайд k. dir — откуда въезжает (1 — справа, -1 — слева) для анимации.
+  function altShow(w, k, dir) {
+    var n = +w.getAttribute("data-n") || 1, cur = +w.getAttribute("data-k") || 0;
+    k = Math.max(0, Math.min(n - 1, k));
+    if (k === cur && w.__altSeen) return;
+    w.__altSeen = true;
+    w.setAttribute("data-k", String(k));
+    w.classList.add("used");                                  // стрелку больше не подсвечиваем
+    var panes = w.querySelectorAll(".cd-alt-pane"), pane = null;
+    for (var i = 0; i < panes.length; i++) {
+      var on = i === k;
+      panes[i].classList.toggle("on", on);
+      panes[i].classList.remove("in-l", "in-r");
+      if (on) { pane = panes[i]; panes[i].removeAttribute("aria-hidden"); } else panes[i].setAttribute("aria-hidden", "true");
+    }
+    if (!pane) return;
+    if (dir) { void pane.offsetWidth; pane.classList.add(dir > 0 ? "in-r" : "in-l"); }
+    var tabs = w.querySelectorAll(".cd-alt-tab");
+    for (var t = 0; t < tabs.length; t++) {
+      tabs[t].classList.toggle("on", t === k);
+      tabs[t].setAttribute("aria-selected", t === k ? "true" : "false");
+    }
+    var strip = w.querySelector(".cd-alt-tabs"), tab = tabs[k];
+    if (strip && tab) {                                       // активная вкладка — в видимой части полосы
+      var left = tab.offsetLeft - 12, right = tab.offsetLeft + tab.offsetWidth + 12;
+      if (left < strip.scrollLeft) strip.scrollLeft = left;
+      else if (right > strip.scrollLeft + strip.clientWidth) strip.scrollLeft = right - strip.clientWidth;
+    }
+    var dots = w.querySelectorAll(".cd-alt-dots i");
+    for (var j = 0; j < dots.length; j++) dots[j].classList.toggle("on", j === k);
+    var code = pane.getAttribute("data-code") || "";
+    var cb = w.querySelector(".copybtn"); if (cb) cb.setAttribute("data-code", code);
+    var te = w.querySelector(".cd-toed"); if (te) te.setAttribute("data-code", code);
+    var gos = w.querySelectorAll(".cd-alt-go");
+    if (gos[0]) gos[0].disabled = k === 0;
+    if (gos[1]) {
+      gos[1].disabled = k === n - 1;
+      var nx = panes[k + 1];
+      gos[1].title = nx ? "Дальше: " + (nx.getAttribute("data-label") || "") : "Это последнее применение";
+    }
+  }
+  function altGo(btn) {
+    var w = btn.closest(".cd-alts"); if (!w) return;
+    var cur = +w.getAttribute("data-k") || 0;
+    if (btn.classList.contains("cd-alt-tab")) { var k = +btn.getAttribute("data-k") || 0; altShow(w, k, k > cur ? 1 : k < cur ? -1 : 0); return; }
+    var d = +btn.getAttribute("data-d") || 0;
+    altShow(w, cur + d, d);
+  }
+  // ← → листают, когда фокус внутри блока (на вкладке, стрелке или кнопке блока).
+  function altKey(e) {
+    if (!e || (e.key !== "ArrowLeft" && e.key !== "ArrowRight")) return false;
+    var a = document.activeElement, w = a && a.closest ? a.closest(".cd-alts") : null;
+    if (!w) return false;
+    var d = e.key === "ArrowRight" ? 1 : -1, cur = +w.getAttribute("data-k") || 0;
+    altShow(w, cur + d, d);
+    var tab = w.querySelectorAll(".cd-alt-tab")[+w.getAttribute("data-k") || 0];
+    if (tab && a.classList.contains("cd-alt-tab")) tab.focus();
+    e.preventDefault();
+    return true;
+  }
+
+  // ---------------------------------------------------------------------------
+  //  «Забегаем вперёд»: в примере темы встретился приём из более поздней темы — под кодом одна
+  //  строка, что он делает, и где о нём подробно. Каждый приём — один раз на странице (первое
+  //  появление), чтобы не шуметь. Порядок тем — как в маршруте (после struct — указатели): его
+  //  задаёт extension/lib/course.js, а окно видит его как порядок группы «Справочник по темам».
+  // ---------------------------------------------------------------------------
+  var AHEAD = [
+    [/std::format\b/, "std::format", "собирает строку по шаблону: `{}` заменяется значением, `{:.2f}` — число с двумя знаками", 2],
+    [/std::getline\b|std::istringstream\b/, "std::getline / istringstream", "читают строку целиком и разбирают её на слова", 2],
+    [/\b(for|while)\s*\(/, "цикл for / while", "повторяет блок кода, пока условие верно", 3],
+    [/\bswitch\s*\(/, "switch", "выбирает ветку по значению — как цепочка if, но короче", 3],
+    [/\benum\s+class\b/, "enum class", "свой тип с именованными вариантами вместо «магических» чисел", 3],
+    [/^[A-Za-z_][\w:<>]*\s+[A-Za-z_]\w*\s*\([^;]*\)\s*\{/m, "своя функция", "именованный кусок кода, который можно вызывать много раз", 4],
+    [/\bconst\s+[\w:<>]+\s*&/, "const &", "передать значение в функцию без копии и без права его менять", 4],
+    [/\[[^\]\n]*\]\s*\([^)\n]*\)\s*(?:->\s*[\w:<>]+\s*)?\{/, "лямбда [](…) { … }", "маленькая функция прямо на месте — например, правило сортировки", 4],
+    [/std::optional\b/, "std::optional", "«значение или ничего» — когда ответа может не быть", 4],
+    [/std::vector\b/, "std::vector", "список значений, который сам растёт: `push_back` добавляет, `v[i]` — элемент", 6],
+    [/std::(?:unordered_)?map\b/, "std::map", "словарь «ключ → значение», например «предмет → сколько штук»", 6],
+    [/std::set\b/, "std::set", "набор без повторов: одинаковое второй раз не добавится", 6],
+    [/std::pair\b|\bauto\s*&?\s*\[/, "pair и auto [a, b]", "две вещи вместе и способ разложить их на две переменные", 6],
+    [/\.begin\(\)|\.end\(\)/, "begin() / end()", "начало и конец контейнера — их передают алгоритмам", 7],
+    [/std::(?:stable_sort|sort|count_if|max_element|min_element|find_if|accumulate|transform)\b/, "алгоритмы std::sort, count_if, max_element…", "готовые «сортируй», «посчитай», «найди максимум» — без ручного цикла", 7],
+    [/\bstruct\s+[A-Za-z_]\w*\s*\{/, "struct", "свой тип из нескольких полей: имя, HP, золото — одним значением", 8],
+    [/std::(?:ifstream|ofstream|fstream)\b/, "файлы ifstream / ofstream", "читать из файла и писать в файл так же, как в консоль", 8],
+    [/std::(?:mt19937|uniform_int_distribution|random_device)\b/, "случайные числа <random>", "генератор и «кубик» с нужным диапазоном", 8],
+    [/\bnullptr\b|\bnew\s+[A-Za-z_]/, "указатели", "адрес объекта в памяти; `nullptr` — «никуда не указывает»", 22],
+    [/(?<!enum\s{1,4})\bclass\s+[A-Za-z_]\w*\s*[{:]/, "class", "тип с закрытыми полями: менять их можно только его методами", 13],
+    [/\btry\s*\{|\bcatch\s*\(|\bthrow\b/, "try / catch", "поймать ошибку, которую бросила функция, и не упасть", 14],
+    [/std::string_view\b/, "std::string_view", "взгляд на строку без её копии", 15],
+    [/std::(?:ranges|views)::/, "ranges", "алгоритмы без begin()/end() и цепочки обработки", 16],
+    [/\btemplate\s*</, "template", "одна функция или тип сразу для многих типов", 17],
+    [/std::move\b/, "std::move", "отдать объект, а не копировать его", 23],
+    [/std::(?:unique_ptr|make_unique|shared_ptr|make_shared)\b/, "умные указатели", "объект в куче, который удалится сам", 18],
+    [/\bvirtual\b|\boverride\b/, "virtual / override", "один вызов — разное поведение у разных наследников", 20],
+    [/\bconstexpr\b|\bconsteval\b|\bstatic_assert\b/, "constexpr", "посчитать значение ещё при сборке программы", 25],
+    [/std::(?:variant|visit)\b/, "std::variant", "«одно из нескольких» и разбор всех вариантов", 26],
+    [/std::(?:thread|jthread|mutex|atomic|async)\b/, "потоки", "несколько дел одновременно", 27],
+  ];
+  var REF_GROUP = "Справочник по темам";
+  // Место темы в курсе = её место в группе «Справочник по темам» (данные уже в порядке курса).
+  function courseTopics() { var d = DATA(); return d ? d.files.filter(function (f) { return f.group === REF_GROUP; }) : []; }
+  function courseRank(rel) {
+    var list = courseTopics(), r = String(rel || "").toLowerCase();
+    for (var i = 0; i < list.length; i++) if (list[i].rel.toLowerCase() === r) return i;
+    return -1;
+  }
+  function topicFileByNum(n) {
+    var d = DATA(); if (!d) return null;
+    for (var i = 0; i < d.files.length; i++) if (/^ref\//i.test(d.files[i].rel) && topicNum(d.files[i].rel) === n) return d.files[i];
+    return null;
+  }
+  // Что в этом коде из более поздних тем (без повторов из seen).
+  function aheadNotes(code, rel, seen) {
+    var r = courseRank(rel); if (r < 0) return [];
+    // в комментариях не ищем; строка с main — каркас любой программы, не «своя функция»
+    var out = [], src = String(code || "").replace(/\/\/[^\n]*/g, "").replace(/^.*\bmain\s*\(.*$/gm, "");
+    AHEAD.forEach(function (a) {
+      if (seen && seen[a[1]]) return;
+      var f = topicFileByNum(a[3]); if (!f) return;
+      if (courseRank(f.rel) <= r || !a[0].test(src)) return;
+      if (seen) seen[a[1]] = true;
+      out.push({ name: a[1], what: a[2], n: a[3], f: f });
+    });
+    return out;
+  }
+  function aheadHtml(list, rel) {
+    if (!list.length) return "";
+    var dir = String(rel).replace(/[^/]*$/, "");
+    return '<div class="cd-ahead"><div class="cd-ahead-h"><span class="cd-ahead-ic" aria-hidden="true">»</span>Забегаем вперёд — можно пока не вникать</div><ul>' +
+      list.map(function (x) {
+        var href = x.f.rel.indexOf(dir) === 0 ? x.f.rel.slice(dir.length) : "../" + x.f.rel;
+        return "<li><code>" + escapeHtml(x.name) + "</code> — " + inline(x.what) + ". Подробно — в " +
+          '<a href="' + escapeHtml(href) + '">теме ' + x.n + " «" + escapeHtml(shortTitle(x.f)) + "»</a>.</li>";
+      }).join("") + "</ul></div>";
+  }
+  // После рендера статьи: подписать каждый блок кода (и каждый слайд применений) по порядку страницы.
+  function annotateAhead(root, rel) {
+    if (!root || courseRank(rel) < 0) return;
+    var seen = {};
+    root.querySelectorAll(".codewrap").forEach(function (w) {
+      if (w.closest(".cd-ch, .cd-rep, .cd-cp, .cd-guide")) return;   // задания и эталоны — не трогаем
+      var targets = w.classList.contains("cd-alts") ? w.querySelectorAll(".cd-alt-pane") : [w];
+      for (var i = 0; i < targets.length; i++) {
+        var t = targets[i];
+        var code = t.getAttribute("data-code");
+        if (code == null) { var cb = t.querySelector(".copybtn"); code = cb ? cb.getAttribute("data-code") : ""; }
+        var html = aheadHtml(aheadNotes(code, rel, seen), rel);
+        if (!html) continue;
+        var box = document.createElement("div");
+        setHTML(box, html);
+        if (box.firstChild) t.appendChild(box.firstChild);
+      }
+    });
+  }
+  // ==== runtime/13-games.js — игровые блоки: карта квестов, симулятор лута, волна поиска пути ====
+
+  // ---- ```quests : «Путь героя» — все квесты «Подземелья» с прогрессом ----
+  // Квест = «## Квест N. Название» в proekt/NN-glava-*.md; пройден, когда отмечены ВСЕ пункты его
+  // ```checklist (ключи пунктов — те же cdHash, что у renderChecklist). Тело блока не нужно.
+  function questChecklistItems(src) {
+    var items = [];
+    String(src).split("\n").forEach(function (ln) {
+      var t = ln.replace(/\s+$/, "");
+      var mi = t.match(/^\s*[-*]\s+(.*)$/);
+      if (mi) items.push(mi[1]);
+    });
+    return items;
+  }
+  function collectQuests() {
+    var d = DATA(); if (!d) return null;
+    var files = d.files.filter(function (f) { return /^proekt\/\d\d-glava/i.test(f.rel); })
+      .sort(function (a, b) { return a.rel < b.rel ? -1 : 1; });
+    if (!files.length) return null;
+    var chapters = [], loading = false;
+    files.forEach(function (f) {
+      if (!f.md) { loading = true; return; }
+      var lines = String(f.md).replace(/\r\n?/g, "\n").split("\n");
+      var ch = { rel: f.rel, title: String(f.title || f.name).replace(/^Подземелье\s*·\s*/, ""), quests: [] };
+      var q = null, fence = null, buf = [];
+      lines.forEach(function (ln) {
+        var fm = ln.match(/^```\s*([A-Za-z]*)/);
+        if (fm) {
+          if (fence === null) { fence = fm[1].toLowerCase(); buf = []; return; }
+          if (fence === "checklist" && q) q.items = q.items.concat(questChecklistItems(buf.join("\n")));
+          fence = null; return;
+        }
+        if (fence !== null) { buf.push(ln); return; }
+        var hm = ln.match(/^##\s+(Квест\s+(\d+)\.\s*(.+?))\s*$/);
+        if (hm) { q = { n: +hm[2], title: hm[3], slug: slugify(hm[1]), items: [] }; ch.quests.push(q); }
+        else if (/^##\s/.test(ln)) q = null;
+      });
+      chapters.push(ch);
+    });
+    return { chapters: chapters, loading: loading };
+  }
+  function renderQuestMap() {
+    var qd = collectQuests();
+    if (!qd) return '<div class="cd-qmap cd-qmap-empty">Квесты «Подземелья» не найдены.</div>';
+    if (qd.loading) return '<div class="cd-qmap cd-qmap-empty">Путь героя загружается…</div>';
+    var total = 0, done = 0, next = null, chHtml = "";
+    qd.chapters.forEach(function (ch) {
+      var chDone = 0, nodes = "";
+      ch.quests.forEach(function (q) {
+        var have = q.items.filter(function (it) { return !!state.checks[cdHash(it)]; }).length;
+        var st = q.items.length && have === q.items.length ? "done" : (have ? "part" : "todo");
+        total++; if (st === "done") { done++; chDone++; } else if (!next) { next = { q: q, ch: ch }; st += " next"; }
+        var href = "../" + ch.rel + "#" + q.slug;
+        var pct = q.items.length ? Math.round(have / q.items.length * 100) : 0;
+        nodes += '<a class="cd-qm-node ' + st + '" href="' + escapeHtml(href) + '" style="--qp:' + pct + '" title="Квест ' + q.n + ". " +
+          escapeHtml(q.title) + (st.indexOf("done") === 0 ? " — пройден" : q.items.length ? " — отмечено " + have + " из " + q.items.length : "") + '">' +
+          '<span class="cd-qm-dot">' + (st.indexOf("done") === 0 ? "✓" : q.n) + '</span><span class="cd-qm-nm">' + escapeHtml(q.title) + "</span></a>";
+      });
+      chHtml += '<div class="cd-qm-ch"><div class="cd-qm-chn">' + escapeHtml(ch.title) +
+        '<span class="cd-qm-chc">' + chDone + " / " + ch.quests.length + "</span></div>" +
+        '<div class="cd-qm-path">' + nodes + "</div></div>";
+    });
+    var pct = total ? Math.round(done / total * 100) : 0;
+    var nextHtml = next
+      ? '<a class="cd-qm-next" href="' + escapeHtml("../" + next.ch.rel + "#" + next.q.slug) + '">Следующий: <b>Квест ' + next.q.n + " · " + escapeHtml(next.q.title) + "</b> →</a>"
+      : '<div class="cd-qm-next win">🏆 Все квесты пройдены — игра ваша. Дальше — бонус-квесты ниже.</div>';
+    return '<div class="cd-qmap"><div class="cd-qm-head"><div class="cd-qm-ttl">🗺️ Путь героя</div>' +
+      '<div class="cd-qm-sum">пройдено <b>' + done + "</b> из " + total + " · " + pct + "%</div></div>" +
+      '<div class="cd-qm-bar"><i style="width:' + pct + '%"></i></div>' + chHtml + nextHtml +
+      '<div class="cd-qm-note">Квест засчитывается, когда отмечены все пункты его чек-листа «готово, если».</div></div>';
+  }
+
+  // ---- ```lootsim : сундуки с весами. Строки «Имя = вес», необязательно «@pity N» ----
+  function renderLootSim(src) {
+    var rows = [], pity = 0;
+    String(src).replace(/\r\n?/g, "\n").split("\n").forEach(function (ln) {
+      var pm = ln.match(/^\s*@pity\s+(\d+)\s*$/i); if (pm) { pity = Math.min(200, +pm[1]); return; }
+      var m = ln.match(/^\s*(.+?)\s*=\s*(\d+(?:\.\d+)?)\s*$/);
+      if (m && rows.length < 6 && +m[2] > 0) rows.push({ name: m[1], w: +m[2] });
+    });
+    if (rows.length < 2) return "";
+    var sum = rows.reduce(function (a, r) { return a + r.w; }, 0);
+    var list = rows.map(function (r, i) {
+      var p = Math.round(r.w / sum * 1000) / 10;
+      return '<div class="cd-ls-row r' + i + '"><span class="cd-ls-nm">' + escapeHtml(r.name) + '</span>' +
+        '<span class="cd-ls-want">шанс ' + p + '%</span>' +
+        '<span class="cd-ls-bar"><i class="cd-ls-exp" style="left:' + p + '%"></i><b style="width:0%"></b></span>' +
+        '<span class="cd-ls-got">—</span></div>';
+    }).join("");
+    return '<div class="cd-lootsim" data-rows="' + encodeURIComponent(JSON.stringify(rows)) + '" data-pity="' + pity + '">' +
+      '<div class="cd-ls-head">🎁 Открой сундуки — посмотри, как веса работают на деле</div>' + list +
+      '<div class="cd-ls-trail" aria-label="Последние сундуки"></div>' +
+      '<div class="cd-ls-ctl"><button type="button" class="cd-ls-open" data-n="1">Открыть 1</button>' +
+      '<button type="button" class="cd-ls-open" data-n="10">×10</button><button type="button" class="cd-ls-open" data-n="1000">×1000</button>' +
+      (pity ? '<label class="cd-ls-pityl"><input type="checkbox" class="cd-ls-pity"> гарантия: «' + escapeHtml(rows[rows.length - 1].name) + "» не реже чем раз в " + pity + "</label>" : "") +
+      '<button type="button" class="cd-ls-reset">Сброс</button></div>' +
+      '<div class="cd-ls-stat">Пока ни одного сундука. Черта на полоске — заявленный шанс.</div></div>';
+  }
+  function lootSimClick(t) {
+    var box = t.closest(".cd-lootsim"); if (!box) return false;
+    var open = t.closest(".cd-ls-open"), reset = t.closest(".cd-ls-reset");
+    if (!open && !reset) return false;
+    var rows = []; try { rows = JSON.parse(decodeURIComponent(box.getAttribute("data-rows") || "")); } catch (e) { return true; }
+    var pity = +box.getAttribute("data-pity") || 0, last = rows.length - 1;
+    if (!box.__ls || reset) box.__ls = { cnt: rows.map(function () { return 0; }), total: 0, dry: 0, maxDry: 0, trail: [] };
+    var S = box.__ls, sum = rows.reduce(function (a, r) { return a + r.w; }, 0);
+    var pityOn = pity && box.querySelector(".cd-ls-pity") && box.querySelector(".cd-ls-pity").checked;
+    var n = open ? +open.getAttribute("data-n") || 1 : 0;
+    for (var k = 0; k < n; k++) {
+      var pick;
+      if (pityOn && S.dry >= pity - 1) pick = last;               // гарантия: давно не было — выдаём редчайшее
+      else { var r = Math.random() * sum, i = 0; while (i < last && r >= rows[i].w) { r -= rows[i].w; i++; } pick = i; }
+      S.cnt[pick]++; S.total++;
+      if (pick === last) S.dry = 0; else { S.dry++; if (S.dry > S.maxDry) S.maxDry = S.dry; }
+      S.trail.push(pick); if (S.trail.length > 24) S.trail.shift();
+    }
+    box.querySelectorAll(".cd-ls-row").forEach(function (row, i) {
+      var share = S.total ? S.cnt[i] / S.total * 100 : 0;
+      row.querySelector(".cd-ls-bar b").style.width = Math.min(100, share) + "%";
+      row.querySelector(".cd-ls-got").textContent = S.total ? S.cnt[i] + " · " + (Math.round(share * 10) / 10) + "%" : "—";
+    });
+    setHTML(box.querySelector(".cd-ls-trail"), S.trail.map(function (p) { return '<i class="r' + p + '" title="' + escapeHtml(rows[p].name) + '"></i>'; }).join(""));
+    box.querySelector(".cd-ls-stat").textContent = S.total
+      ? "Открыто: " + S.total + " · последний: " + rows[S.trail[S.trail.length - 1]].name + " · без «" + rows[last].name + "» подряд сейчас " + S.dry +
+        ", самая длинная серия " + S.maxDry + (S.total < 100 ? ". Открой ×1000 — доли подтянутся к заявленным." : ".")
+      : "Пока ни одного сундука. Черта на полоске — заявленный шанс.";
+    return true;
+  }
+
+  // ---- ```bfsgrid : карта (# стена, . пол, S игрок, E враг). Клик — стена/пол, волна считается заново ----
+  function bfsParse(src) {
+    var rows = String(src).replace(/\r\n?/g, "\n").split("\n").map(function (l) { return l.replace(/\s+$/, ""); })
+      .filter(function (l) { return l.length && !/^\s*#\s/.test(l); }).slice(0, 16);
+    var w = rows.reduce(function (a, r) { return Math.max(a, r.length); }, 0);
+    if (!w || w > 30 || rows.length < 2) return null;
+    return rows.map(function (r) { var o = []; for (var x = 0; x < w; x++) { var c = r.charAt(x) || "#"; o.push(/[#.SE]/.test(c) ? c : "."); } return o; });
+  }
+  function bfsDist(g) {
+    var h = g.length, w = g[0].length, dist = [], sx = -1, sy = -1, ex = -1, ey = -1, x, y;
+    for (y = 0; y < h; y++) { dist.push([]); for (x = 0; x < w; x++) { dist[y].push(-1); if (g[y][x] === "S") { sx = x; sy = y; } if (g[y][x] === "E") { ex = x; ey = y; } } }
+    if (sx < 0) return { dist: dist, path: {}, max: 0, reach: -1 };
+    var q = [[sx, sy]], head = 0, max = 0; dist[sy][sx] = 0;
+    var D = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    while (head < q.length) {
+      var c = q[head++];
+      D.forEach(function (d) {
+        var nx = c[0] + d[0], ny = c[1] + d[1];
+        if (ny < 0 || ny >= h || nx < 0 || nx >= w || g[ny][nx] === "#" || dist[ny][nx] >= 0) return;
+        dist[ny][nx] = dist[c[1]][c[0]] + 1; if (dist[ny][nx] > max) max = dist[ny][nx];
+        q.push([nx, ny]);
+      });
+    }
+    var path = {}, reach = ex >= 0 ? dist[ey][ex] : -1;
+    if (reach > 0) {                     // от врага — к клетке, где волна на 1 меньше: так враг и идёт к игроку
+      var cx = ex, cy = ey;
+      while (dist[cy][cx] > 0) {
+        path[cx + "," + cy] = 1;
+        for (var i = 0; i < 4; i++) {
+          var px = cx + D[i][0], py = cy + D[i][1];
+          if (py >= 0 && py < h && px >= 0 && px < w && dist[py][px] === dist[cy][cx] - 1) { cx = px; cy = py; break; }
+        }
+      }
+    }
+    return { dist: dist, path: path, max: max, reach: reach };
+  }
+  function bfsGridHtml(g, limit) {
+    var r = bfsDist(g), html = "";
+    g.forEach(function (row, y) {
+      row.forEach(function (c, x) {
+        var d = r.dist[y][x], show = d >= 0 && (limit == null || d <= limit);
+        var cls = c === "#" ? "wall" : c === "S" ? "start" : c === "E" ? "enemy" : "floor";
+        if (show && r.path[x + "," + y] && (limit == null || limit >= r.reach)) cls += " path";
+        var tone = show && r.max ? Math.round(d / r.max * 100) : 0;
+        var label = c === "S" ? "@" : c === "E" ? "E" : c === "#" ? "" : (show ? String(d) : "");
+        html += '<button type="button" class="cd-bfs-c ' + cls + (show ? " on" : "") + '" data-x="' + x + '" data-y="' + y + '" style="--t:' + tone + '"' +
+          (c === "#" || c === "." ? ' title="Клик — ' + (c === "#" ? "убрать стену" : "поставить стену") + '"' : "") + ">" + label + "</button>";
+      });
+    });
+    var status = r.reach > 0 ? "Враг дойдёт до героя за <b>" + r.reach + "</b> " + plural(r.reach, ["шаг", "шага", "шагов"]) + " — путь подсвечен."
+      : r.reach === 0 ? "Враг уже рядом." : "Стены перекрыли дорогу — волна не дошла до врага, ему некуда идти.";
+    return { grid: html, status: status, cols: g[0].length, max: r.max };
+  }
+  function renderBfsGrid(src) {
+    var g = bfsParse(src); if (!g) return "";
+    var v = bfsGridHtml(g);
+    return '<div class="cd-bfs" data-map="' + encodeURIComponent(g.map(function (r) { return r.join(""); }).join("\n")) + '">' +
+      '<div class="cd-bfs-head">🧭 Волна от героя: число в клетке — сколько шагов до неё. Кликай по клеткам — ставь и убирай стены.</div>' +
+      '<div class="cd-bfs-grid" style="--cols:' + v.cols + '">' + v.grid + "</div>" +
+      '<div class="cd-bfs-st">' + v.status + "</div>" +
+      '<div class="cd-bfs-ctl"><button type="button" class="cd-bfs-play">▶ Волна по шагам</button><button type="button" class="cd-bfs-reset">Вернуть карту</button></div></div>';
+  }
+  function bfsRedraw(box, limit) {
+    var v = bfsGridHtml(box.__g, limit);
+    setHTML(box.querySelector(".cd-bfs-grid"), v.grid);
+    setHTML(box.querySelector(".cd-bfs-st"), limit == null || limit >= v.max ? v.status : "Волна: шаг " + limit + "…");
+    return v;
+  }
+  function bfsClick(t) {
+    var box = t.closest(".cd-bfs"); if (!box) return false;
+    if (!box.__g || t.closest(".cd-bfs-reset")) {
+      box.__g = bfsParse(decodeURIComponent(box.getAttribute("data-map") || ""));
+      if (!box.__g) return true;
+    }
+    clearTimeout(box.__timer);
+    var cell = t.closest(".cd-bfs-c");
+    if (cell) {
+      var x = +cell.getAttribute("data-x"), y = +cell.getAttribute("data-y"), c = box.__g[y] && box.__g[y][x];
+      if (c === "#" || c === ".") box.__g[y][x] = c === "#" ? "." : "#";
+      bfsRedraw(box); return true;
+    }
+    if (t.closest(".cd-bfs-play")) {
+      var v = bfsRedraw(box, 0), k = 0;
+      if (state.noAnim || prefersReducedMotion()) { bfsRedraw(box); return true; }
+      var tick = function () { k++; bfsRedraw(box, k); if (k < v.max) box.__timer = setTimeout(tick, 170); };
+      box.__timer = setTimeout(tick, 170);
+      return true;
+    }
+    if (t.closest(".cd-bfs-reset")) { bfsRedraw(box); return true; }
+    return false;
+  }
+  // Клики по игровым блокам (зовёт onArticleClick).
+  function gamesClick(e) {
+    var t = e.target; if (!t || !t.closest) return false;
+    return lootSimClick(t) || bfsClick(t);
   }
   // ==== runtime/13-interactive.js — обработка кликов интерактивных блоков, поиск по тексту, клавиатура ====
   // ------- опросник / «найди ошибку» (общая обработка для читалки и сплита) -------
@@ -7907,6 +9886,9 @@
     var exAgain = t.closest(".cd-exam-again");
     if (exAgain) { e.preventDefault(); examReset(exAgain); return true; }
     if (bossClick(t)) { e.preventDefault(); return true; }
+    if (repeatClick(t, e) || checkpointClick(t)) { e.preventDefault(); return true; }
+    var altB = t.closest(".cd-alt-go, .cd-alt-tab");
+    if (altB) { e.preventDefault(); altGo(altB); return true; }
     var stb = t.closest(".cd-st-btn");
     if (stb) { e.preventDefault(); stepsClick(stb); return true; }
     if (memClick(t)) { e.preventDefault(); return true; }
@@ -7953,12 +9935,14 @@
   // Отметить ката решённой (прогресс переживает перезапуск; день идёт в «серию»).
   function challengeSolved(box) {
     var id = box.getAttribute("data-id");
-    if (id && !state.challenge[id]) { state.challenge[id] = true; saveState(); try { recordActivity(); } catch (e) {} }
+    if (id && !state.challenge[id]) { state.challenge[id] = true; try { noteSolvedFirst(box); } catch (e) {} saveState(); try { recordActivity(); } catch (e) {} }
     if (id && state.daily && state.daily.id === id && state.daily.date === cdDate(0) && !state.dailyDone[cdDate(0)]) {
+      try { noteDailySolved(box); } catch (e) {}
       state.dailyDone[cdDate(0)] = 1; saveState();
       toast("Задача дня решена! Серия: " + dailyStreak());
     }
     box.classList.add("done");
+    try { repeatSolved(box); } catch (e) {}
   }
   // Parsons: клик по строке перекладывает её между «банком» и «решением».
   function parsonsPick(li) {
@@ -7991,7 +9975,7 @@
       if (!good) okAll = false;
     }
     if (okAll) { if (msg) { msg.textContent = "Верно! Программа собрана правильно."; msg.className = "cd-ch-msg ok"; } challengeSolved(box); }
-    else if (got.length === want.length) missParsons(box);   // собрал всё, но не в том порядке
+    else if (got.length === want.length) { missParsons(box); noteAttempt(box, false); }   // собрал всё, но не в том порядке
     else if (msg) { msg.textContent = got.length !== want.length ? ("Нужно " + want.length + " " + plural(want.length, ["строка", "строки", "строк"]) + ", а стоит " + got.length + ".") : ("Строка " + firstBad + " не на месте — поправь порядок."); msg.className = "cd-ch-msg err"; }
   }
   // Predict: сверяем введённый вывод с эталоном (построчно, схлопнув лишние пробелы).
@@ -8004,7 +9988,7 @@
     inp.classList.remove("right", "wrong"); inp.classList.add(good ? "right" : "wrong");
     if (msg) {
       if (good) { msg.textContent = "Верно!"; msg.className = "cd-ch-msg ok"; challengeSolved(box); }
-      else { msg.textContent = "Не совпало. Проследи код по шагам и попробуй снова."; msg.className = "cd-ch-msg err"; missPredict(box); }
+      else { msg.textContent = "Не совпало. Проследи код по шагам и попробуй снова."; msg.className = "cd-ch-msg err"; missPredict(box); noteAttempt(box, false); }
     }
   }
   function predictReveal(btn) {
@@ -8013,9 +9997,10 @@
     var exp = decodeURIComponent(box.getAttribute("data-exp") || "");
     if (inp) { inp.value = exp; inp.classList.remove("wrong"); }
     if (msg) { msg.textContent = "Ответ показан."; msg.className = "cd-ch-msg"; }
+    box.__revealed = true; noteHint(box);
     if (!box.classList.contains("done")) missPredict(box);
   }
-  // «Напиши и запусти»: пишем код+тесты в req-файл, ждём res-файл от хоста, показываем прогон.
+  // «Напиши и запусти»: код и тесты — запросом к расширению (мост / вкладка / Moon Core), ответ — прогон.
   var _runSeq = 0;
   function runChallengeRun(btn) {
     var box = btn.closest(".cd-ch-run"); if (!box) return;
@@ -8023,15 +10008,15 @@
     var ta = box.querySelector(".cd-run-code");
     if (!ta) return;
     var tests = []; try { tests = JSON.parse(decodeURIComponent(box.getAttribute("data-tests") || "[]")); } catch (e) {}
-    var id = "r" + Date.now() + "-" + (++_runSeq);
+    var id = "r" + Date.now() + "-" + (++_runSeq), mode = box.getAttribute("data-mode") === "contains" ? "contains" : undefined;
     btn.disabled = true;
     if (msg) { msg.textContent = "Компилирую и запускаю…"; msg.className = "cd-ch-msg"; }
     if (out) { out.hidden = true; setHTML(out, ""); }
     setMood(box, "think");
     // Запрос с ответом сразу: у каждой задачи своё ожидание, соседняя его не отменит.
-    rpc("run", { id: id, code: ta.value, tests: tests.slice(0, PROTO.MAX_TESTS) }, PROTO.RUN_TIMEOUT_MS, function (res) {
+    rpc("run", { id: id, code: ta.value, tests: tests.slice(0, PROTO.MAX_TESTS), mode: mode }, PROTO.RUN_TIMEOUT_MS, function (res) {
       btn.disabled = false;
-      if (res) { renderRunResult(box, res); return; }
+      if (res) { renderRunResult(box, res); try { noteRunResult(box, res); } catch (e) {} return; }
       setMood(box, "oops");
       if (msg) { msg.textContent = "Нет ответа от расширения. Проверь, что оно активно («Документация C++: проверить плавающее окно»)."; msg.className = "cd-ch-msg err"; }
     });
@@ -8074,15 +10059,28 @@
     var tests = res.tests || [], passed = 0, rows = "";
     tests.forEach(function (t) {
       if (t.pass) passed++;
+      if (t.skipped) {   // хост остановил прогон: программа зависла или кончилось время
+        rows += '<div class="cd-run-t skip"><span class="cd-run-tmark">–</span><span class="cd-run-tin">вход: <code>' +
+          testShow(t["in"] == null ? "∅" : t["in"]) + "</code> · не запускался</span></div>";
+        return;
+      }
       rows += '<div class="cd-run-t ' + (t.pass ? "ok" : "bad") + '"><span class="cd-run-tmark">' + (t.pass ? "✓" : "✗") + "</span>" +
         '<span class="cd-run-tin">вход: <code>' + testShow(t["in"] == null ? "∅" : t["in"]) + "</code></span>" +
         (t.pass ? "" : '<span class="cd-run-tgot">вывод <code>' + testShow(t.got == null ? "" : t.got) +
-          '</code> · ждали <code>' + testShow(t.expected == null ? "" : t.expected) + "</code></span>") + "</div>";
+          '</code> · ждали <code>' + testShow(t.expected == null ? "" : t.expected) + "</code></span>") +
+        // программа упала: причина простыми словами + начало stderr (там часто what() исключения)
+        (t.crash ? '<span class="cd-run-tcrash">💥 Программа упала: ' + escapeHtml(String(t.crash)) +
+          (t.stderr ? '<code>' + escapeHtml(String(t.stderr).slice(0, 300)) + "</code>" : "") + "</span>" : "") + "</div>";
     });
     if (out) { out.hidden = false; setHTML(out, rows || '<div class="cd-run-t ok"><span class="cd-run-tmark">✓</span><span class="cd-run-tin">скомпилировалось без ошибок</span></div>'); }
     if (msg) {
       if (res.ok && tests.length) { msg.textContent = "Все тесты пройдены (" + passed + "/" + tests.length + ")!"; msg.className = "cd-ch-msg ok"; challengeSolved(box); syncSolution(box); }
-      else if (tests.length) { msg.textContent = "Пройдено " + passed + " из " + tests.length + " — поправь код и запусти снова."; msg.className = "cd-ch-msg err"; }
+      else if (tests.length) {
+        msg.textContent = "Пройдено " + passed + " из " + tests.length + (res.stopped === "hang"
+          ? " — программа зависла (бесконечный цикл?), остальные тесты не запускались."
+          : res.stopped ? " — время вышло, остальные тесты не запускались." : " — поправь код и запусти снова.");
+        msg.className = "cd-ch-msg err";
+      }
       else { msg.textContent = "Скомпилировалось без ошибок."; msg.className = "cd-ch-msg ok"; }
     }
   }
@@ -8255,6 +10253,7 @@
     var hlu = e.target.closest && e.target.closest(".cd-hlu");
     if (hlu) { e.preventDefault(); removeHighlight(hlu); return; }
     if (quizClick(e)) return;
+    if (gamesClick(e)) return;                     // сундуки, волна поиска пути
     // клик по строке таблицы «Задачи темы» — переход к самой задаче
     var taskRow = e.target.closest && e.target.closest("tr.cd-taskrow");
     if (taskRow && !e.target.closest("a[href]")) { gotoTask(taskRow.getAttribute("data-num")); return; }
@@ -8312,8 +10311,10 @@
     return !!((t && t.nodeType === 1 && win.contains(t)) || (ae && ae !== document.body && win.contains(ae)));
   }
   function onKey(e) {
+    if (isOpen() && altKey(e)) return;                     // ← → листают применения примера
     if (!isOpen() || e.key !== "Escape") return;
     if (!focusInside(winEl, e.target, document.activeElement)) return;
+    if (progressOpen()) { e.stopPropagation(); hideProgress(); return; }                 // окно «Прогресс»
     if (guideEl && !guideEl.hidden) { e.stopPropagation(); hideGuide(); return; }        // сперва закрываем руководство
     if (viewMenu && !viewMenu.hidden) { viewMenu.hidden = true; return; }
     if (edPopEl && !edPopEl.hidden) { edPopEl.hidden = true; return; }
@@ -8371,6 +10372,10 @@
   // прислало адрес webview (https://…vscode-cdn.net/…) — берём как есть.
   function resUrl(u) {
     if (IN_PANEL && /^https:\/\/[^"'()\s<>]+$/.test(String(u || ""))) return String(u);
+    // Превью в браузере (npm run preview:window / dev): картинки отдаёт локальный сервер превью.
+    // В оболочке VS Code страница открыта по vscode-file:, так что эта ветка там не срабатывает.
+    if (typeof location !== "undefined" && /^https?:$/.test(location.protocol) &&
+        /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/[^"'()\s<>]*$/.test(String(u || ""))) return String(u);
     return appUrl(u);
   }
   function appRead(u) {
@@ -8384,8 +10389,23 @@
     } catch (e) { return null; }       // файла нет — оболочка отвечает ошибкой сети
   }
   var _bridge = null, _bridgeAt = 0;
+  // Через Moon Core: события модуля вместо своего потока (подписываемся один раз).
+  var _mcSubscribed = false;
+  function mcSubscribe() {
+    if (_mcSubscribed || !MCM) return;
+    _mcSubscribed = true;
+    _esLive = true;   // контекст редактора и метка приходят событиями — опрос файлов не нужен
+    try {
+      MCM.on("editor", function (txt) { var p = parseEditorText(String(txt)); if (p) { editorPayload = p; applyEditorPayload(p); } });
+      MCM.on("stamp", function (txt) { applyStampText(String(txt)); });
+      MCM.on("progress", function (txt) { onProgressEvent(String(txt)); });
+    } catch (e) { _esLive = false; }
+  }
   function bridgeInfo() {
     if (IN_PANEL) return null;
+    // Moon Core: события — через его мост, но свой мост расширения тоже жив: им пишем зеркало
+    // прогресса (у моста Moon Core лимит 1 МБ и нет sendBeacon при закрытии окна).
+    if (MCM) mcSubscribe();
     if (_bridge && Date.now() - _bridgeAt < 10000) return _bridge;
     _bridgeAt = Date.now();
     var d = DATA(), txt = appRead((d && d.bridgeUrl) || bootVal("bridgeUrl"));
@@ -8405,7 +10425,7 @@
         var fresh = !prev || prev.token !== _bridge.token;
         // «я на связи» — для «Проверить плавающее окно» (один раз на адрес моста)
         if (fresh && typeof fetch === "function") try { fetch("http://127.0.0.1:" + _bridge.port + "/ping/" + _bridge.token, { cache: "no-store" }).catch(function () {}); } catch (e) {}
-        if (fresh) connectEvents();
+        if (fresh && !MCM) connectEvents();
       }
     } catch (e) {}
     return _bridge;
@@ -8444,6 +10464,7 @@
       if (p) { editorPayload = p; applyEditorPayload(p); }
     });
     _es.addEventListener("stamp", function (ev) { applyStampText(ev.data); });
+    _es.addEventListener("progress", function (ev) { onProgressEvent(ev.data); });
   }
   // Записать зеркало прогресса через мост (во вкладке — сообщением). Асинхронно; true — запрос ушёл.
   function bridgeWrite(u, text, beacon) {
@@ -8451,7 +10472,7 @@
     if (PROTO.WRITABLE.indexOf(name) === -1) return false;
     if (IN_PANEL) { try { VSC.postMessage({ type: "write", name: name, text: String(text) }); return true; } catch (e) { return false; } }
     var b = bridgeInfo();
-    if (!b) return false;
+    if (!b) return MCM ? mcWrite(name, text) : false;
     var target = "http://127.0.0.1:" + b.port + "/w/" + b.token + "/" + name;
     // sendBeacon переживает выгрузку страницы; text/plain не требует CORS-предзапроса.
     if (beacon && typeof navigator !== "undefined" && navigator.sendBeacon) {
@@ -8461,7 +10482,28 @@
     try {
       fetch(target, {
         method: "POST", body: String(text), headers: { "Content-Type": "text/plain" }, mode: "cors", cache: "no-store",
-      }).then(function (r) { if (!r.ok) bridgeFailed(b); }, function () { bridgeFailed(b); });   // сбой — возьмём другой хост
+      }).then(function (r) { if (!r.ok) { bridgeFailed(b); if (MCM) mcWrite(name, text); } },
+        function () { bridgeFailed(b); if (MCM) mcWrite(name, text); });   // сбой — возьмём другой хост (или мост Moon Core)
+      return true;
+    } catch (e) { return false; }
+  }
+  // Запись через мост Moon Core: у него лимит тела запроса ~1 МБ. Больше — не молчим, а сообщаем
+  // (журнал + один раз подсказка): иначе прогресс тихо переставал бы сохраняться.
+  var MC_MAX_WRITE = 1000 * 1000, _mcBigWarned = false;
+  function mcWrite(name, text) {
+    text = String(text);
+    if (text.length > MC_MAX_WRITE) {
+      if (!_mcBigWarned) {
+        _mcBigWarned = true;
+        reportError("зеркало прогресса", new Error("зеркало " + Math.round(text.length / 1024) + " КБ больше лимита моста Moon Core; мост расширения недоступен"));
+        toast("Резервная копия прогресса не сохранилась: слишком большая. Проверь «Документация C++: проверить плавающее окно».", true);
+      }
+      return false;
+    }
+    try {
+      MCM.rpc("write", { name: name, text: text }).then(function (r) {
+        if (!r || !r.ok) reportError("зеркало прогресса", new Error((r && r.error) || "мост Moon Core не принял запись"));
+      }, function () {});
       return true;
     } catch (e) { return false; }
   }
@@ -8491,6 +10533,14 @@
       var id = "q" + Date.now() + "-" + (++_rpcSeq);
       _rpcWait[id] = function (r) { delete _rpcWait[id]; finish(r); };
       try { VSC.postMessage({ type: "rpc", id: id, method: method, body: body }); } catch (e) { delete _rpcWait[id]; finish(null); }
+      return;
+    }
+    if (MCM) {
+      // Мост Moon Core сам выбирает хост этого окна; ответ модуля — { ok, result }.
+      try {
+        // Своё ожидание: «Запустить» идёт до минуты, а у моста Moon Core по умолчанию 8 с.
+        MCM.rpc(method, body, { timeoutMs: Math.max(1000, timeoutMs - 1000) }).then(function (r) { finish(r && r.ok ? r.result : null); }, function () { finish(null); });
+      } catch (e) { finish(null); }
       return;
     }
     var hosts = bridgeHosts(), i = 0;
@@ -8530,16 +10580,18 @@
     // адрес самой страницы (скрипты VS Code — отдельные .js). Во вкладке страница целиком наша.
     window.addEventListener("error", function (ev) {
       if (!ev) return;
-      var mine = IN_PANEL || (ev.filename && typeof location !== "undefined" && String(ev.filename).split("?")[0] === String(location.href).split("?")[0]);
+      var fn = String(ev.filename || "").split("?")[0];
+      var mine = IN_PANEL || (fn && typeof location !== "undefined" && fn === String(location.href).split("?")[0]) ||
+        /mooncore-mod-cppdocs\.js$/.test(fn);   // файл модуля Moon Core рядом с оболочкой
       if (mine) reportError("window.onerror", ev.error || ev.message);
     });
     if (IN_PANEL) window.addEventListener("unhandledrejection", function (ev) { reportError("promise", ev && ev.reason); });
   } catch (e) {}
-  function nodeRead(u) {
+  // Прочитать файл хранилища/расширения (vscode-file://; во вкладке — только зеркало прогресса).
+  function fileRead(u) {
     if (IN_PANEL) return u && u === progressUrl() && typeof window.__CPPDOCS_MIRROR__ === "string" ? window.__CPPDOCS_MIRROR__ : null;
     return appRead(u);
   }
-  function nodeWrite(u, text) { return bridgeWrite(u, text); }
   // Асинхронное чтение (данные окна — сотни КБ: синхронный запрос подвесил бы интерфейс VS Code).
   function appReadAsync(u, cb) {
     if (IN_PANEL) { cb(null); return; }
@@ -9071,7 +11123,7 @@
   function pollEditor() {
     var d = DATA(); var url = (d && d.editorUrl) || bootVal("editorUrl");
     if (!url) return;
-    var txt = nodeRead(url); if (txt == null) return;   // файла нет — не трогаем плашку
+    var txt = fileRead(url); if (txt == null) return;   // файла нет — не трогаем плашку
     if (txt === _editorText) { applyEditorPayload(editorPayload); return; }
     _editorText = txt;
     editorPayload = parseEditorText(txt);
@@ -9110,7 +11162,7 @@
   function pollStamp() {
     var d = DATA();
     var url = (d && d.stampUrl) || bootVal("stampUrl");
-    if (url) applyStampText(nodeRead(url));
+    if (url) applyStampText(fileRead(url));
   }
 
   // ==== runtime/16-boot.js — кнопка-запуск, самолечение, старт ====
@@ -9268,6 +11320,7 @@
         if (obj) { window.__CPPDOCS__ = obj; rebuildFromData(); }
       }
       else if (m.type === "theme") { try { applyAccent(); applyThemeClasses(); } catch (e) {} }
+      else if (m.type === "progress" && typeof m.text === "string") { window.__CPPDOCS_MIRROR__ = m.text; onProgressEvent(m.text); }
     });
     try {
       document.addEventListener("mouseup", function () { setTimeout(onArticleSelect, 0); });
@@ -9282,7 +11335,7 @@
     try {
       var b0 = window.__CPPDOCS_BOOT__, d0 = DATA();
       CD_NONCE = (b0 && typeof b0.scriptNonce === "string" && b0.scriptNonce) ||
-                 (d0 && typeof d0.scriptNonce === "string" && d0.scriptNonce) || "";
+                 (d0 && typeof d0.scriptNonce === "string" && d0.scriptNonce) || MC_NONCE || "";
     } catch (e) {}
     if (IN_PANEL) { bootPanel(); return; }
     heal();
@@ -9339,6 +11392,16 @@
     // для тестов: заготовка задачи, интервалы на кнопках, лимит новых карточек, режим по разделам
     taskStubCode: taskStubCode, ivlLabel: ivlLabel, cdPreview: cdPreview, newLeftToday: newLeftToday,
     tidyArticle: tidyArticle, showSection: showSection, parseTopics: parseTopics, examPassedTopics: examPassedTopics,
-    _rpc: function (m, b, t, cb) { rpc(m, b, t, cb); }, _scrubHTML: scrubHTML, _stateSchema: { migrate: migrateState, normalize: normalizeState, prune: pruneState, version: STATE_VERSION }, stepsNorm: stepsNorm, collectChallenges: collectChallenges, dailyChallenge: dailyChallenge, dailyStreak: dailyStreak, parseMemory: parseMemory, parseFrames: parseFrames, focusInside: focusInside, _adoptProgress: adoptProgress, _saveState: function () { saveState(); }, _sticker: function (n) { return STICKERS[n]; }, _read: function (u) { return nodeRead(u); }, _write: function (u, t) { return nodeWrite(u, t); },
+    _rpc: function (m, b, t, cb) { rpc(m, b, t, cb); }, _scrubHTML: scrubHTML, _stateSchema: { migrate: migrateState, normalize: normalizeState, prune: pruneState, version: STATE_VERSION }, stepsNorm: stepsNorm, collectChallenges: collectChallenges, dailyChallenge: dailyChallenge, dailyStreak: dailyStreak, parseMemory: parseMemory, parseFrames: parseFrames, focusInside: focusInside, _adoptProgress: adoptProgress, _saveState: function () { saveState(); }, _sticker: function (n) { return STICKERS[n]; }, _read: function (u) { return fileRead(u); }, _write: function (u, t) { return bridgeWrite(u, t); },
+    // для тестов: игровые блоки (волна BFS, квесты «Подземелья»)
+    bfsDist: bfsDist, bfsParse: bfsParse, collectQuests: collectQuests,
+    // для тестов: освоение тем, карта, экзамен недели, достижения, рекорды, сравнение кода, Anki
+    progressTopics: progressTopics, topicMastery: topicMastery, topicUnlocked: topicUnlocked, weakSpots: weakSpots,
+    knowledgeMapHtml: knowledgeMapHtml, weekKey: weekKey, buildWeeklyExam: buildWeeklyExam, quizQuestionsOf: quizQuestionsOf,
+    checkAchievements: checkAchievements, achList: ACH, noteRunResult: noteRunResult, noteDailySolved: noteDailySolved,
+    noteDailyOpened: noteDailyOpened, dailyRecordLine: dailyRecordLine, recordsHtml: recordsHtml, achHtml: achHtml,
+    diffHtml: diffHtml, codeLines: codeLines, lcsOps: lcsOps, codeNames: codeNames, exampleRefCode: exampleRefCode,
+    renderCheckpoint: renderCheckpoint, renderRepeat: renderRepeat, ankiExportText: ankiExportText,
+    onProgressEvent: onProgressEvent, keepRecent: keepRecent, aheadNotes: aheadNotes, renderCodeAlts: renderCodeAlts,
   };
 })();

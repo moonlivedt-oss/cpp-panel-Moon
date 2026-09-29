@@ -156,7 +156,7 @@
   }
   function startReview() {
     reviewQueue = buildReviewQueue();
-    reviewPos = 0; reviewOk = 0; reviewWarmup = false;
+    resetReviewSession(false);
     if (!reviewQueue.length) return;
     showReview();
   }
@@ -188,8 +188,11 @@
   }
   function dailyChallenge() {
     var today = cdDate(0);
-    if (state.daily && state.daily.date === today && lookupFile(state.daily.rel)) return state.daily;
-    var all = collectChallenges();
+    if (state.daily && state.daily.date === today && lookupFile(state.daily.rel) &&
+        (state.daily.type !== "run" || (DATA() && DATA().run && DATA().run.enabled))) return state.daily;
+    // «Напиши и запусти» без cppDocs.localRun решить нельзя — такая задача дня сожгла бы серию.
+    var runOn = !!(DATA() && DATA().run && DATA().run.enabled);
+    var all = collectChallenges().filter(function (c) { return runOn || c.type !== "run"; });
     if (!all.length) return null;
     var opened = all.filter(function (c) { return state.read[c.rel] || (state.recent || []).indexOf(c.rel) !== -1; });
     var pool = opened.length ? opened : all.filter(function (c) { return topicNum(c.rel) <= 3; });
@@ -213,6 +216,7 @@
   }
   function openDaily() {
     var dc = dailyChallenge(); if (!dc) return;
+    try { noteDailyOpened(); } catch (e) {}
     openFile(dc.rel);
     setTimeout(function () {
       var box = articleEl && articleEl.querySelector('[data-id="' + cssEscape(dc.id) + '"]');
@@ -229,7 +233,8 @@
       '<span class="cd-hw-ic">' + (done ? "✓" : emo("ui-dice", "🎯")) + "</span>" +
       '<div class="cd-hc-main"><div class="cd-hc-lbl">Задача дня · ' + escapeHtml(DAILY_TYPES[dc.type] || "задание") + (done ? " · решена" : "") + "</div>" +
       '<div class="cd-hc-title">' + escapeHtml(dc.prompt || "Задание из темы") + "</div>" +
-      '<div class="cd-hc-meta">' + escapeHtml(dc.title) + (streak ? " · серия " + streak + " " + plural(streak, ["день", "дня", "дней"]) : " · реши — начнётся серия") + "</div></div>" +
+      '<div class="cd-hc-meta">' + escapeHtml(dc.title) + (streak ? " · серия " + streak + " " + plural(streak, ["день", "дня", "дней"]) : " · реши — начнётся серия") +
+      (function () { var r = ""; try { r = dailyRecordLine(dc.type); } catch (e) {} return r ? " · " + escapeHtml(r) : ""; })() + "</div></div>" +
       (done ? "" : '<div class="cd-hc-arrow">→</div>') + "</div>";
   }
   function buildWarmupQueue() {
@@ -252,48 +257,136 @@
   function warmupDoneToday() { return state.warmupDone === cdDate(0); }
   function startWarmup() {
     reviewQueue = buildWarmupQueue();
-    reviewPos = 0; reviewOk = 0; reviewWarmup = true;
+    resetReviewSession(true);
     if (!reviewQueue.length) return;
     showReview();
+  }
+  function resetReviewSession(warm) {
+    reviewPos = 0; reviewOk = 0; reviewWarmup = !!warm;
+    reviewLog = []; reviewUndo = null; reviewStreak = 0; reviewTyped = "";
+  }
+  var RV_GRADES = [   // [подпись, значок, класс]
+    ["Не помню", "✗", "g0"], ["Трудно", "~", "g1"], ["Помню", "✓", "g2"],
+  ];
+  // Дорожка сессии: точка на карточку, отвеченные окрашены оценкой, текущая пульсирует.
+  function reviewTrackHtml() {
+    var n = reviewQueue.length;
+    if (n > 24) {
+      return '<span class="cd-rv-prog"><i style="width:' + Math.round(reviewPos / n * 100) + '%"></i></span>';
+    }
+    var html = '<span class="cd-rv-track">';
+    for (var i = 0; i < n; i++) {
+      var lg = reviewLog[i], cls = lg ? "g" + lg.g : (i === reviewPos ? "cur" : "");
+      if (reviewQueue[i] && reviewQueue[i].again) cls += " again";
+      html += '<i class="' + cls + '"></i>';
+    }
+    return html + "</span>";
+  }
+  function reviewTopHtml() {
+    return '<div class="cd-rv-top">' +
+      '<span class="cd-rv-count">' + (reviewWarmup ? "Разминка · " : "Повторение · ") + Math.min(reviewPos + 1, reviewQueue.length) + " / " + reviewQueue.length + "</span>" +
+      reviewTrackHtml() +
+      (reviewUndo ? '<button class="cd-rv-undo" type="button" title="Отменить последнюю оценку">↶ Назад</button>' : "") +
+      '<button class="cd-rv-close" type="button" title="Закрыть">✕</button></div>';
+  }
+  // Сколько карточек этой сессии вернётся завтра и на этой неделе (по свежему расписанию).
+  function reviewReturns() {
+    var t1 = cdDate(1), t7 = cdDate(7), tomorrow = 0, week = 0, seen = {};
+    reviewLog.forEach(function (l) {
+      if (!l.id || seen[l.id]) return; seen[l.id] = true;
+      var rec = state.cards[l.id]; if (!rec || !rec.due) return;
+      if (String(rec.due) <= t1) tomorrow++; else if (String(rec.due) <= t7) week++;
+    });
+    return { tomorrow: tomorrow, week: week };
+  }
+  function reviewDoneHtml() {
+    var wm = (typeof STICKERS !== "undefined" && STICKERS && STICKERS["mascot-win"]) ? "mascot-win" : "mascot-done";
+    var cnt = [0, 0, 0], weak = [], seenWeak = {};
+    reviewLog.forEach(function (l) {
+      if (l.again) return;                                  // повтор внутри сессии не считаем второй раз
+      cnt[l.g]++;
+      if (l.g < 2 && !seenWeak[l.key]) { seenWeak[l.key] = true; weak.push(l); }
+    });
+    var total = cnt[0] + cnt[1] + cnt[2], acc = total ? Math.round((cnt[1] + cnt[2]) / total * 100) : 0;
+    var ret = reviewReturns(), cc = null;
+    try { cc = cardCounts(); } catch (e) {}
+    var more = cc && !reviewWarmup ? cc.due + cc.neu : (cc ? cc.due : 0);
+    var title = (reviewWarmup ? "Разминка сделана! " : "") + (total ? "Повторено " + total + " " + plural(total, ["карточка", "карточки", "карточек"]) : "Готово");
+    var sub = !total ? "" : acc === 100 ? "Все вспомнил — отличная память." : acc >= 70 ? "Хороший результат: большинство — в голове." :
+      "Ничего страшного: трудные карточки вернутся раньше, и с каждым разом будет легче.";
+    var tile = function (k, v, lbl) { return '<div class="cd-rv-st ' + k + '"><b>' + v + "</b><span>" + lbl + "</span></div>"; };
+    var weakHtml = weak.length ? '<div class="cd-rv-weak"><div class="cd-rv-wh">Стоит перечитать</div>' + weak.slice(0, 5).map(function (l) {
+      var cf = lookupFile(l.rel);
+      return '<div class="cd-rv-wi g' + l.g + '"><span class="cd-rv-wq">' + inline(String(l.q || "").replace(/^🤔\s*/, "")) + "</span>" +
+        (cf ? '<button class="cd-rv-open" type="button" data-rel="' + escapeHtml(l.rel) + '" data-hash="' + (l.slug ? "#" + escapeHtml(l.slug) : "") + '">' +
+          escapeHtml(cf.title || cf.name) + " ↗</button>" : "") + "</div>";
+    }).join("") + "</div>" : "";
+    var retTxt = (ret.tomorrow || ret.week) ? '<div class="cd-rv-ret">' + emo("ui-calendar", "📅") + " " +
+      (ret.tomorrow ? "Завтра вернётся " + ret.tomorrow + " " + plural(ret.tomorrow, ["карточка", "карточки", "карточек"]) : "") +
+      (ret.tomorrow && ret.week ? ", " : "") + (ret.week ? (ret.tomorrow ? "" : "На этой неделе вернётся ") + (ret.tomorrow ? "на неделе ещё " : "") + ret.week : "") + "</div>" : "";
+    return '<div class="cd-rv-inner">' + reviewTopHtml() + '<div class="cd-rv-done">' +
+      '<div class="cd-rv-art">' + stickerMarkup(wm, 96) + "</div>" +
+      '<div class="cd-rv-done-t">' + escapeHtml(title) + "</div>" +
+      (sub ? '<div class="cd-rv-done-s">' + escapeHtml(sub) + "</div>" : "") +
+      (total ? '<div class="cd-rv-stats">' + tile("g2", cnt[2], "помню") + tile("g1", cnt[1], "трудно") + tile("g0", cnt[0], "не помню") +
+        tile("acc", acc + "%", "вспомнил") + "</div>" : "") +
+      retTxt + weakHtml +
+      '<div class="cd-rv-done-btns"><button class="cd-rv-close2" type="button">На главную</button>' +
+      (more ? '<button class="cd-rv-more" type="button">Ещё карточки (' + more + ")</button>" : "") + "</div>" +
+      "</div></div>";
   }
   function renderReviewCard() {
     if (!reviewEl) return;
     syncReviewBell();
     if (reviewPos >= reviewQueue.length) {          // сессия окончена — итог
-      var wm = (typeof STICKERS !== "undefined" && STICKERS && STICKERS["mascot-win"]) ? "mascot-win" : "mascot-done";
       if (reviewWarmup) state.warmupDone = cdDate(0);
-      setHTML(reviewEl, '<div class="cd-rv-inner"><div class="cd-rv-done">' +
-        '<div class="cd-rv-art">' + stickerMarkup(wm, 96) + "</div>" +
-        '<div class="cd-rv-done-t">' + (reviewWarmup ? "Разминка сделана! " : "") + "Повторено " + reviewOk + " " + plural(reviewOk, ["карточка", "карточки", "карточек"]) + "!</div>" +
-        '<div class="cd-rv-done-s">' + (reviewWarmup ? "Мозг разогрет — самое время для новой темы." : "Отлично. Возвращайся завтра — интервалы уже назначены.") + "</div>" +
-        '<button class="cd-rv-close2" type="button">На главную</button></div></div>');
+      setHTML(reviewEl, reviewDoneHtml());
       recordActivity(); saveState();
       return;
     }
     var c = reviewQueue[reviewPos];
     var cf = lookupFile(c.rel);
     var from = cf ? escapeHtml(cf.title || cf.name) + (c.sec ? " → " + escapeHtml(c.sec) : "") : "";
-    var pct = Math.round(reviewPos / reviewQueue.length * 100);
-    function gradeBtn(g, txt) {
-      var sub = c.missed ? ["через день", "через 3 дня", "больше не спрашивать"][g] : ivlLabel(cdPreview(c.id, g));
-      return '<button class="cd-rv-grade" data-g="' + g + '" type="button">' + txt + '<small>' + escapeHtml(sub) + "</small></button>";
+    var gcol = cf && cf.groupColor ? ' style="--rvg:' + escapeHtml(cf.groupColor) + '"' : "";
+    function gradeBtn(g) {
+      var sub = c.again ? ["не вышло", "почти", "закрепил"][g] : c.missed ? ["через день", "через 3 дня", "больше не спрашивать"][g] : ivlLabel(cdPreview(c.id, g));
+      var G = RV_GRADES[g];
+      return '<button class="cd-rv-grade ' + G[2] + '" data-g="' + g + '" type="button"><span class="cd-rv-gi">' + G[1] + "</span>" +
+        '<span class="cd-rv-gt">' + G[0] + "<small>" + escapeHtml(sub) + "</small></span></button>";
     }
-    setHTML(reviewEl, '<div class="cd-rv-inner">' +
-      '<div class="cd-rv-top"><span class="cd-rv-count">' + (reviewWarmup ? "Разминка · " : "") + (reviewPos + 1) + " / " + reviewQueue.length + "</span>" +
-      '<span class="cd-rv-prog"><i style="width:' + pct + '%"></i></span>' +
-      '<button class="cd-rv-close" type="button" title="Закрыть">✕</button></div>' +
-      '<div class="cd-rv-card">' +
-      (from ? '<div class="cd-rv-from">из темы: ' + from + "</div>" : "") +
+    var streak = reviewStreak >= 3 ? '<span class="cd-rv-streak" title="Подряд без «не помню»">' + emo("ui-streak", "🔥") + " " + reviewStreak + " подряд</span>" : "";
+    setHTML(reviewEl, '<div class="cd-rv-inner">' + reviewTopHtml() +
+      '<div class="cd-rv-card"' + gcol + ">" +
+      '<div class="cd-rv-meta">' + (from ? '<span class="cd-rv-from">' + from + "</span>" : "") +
+      (c.again ? '<span class="cd-rv-badge">повтор</span>' : (cdCardState(c.id).status === "new" && !c.missed ? '<span class="cd-rv-badge new">новая</span>' : "")) + streak + "</div>" +
       '<div class="cd-rv-q">' + (c.md ? renderMarkdown(c.q, null) : inline(c.q)) + "</div>" +
-      '<div class="cd-rv-a" hidden>' + (c.md ? renderMarkdown(c.a, null) : inline(c.a)) + "</div>" +
+      '<div class="cd-rv-recall"><details class="cd-rv-own"' + (reviewTyped ? " open" : "") + "><summary>" + emo("ui-pencil", "✎") + " Сначала вспомни — запиши ответ своими словами (необязательно)</summary>" +
+      '<textarea class="cd-rv-in" rows="2" placeholder="Как объяснил бы другу?"></textarea></details></div>' +
+      '<div class="cd-rv-a" hidden>' + '<div class="cd-rv-mine" hidden><span>Твой ответ</span><div class="cd-rv-mt"></div></div>' +
+      '<div class="cd-rv-al">Ответ</div>' + (c.md ? renderMarkdown(c.a, null) : inline(c.a)) + "</div>" +
       '<div class="cd-rv-ctl"><button class="cd-rv-show" type="button">Показать ответ</button>' +
-      '<span class="cd-rv-rate" hidden>' + gradeBtn(0, "Не помню") + gradeBtn(1, "Трудно") + gradeBtn(2, "Помню") + "</span>" +
+      '<span class="cd-rv-rate" hidden>' + gradeBtn(0) + gradeBtn(1) + gradeBtn(2) + "</span>" +
       (cf ? '<button class="cd-rv-open" type="button" data-rel="' + escapeHtml(c.rel) + '" data-hash="' + (c.slug ? "#" + escapeHtml(c.slug) : "") + '" title="Прочитать раздел, откуда эта карточка">открыть раздел ↗</button>' : "") +
       "</div></div>" +
-      '<div class="cd-rv-hint">Отвечай честно: от оценки зависит, когда карточка вернётся.</div></div>');
+      '<div class="cd-rv-hint">' + (c.again ? "Эта карточка уже была «не помню» — закрепляем, расписание не меняется." : "Отвечай честно: от оценки зависит, когда карточка вернётся.") + "</div></div>");
+    var ta = reviewEl.querySelector(".cd-rv-in");
+    if (ta) { ta.value = reviewTyped; ta.addEventListener("input", function () { reviewTyped = ta.value; }); }
   }
+  function cloneOrUndef(v) { return v === undefined ? undefined : JSON.parse(JSON.stringify(v)); }
   function reviewGrade(g) {
     var c = reviewQueue[reviewPos]; if (!c) return;
+    // снимок для «↶ Назад»: всё, что меняет оценка
+    reviewUndo = {
+      pos: reviewPos, ok: reviewOk, streak: reviewStreak, logLen: reviewLog.length, queueLen: reviewQueue.length,
+      id: c.id, card: cloneOrUndef(state.cards[c.id]), missedKey: c.missed || "", missed: c.missed ? cloneOrUndef(state.missed[c.missed]) : undefined,
+      newToday: cloneOrUndef(state.newToday), warm: state.warmupDone, typed: reviewTyped,
+    };
+    reviewLog[reviewPos] = { g: g, id: c.missed ? "" : c.id, key: c.id, q: c.q, rel: c.rel, slug: c.slug, again: !!c.again };
+    reviewStreak = g >= 1 ? reviewStreak + 1 : 0;
+    reviewTyped = "";
+    if (c.again) {                    // повтор внутри сессии: расписание уже назначено первой оценкой
+      reviewPos++; renderReviewCard(); return;
+    }
     if (c.missed) {                   // загадка из разбора: своё простое расписание
       if (g >= 2) delete state.missed[c.missed];
       else if (state.missed[c.missed]) state.missed[c.missed].due = cdDate(g ? 3 : 1);
@@ -303,17 +396,39 @@
     }
     if (cdCardState(c.id).status === "new") noteNewSeen();
     cdSchedule(c.id, g);
+    try { bumpCount("graded"); } catch (e) {}
     if (g >= 1) reviewOk++;          // «трудно»/«помню» считаем как повторённую
+    // «Не помню» — ещё раз в конце этой же сессии (один раз): вспомнить, пока ответ свежий, полезнее всего
+    if (g === 0) reviewQueue.push(Object.assign({}, c, { again: true }));
     reviewPos++;
     renderReviewCard();
+  }
+  function reviewUndoLast() {
+    var u = reviewUndo; if (!u) return;
+    if (u.id && !u.missedKey) { if (u.card === undefined) delete state.cards[u.id]; else state.cards[u.id] = u.card; }
+    if (u.missedKey) { if (u.missed === undefined) delete state.missed[u.missedKey]; else state.missed[u.missedKey] = u.missed; }
+    if (u.newToday === undefined) delete state.newToday; else state.newToday = u.newToday;
+    state.warmupDone = u.warm;
+    reviewQueue.length = u.queueLen; reviewLog.length = u.logLen;
+    reviewPos = u.pos; reviewOk = u.ok; reviewStreak = u.streak; reviewTyped = u.typed || "";
+    reviewUndo = null;
+    saveState(); renderReviewCard();
   }
   function onReviewClick(e) {
     var t = e.target;
     if (t.closest && t.closest(".cd-rv-close, .cd-rv-close2")) { hideReview(); showHome(); return; }
+    if (t.closest && t.closest(".cd-rv-undo")) { reviewUndoLast(); return; }
+    if (t.closest && t.closest(".cd-rv-more")) { startReview(); return; }
     if (t.closest && t.closest(".cd-rv-show")) {
       var card = reviewEl.querySelector(".cd-rv-card");
-      if (card) { var a = card.querySelector(".cd-rv-a"), rate = card.querySelector(".cd-rv-rate"), show = card.querySelector(".cd-rv-show");
-        if (a) a.hidden = false; if (rate) rate.hidden = false; if (show) show.hidden = true; }
+      if (card) {
+        var a = card.querySelector(".cd-rv-a"), rate = card.querySelector(".cd-rv-rate"), show = card.querySelector(".cd-rv-show");
+        var mine = card.querySelector(".cd-rv-mine"), own = card.querySelector(".cd-rv-recall");
+        if (mine && reviewTyped.trim()) { mine.hidden = false; mine.querySelector(".cd-rv-mt").textContent = reviewTyped.trim(); }
+        if (own) own.hidden = true;
+        if (a) a.hidden = false; if (rate) rate.hidden = false; if (show) show.hidden = true;
+        card.classList.add("flipped");
+      }
       return;
     }
     var gb = t.closest && t.closest(".cd-rv-grade");
@@ -326,6 +441,10 @@
     if (homeEl) homeEl.hidden = true;
     reviewEl.hidden = false; winEl.classList.add("home");
     winEl.classList.add("reviewing");   // режим повторения: без списка материалов, карточка крупнее
+    // пейзаж палитры — приглушённым фоном (если на главной выбран «Пейзаж»)
+    var bg = state.homeBg === "none" || state.homeBg === "stars" ? null : homeBgImage();
+    reviewEl.classList.toggle("has-bg", !!bg);
+    if (bg) reviewEl.style.setProperty("--rv-bg", "url(" + bg + ")"); else reviewEl.style.removeProperty("--rv-bg");
     renderReviewCard();
     syncHead();
   }
@@ -348,7 +467,14 @@
       }
       var res = resolveRel(f.rel, src);
       var base = (d.root || "").replace(/\\/g, "/");
-      if (base) img.src = "file:///" + (base + "/" + res.rel).replace(/^\/+/, "");
+      // Оболочка VS Code отклоняет file:// — картинку отдаёт vscode-file:// (resUrl; сегменты кодируются).
+      if (base) {
+        var fu = "file:///" + (base + "/" + res.rel).replace(/^\/+/, "").split("/").map(function (seg) {
+          try { return encodeURIComponent(decodeURIComponent(seg)).replace(/%3A/gi, ":"); } catch (e) { return encodeURIComponent(seg); }
+        }).join("/");
+        var ru = resUrl(fu);
+        if (ru) img.src = ru;
+      }
     });
   }
   function resolveImages() { resolveImagesIn(articleEl, current); }

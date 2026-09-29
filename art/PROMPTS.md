@@ -12,6 +12,27 @@
 |---|---|---|---|
 | `mascot-oops.webp` | 256×256 | рядом с результатом «Запустить», когда сборка или тесты не прошли | Cute hand-drawn sticker of the same small round mascot character as the others (purple-lavender blob with big eyes), looking sympathetic and slightly sheepish, one hand scratching its head, a tiny band-aid on its cheek, small "oops" sweat drop; thick white outline around the whole figure, bright flat colors, playful slightly wobbly lines, transparent background, no text |
 
+## Значок настроек (необязательно)
+
+| Файл | Размер | Где | Промпт |
+|---|---|---|---|
+| `ui-settings.webp` | 128×128 | шапка окна «Настройки» (сейчас там эмодзи ⚙) | Cute hand-drawn sticker icon: a chunky rounded gear with a tiny paintbrush and a small letter "A" leaning on it, lavender and warm yellow, thick white outline, bright flat colors, slightly wobbly lines, transparent background, no text |
+
+## Иконки вкладок настроек и повторения (128×128)
+
+Стиль как у `ui-cards`/`ui-news`: рисованная наклейка, толстый белый контур, прозрачный фон, без текста.
+Показываются маленькими (22 px) — рисунок должен читаться силуэтом, без мелких деталей.
+
+| Файл | Где (сейчас эмодзи) | Промпт |
+|---|---|---|
+| `ui-tab-look.webp` | вкладка «Вид» (🎨) | Cute hand-drawn sticker icon of a painter's palette with three bright paint blobs and a small brush, chunky shapes, thick white outline, transparent background, no text |
+| `ui-tab-text.webp` | вкладка «Текст» (🔤) | Cute hand-drawn sticker icon of a big friendly capital letter "A" next to a small letter "a", like typography blocks, chunky, thick white outline, transparent background |
+| `ui-tab-window.webp` | вкладка «Окно» (🪟) | Cute hand-drawn sticker icon of a small rounded app window with a title bar and three dots, slightly tilted, chunky, thick white outline, transparent background, no text |
+| `ui-tab-behave.webp` | вкладка «Поведение» (✨) | Cute hand-drawn sticker icon of a toggle switch turned on with two little sparkles around it, chunky, thick white outline, transparent background, no text |
+| `ui-tab-progress.webp` | вкладка «Прогресс» (💾) | Cute hand-drawn sticker icon of a treasure chest slightly open with a glowing star inside (saved progress), chunky, thick white outline, transparent background, no text |
+| `ui-calendar.webp` | итог повторения: «завтра вернётся…» (📅) | Cute hand-drawn sticker icon of a small tear-off calendar page with a circled day and a tiny arrow looping back, chunky, thick white outline, transparent background, no numbers |
+| `ui-pencil.webp` | «Сначала вспомни» в карточке (✎) | Cute hand-drawn sticker icon of a chunky pencil writing a squiggle line, thick white outline, transparent background, no text |
+
 ## Обложки тем (баннер над названием темы)
 
 Широкий баннер **1200×240**, без текста. Левая половина — спокойная (поверх неё пишется название темы),

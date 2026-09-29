@@ -20,7 +20,6 @@
 var fs = require("fs");
 var path = require("path");
 var zlib = require("zlib");
-var os = require("os");
 var cp = require("child_process");
 var crypto = require("crypto");
 
@@ -216,6 +215,8 @@ var CONTENT_TYPES =
   '  <Default Extension="svg" ContentType="image/svg+xml" />\n' +
   '  <Default Extension="md" ContentType="text/markdown" />\n' +
   '  <Default Extension="png" ContentType="image/png" />\n' +
+  '  <Default Extension="webp" ContentType="image/webp" />\n' +
+  '  <Default Extension="woff2" ContentType="font/woff2" />\n' +
   '  <Default Extension="cpp" ContentType="text/plain" />\n' +
   '  <Default Extension="txt" ContentType="text/plain" />\n' +
   '  <Default Extension="vsixmanifest" ContentType="text/xml" />\n' +
@@ -229,17 +230,6 @@ var CONTENT_TYPES =
 // ------------------------------------------------------------
 //  Сборка
 // ------------------------------------------------------------
-
-/**
- * Папка сайдлоад-установки, из которой загрузчик (be5invis/custom-ui-style) читает
- * рантайм и куда прописана инъекция. ПЛОСКАЯ раскладка (файлы в корне), publisher='local'
- * — чтобы id расширения (=> globalStorage с данными) и путь импорта совпадали с тем,
- * что уже прописано в settings.json. Стандартный `code --install-extension` кладёт в
- * <publisher>.<name>-<ver> (moonlivedt.*), которую загрузчик НЕ читает.
- */
-function devInstallDir(pkg) {
-  return path.join(os.homedir(), ".vscode", "extensions", "local.cpp-docs-panel-" + pkg.version);
-}
 
 function fail(msg) {
   console.error("\n  ✗ Сборка остановлена: " + msg + "\n");
@@ -360,6 +350,13 @@ function stripSolutions(md) {
     .replace(/[ \t]*<details>\s*<summary>\s*Полное решение[\s\S]*?<\/details>[ \t]*\n?/g, "")
     .replace(/\n{3,}/g, "\n\n");
 }
+/** Пометка для описания задачника в варианте «без решений»: текст обещает решения «внизу страницы»,
+ *  а их там нет — говорим прямо под заголовком. */
+var NO_SOLUTIONS_NOTE = "> **В этой сборке решений нет** — только условия, подсказки и тест-планы. " +
+  "Пункты ниже про «Решения с разбором» к ней не относятся: сверяйтесь с тест-планом и запуском.\n";
+function markNoSolutions(md) {
+  return String(md).replace(/\r\n/g, "\n").replace(/^(# [^\n]*\n)/, "$1\n" + NO_SOLUTIONS_NOTE);
+}
 
 /** Страницы знакомства: walkthrough/*.md (пути относительно extension/). */
 function walkthroughFiles() {
@@ -367,6 +364,14 @@ function walkthroughFiles() {
   if (!fs.existsSync(dir)) return [];
   return fs.readdirSync(dir).filter(function (n) { return /\.md$/i.test(n); }).sort()
     .map(function (n) { return "walkthrough/" + n; });
+}
+
+/** Встроенные шрифты окна: fonts/*.woff2 + лицензии OFL (пути относительно extension/). */
+function fontFiles() {
+  var dir = path.join(EXT, "fonts");
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir).filter(function (n) { return /\.(woff2|txt)$/i.test(n); }).sort()
+    .map(function (n) { return "fonts/" + n; });
 }
 
 /** Модули хоста расширения: lib/*.js (пути относительно extension/, прямые слэши). */
@@ -400,7 +405,7 @@ function main() {
     });
   // Модули расширения (extension/lib/*.js) — extension.js подключает их через require.
   // Плюс страницы пошагового знакомства (extension/walkthrough/*.md, contributes.walkthroughs).
-  libFiles().concat(walkthroughFiles()).forEach(function (rel) {
+  libFiles().concat(walkthroughFiles(), fontFiles()).forEach(function (rel) {
     entries.push({ name: "extension/" + rel, data: fs.readFileSync(path.join(EXT, rel)) });
   });
 
@@ -411,8 +416,8 @@ function main() {
     var data;
     if (NO_SOLUTIONS && /^zadachnik\//.test(d.rel)) {
       var src = fs.readFileSync(d.full, "utf8");
-      var out = stripSolutions(src);
-      if (out !== src) strippedCount++;
+      var out = d.rel === "zadachnik/00-README.md" ? markNoSolutions(src) : stripSolutions(src);
+      if (out !== src && d.rel !== "zadachnik/00-README.md") strippedCount++;
       data = Buffer.from(out, "utf8");
     } else {
       data = fs.readFileSync(d.full);
@@ -443,41 +448,17 @@ function main() {
   console.log("   ИТОГО: " + entries.length + " файлов, vsix " + Math.round(fs.statSync(outPath).size / 1024) + " КБ");
 
   if (process.argv.indexOf("--install") !== -1) {
-    // Ставим НЕ через `code --install-extension` (он кладёт в moonlivedt.*, которую загрузчик
-    // не читает), а плоской копией в папку сайдлоада local.cpp-docs-panel-<версия> — ту, что
-    // прописана в инъекции settings.json. Так правки рантайма/расширения реально применяются.
-    var dest = devInstallDir(pkg);
-    console.log("\nСтавлю в: " + dest);
-    fs.mkdirSync(dest, { recursive: true });
-    // package.json с publisher='local' (id => globalStorage с данными), остальное из манифеста
-    var localPkg = Object.assign({}, pkg, { publisher: "local" });
-    fs.writeFileSync(path.join(dest, "package.json"), JSON.stringify(localPkg, null, 2) + "\n", "utf8");
-    // остальные файлы расширения — плоско (рантайм и пр. должны лежать в КОРНЕ папки)
-    fs.readdirSync(EXT)
-      .filter(function (name) { return name !== "package.json" && name !== ".vscodeignore"; })
-      .forEach(function (name) {
-        var full = path.join(EXT, name);
-        if (fs.statSync(full).isFile()) fs.copyFileSync(full, path.join(dest, name));
-      });
-    // модули расширения — в dest/lib (старую папку убираем, чтобы не остался переименованный модуль)
-    fs.rmSync(path.join(dest, "lib"), { recursive: true, force: true });
-    libFiles().forEach(function (rel) {
-      fs.mkdirSync(path.join(dest, "lib"), { recursive: true });
-      fs.copyFileSync(path.join(EXT, rel), path.join(dest, rel));
-    });
-    walkthroughFiles().forEach(function (rel) {
-      fs.mkdirSync(path.join(dest, "walkthrough"), { recursive: true });
-      fs.copyFileSync(path.join(EXT, rel), path.join(dest, rel));
-    });
-    // и вшитую документацию (dest/docs) — тем же фильтром
-    bundledDocsFiles().forEach(function (d) {
-      var target = path.join(dest, "docs", d.rel);
-      fs.mkdirSync(path.dirname(target), { recursive: true });
-      fs.copyFileSync(d.full, target);
-    });
-    console.log("\nГотово. ВАЖНО: рантайм окна впечатан в оболочку VS Code — одного «Reload Window» мало.");
-    console.log("Выполните «Документация C++: подключить плавающее окно» и нажмите «Перезапустить».");
+    // Обычная установка пакета: VS Code кладёт его в <publisher>.<name>-<версия> и загружает.
+    // (Раньше здесь была плоская копия в local.cpp-docs-panel-* для загрузчика be5invis; VS Code
+    // такую папку считает устаревшей и не грузит — работала старая версия расширения.)
+    console.log("\nСтавлю: code --install-extension " + path.relative(ROOT, outPath));
+    var r = cp.spawnSync(process.platform === "win32" ? "code.cmd" : "code", ["--install-extension", outPath, "--force"], { stdio: "inherit", shell: process.platform === "win32" });
+    if (r.status !== 0) { console.error("\n  Не удалось запустить «code». Поставьте вручную: code --install-extension " + outPath + " --force"); process.exit(1); }
+    console.log("\nГотово. С Moon Core: Reload Window — ядро спросит про модуль «Документация C++» и встроит окно само.");
+    console.log("Без Moon Core: выполните «Документация C++: подключить плавающее окно» и нажмите «Перезапустить».");
   }
 }
 
-main();
+// Модулем (build-installer.js берёт makeZip для архива установщика) — без сборки .vsix.
+if (require.main === module) main();
+module.exports = { makeZip: makeZip };

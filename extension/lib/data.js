@@ -7,18 +7,11 @@ const { MAX_DOC_BYTES, findDocsRoot, buildDocsData, bundledDocs } = require('./d
 const storage = require('./storage');
 const { progressFilePath } = require('./progress');
 const { bridgeFilePath } = require('./bridge');
-const { fileUrl, runtimeScriptPath, dataFilePath, stampFilePath, editorFilePath,
+const { fileUrl, dataFilePath, stampFilePath, editorFilePath,
   NOTES_REL, notesFilePath, localRunEnabled } = storage;
 
-/** JSON для инлайн-<script>: экранируем каждый '<' (глушит </script, <!--, <script разом)
- *  и разделители строк U+2028/U+2029 (валидны в JSON, но рвут JS-литерал). JSON.parse вернёт
- *  исходные символы. Данные могут прийти из чужого воркспейса, а исполняются в оболочке. */
-function safeJsonForScript(obj) {
-  return JSON.stringify(obj)
-    .replace(/</g, '\\u003c')
-    .replace(/\u2028/g, '\\u2028')
-    .replace(/\u2029/g, '\\u2029');
-}
+// safeJsonForScript и тело для оболочки — в wb-patch: их же зовёт window-cli.js (батники установщика).
+const { safeJsonForScript, lazyWindowBody } = require('./wb-patch');
 
 /** Личный блокнот. Во вшитых доках блокнот живёт в globalStorage —
  *  подменяем им стартовый шаблон, чтобы окно показывало настоящие записи. */
@@ -82,11 +75,11 @@ function extractImages(context, jsonName, subdir) {
 }
 /** Поля данных окна про картинки (одни и те же для файла данных и для впечатывания). */
 function addImageData(context, data) {
-  data.stickersUrl = stickersUrl(context);            // значки под палитры — через Node (если он есть)
+  data.stickersUrl = stickersUrl(context);            // значки под палитры — запасной путь: JSON целиком
   data.stickersAllUrl = stickersAllUrl(context);      // наклейки интерфейса — тоже
   const all = extractImages(context, 'stickers.json', 'stickers');
   const pal = extractImages(context, 'stickers-palettes.json', 'stickers-pal');
-  if (all) data.stickerImgs = all;                    // …а без Node — картинками по vscode-file://
+  if (all) data.stickerImgs = all;                    // основной путь: картинками по vscode-file://
   if (pal) data.palStickerImgs = pal;
 }
 
@@ -108,7 +101,6 @@ function windowData(context) {
   try {
     data.dataUrl = fileUrl(dataFilePath(context));      // для кнопки «Обновить» в окне
     data.stampUrl = fileUrl(stampFilePath(context));    // лёгкая метка для автообновления
-    data.runtimeUrl = fileUrl(runtimeScriptPath(context));
     // маячок «живо ли расширение» — крошечный package.json (окно читает его раз в минуту)
     data.aliveUrl = context.extensionPath ? fileUrl(path.join(context.extensionPath, 'package.json')) : '';
     data.editorUrl = fileUrl(editorFilePath(context));  // мост доки↔редактор: слово под курсором
@@ -134,25 +126,25 @@ function writeDocsData(context) {
   try {
     const p = dataFilePath(context);
     fs.mkdirSync(path.dirname(p), { recursive: true });
-    fs.writeFileSync(p, body, 'utf8');
+    // Атомарно: окно читает файл асинхронно и могло бы поймать его недописанным (2+ МБ),
+    // а несколько окон VS Code пишут его одновременно.
+    const tmp = p + '.' + process.pid + '.tmp';
+    fs.writeFileSync(tmp, body, 'utf8');
+    fs.renameSync(tmp, p);
     // Метку пишем ПОСЛЕ данных: окно, увидев новую метку, перечитает уже готовый data-файл.
     try { fs.writeFileSync(stampFilePath(context), 'window.__CPPDOCS_STAMP__ = ' + JSON.stringify(data.generatedAt || Date.now()) + ';\n', 'utf8'); } catch (e) {}
+    try { require('./mooncore').publishToc(); } catch (e) {}   // оглавление для окна Moon Core
     return true;
   } catch (e) { return false; }
 }
 
-/** Тело data-скрипта (window.__CPPDOCS__ = {…};) — инлайном в оболочку: внешний file://-скрипт
- *  VS Code блокирует (схема vscode-file://), поэтому и данные, и рантайм впечатываем напрямую. */
+/** Тело data-скрипта (window.__CPPDOCS__ = {…};) — инлайном в оболочку (только оглавление); рантайм
+ *  подключается отдельным <script src="vscode-file://…" integrity> — см. wb-patch.buildWindowBlock. */
 function windowDataBody(context, nonce) {
   const data = windowData(context);
   if (!data) return null;
-  // Тексты материалов (сотни КБ–мегабайты) в оболочку не впечатываем: VS Code разбирал бы их при
-  // каждом запуске. Инлайном — оглавление (названия, группы, время чтения); полный файл данных окно
-  // читает асинхронно сразу после старта (refreshData), до этого на главной — скелет.
-  data.files = data.files.map((f) => Object.assign({}, f, { md: '', sx: undefined }));
-  data.lazy = true;
-  if (nonce) data.scriptNonce = nonce;
-  return 'window.__CPPDOCS__ = ' + safeJsonForScript(data) + ';\n';
+  // Инлайном — только оглавление; полный файл данных окно читает само (см. wb-patch.lazyWindowBody).
+  return lazyWindowBody(data, nonce);
 }
 
 module.exports = { safeJsonForScript, writeDocsData, windowDataBody, windowData, extractImages };

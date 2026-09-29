@@ -90,11 +90,16 @@
         if (lc === "checklist") { out.push(renderChecklist(code)); continue; } // чек-лист «усвоено»
         if (lc === "snippets") { out.push(renderSnippets(code)); continue; }   // таблица «Быстрые слова»: клик по строке — код
         if (lc === "boss") { out.push(renderBoss(code)); continue; }        // босс темы: итоговый мини-проект
+        if (lc === "quests") { out.push(renderQuestMap()); continue; }      // «Путь героя»: квесты «Подземелья» с прогрессом
+        if (lc === "lootsim") { var ls = renderLootSim(code); if (ls) { out.push(ls); continue; } }  // симулятор сундуков
+        if (lc === "bfsgrid") { var bg = renderBfsGrid(code); if (bg) { out.push(bg); continue; } }  // волна поиска пути на сетке
         if (lc === "steps") { var sp = renderSteps(code); if (sp) { out.push(sp); continue; } }  // пошаговый проигрыватель
         if (lc === "frames") { var fv = renderFrames(code); if (fv) { out.push(fv); continue; } }  // кадры: ASCII-анимация
         if (lc === "memory") { var mv = renderMemory(code); if (mv) { out.push(mv); continue; } }  // память по шагам: стек/куча/указатели
         if (lc === "live") { var lv = renderLive(code); if (lv) { out.push(lv); continue; } }  // живой пример: параметры-слайдеры
         if (lc === "challenge") { var ch = renderChallenge(code); if (ch) { out.push(ch); continue; } }  // ката: собери код / предскажи вывод
+        if (lc === "checkpoint") { var cpt = renderCheckpoint(code); if (cpt) { out.push(cpt); continue; } }  // эталон главы + сравнение с моим кодом
+        if (lc === "repeat") { out.push(renderRepeat(code)); continue; }      // «Повтори за мной»: код примера спрятан, видно поведение
         var LANG_LABEL = { cpp: "C++", "c++": "C++", cc: "C++", cxx: "C++", c: "C", bash: "Bash", sh: "Bash", shell: "Bash", txt: "текст", text: "текст", py: "Python" };
         var langLabel = escapeHtml(LANG_LABEL[(lang || "").toLowerCase()] || lang || "код");
         var codeHtml;
@@ -105,6 +110,24 @@
           }).join("");
         } else {
           codeHtml = highlight(code, lang);
+        }
+        // Другие применения того же приёма: следом идут блоки «```cpp alt: Подпись» — они не печатаются
+        // отдельно, а становятся слайдами этого примера (стрелки справа). Страница не растёт.
+        var alts = [], j = i;
+        for (;;) {
+          var k = j;
+          while (k < lines.length && !lines[k].trim()) k++;
+          var am = k < lines.length ? lines[k].match(/^\s*```+\s*([\w+#-]*)\s+alt:?\s*(.*?)\s*$/) : null;
+          if (!am) break;
+          var ab = [];
+          for (k++; k < lines.length && !/^\s*```+\s*$/.test(lines[k]); k++) ab.push(lines[k]);
+          alts.push({ lang: am[1] || lang, label: am[2] || "Ещё применение", code: ab.join("\n") });
+          j = k + 1;
+        }
+        if (alts.length) {
+          i = j;
+          out.push(renderCodeAlts({ lang: lang, code: code, html: codeHtml, lined: !!hlSet }, alts, langLabel, lc));
+          continue;
         }
         out.push(
           '<div class="codewrap">' +

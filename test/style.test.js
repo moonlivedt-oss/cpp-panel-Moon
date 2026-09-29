@@ -19,7 +19,8 @@ check("endl в while { } (using namespace std)", has("while (x > 0) {\n  cout <<
 check("endl в теле без скобок на следующей строке", has("for (int i = 0; i < 3; ++i)\n  std::cout << i << std::endl;", "endl-loop"));
 check("endl в теле на той же строке", has("for (int i = 0; i < 3; ++i) std::cout << i << std::endl;", "endl-loop"));
 check("int x; без значения", has("int main() {\n  int x;\n  std::cin >> x;\n}", "uninit"));
-check("int a, b; без значения", has("  int a, b;", "uninit"));
+check("int a, b; без значения", has("void f() {\n  int a, b;\n}", "uninit"));
+check("глобальная и в namespace — не ошибка (обнуляются сами)", !has("int counter;\nnamespace game {\n  int score;\n}\nint main() {}", "uninit"));
 check("C-приведение (double)sum", has("double avg = (double)sum / n;", "c-cast"));
 check("C-приведение (unsigned char)c", has("unsigned char u = (unsigned char)c;", "c-cast"));
 check("new и delete[]", rules("int *a = new int[5];\ndelete[] a;").filter(function (r) { return r === "new-delete"; }).length === 2);

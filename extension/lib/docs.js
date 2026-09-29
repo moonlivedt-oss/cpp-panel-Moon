@@ -5,6 +5,7 @@
 const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
+const course = require('./course');
 
 // Потолок объёма: доки попадают инлайном в привилегированную оболочку workbench.html;
 // без лимита огромная папка раздула бы её и повесила старт редактора (локальный DoS).
@@ -293,7 +294,19 @@ function collectGroups(root, recent, pins) {
     ['situacii', 'Один инструмент — разные задачи', 'var(--vscode-charts-orange, #d89a4a)'],
   ];
   for (const [folder, label, color] of sections) {
-    const items = mdFilesIn(path.join(root, folder)).map(describe);
+    let files = mdFilesIn(path.join(root, folder));
+    if (folder === 'ref') {
+      // Темы — в порядке курса (lib/course.js), справка и словари — отдельной группой следом:
+      // их не «проходят», и в счётчик «изучено N из M» темы они не входят.
+      const rank = (p) => { const i = course.courseIndex(path.basename(p)); return i === -1 ? 1e6 : i; };
+      const ref = files.filter((p) => course.isReference(path.basename(p)));
+      files = files.filter((p) => !course.isReference(path.basename(p)))
+        .map((p, i) => ({ p, i })).sort((a, b) => rank(a.p) - rank(b.p) || a.i - b.i).map((x) => x.p);
+      if (files.length) groups.push({ label, color, items: files.map(describe) });
+      if (ref.length) groups.push({ label: 'Справка и словари', color: 'var(--vscode-charts-blue, #74c7ec)', items: ref.map(describe) });
+      continue;
+    }
+    const items = files.map(describe);
     if (items.length) groups.push({ label, color, items });
   }
   return groups;

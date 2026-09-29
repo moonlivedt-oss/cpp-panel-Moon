@@ -7,9 +7,9 @@
 //  сверяется с якорем RUNTIME_SHA256 в extension.js: после правки этого файла
 //  выполните  npm run hash:runtime.
 //
-//  Связь с расширением — только через файлы в globalStorage (окно читает/пишет их
-//  через Node fs оболочки): данные и метка свежести, контекст редактора,
-//  запросы «Запустить» и действия «в редактор» / «в заметки».
+//  Связь с расширением: файлы globalStorage окно ЧИТАЕТ по vscode-file:// (данные, метка
+//  свежести, контекст редактора), а запросы («Запустить», «в редактор», «в заметки») и запись
+//  зеркала прогресса идут через мост на 127.0.0.1 (lib/bridge.js); во вкладке — сообщениями.
 //
 //  Карта файла (ищите по тексту заголовка раздела):
 //    Данные ............... «Данные: материалы приходят…» — форма и санитизация данных
@@ -35,11 +35,21 @@
   if (window.__CPPDOCS_RUNTIME__) return;
   window.__CPPDOCS_RUNTIME__ = true;
 
+  // Модуль Moon Core: окно встроено ядром (одна вставка на все плагины). Оглавление и адреса
+  // файлов — в файле данных модуля (ядро читает его при старте), запросы и события — через
+  // мост ядра, nonce — у нашего же <script>. Без Moon Core MCM = null и всё как раньше.
+  var MCM = null, MC_NONCE = "";
+  try { MC_NONCE = (document.currentScript && document.currentScript.nonce) || ""; } catch (e) {}
+  try { MCM = window.__MOONCORE__ && typeof window.__MOONCORE__.module === "function" ? window.__MOONCORE__.module("cppdocs") : null; } catch (e) { MCM = null; }
+  if (MCM && !window.__CPPDOCS__) {
+    try { var mcd = MCM.data(); if (mcd && mcd.toc && typeof mcd.toc === "object") window.__CPPDOCS__ = mcd.toc; } catch (e) {}
+  }
+
   var WIN_ID = "cppdocs-window";
   var BTN_ID = "cppdocs-launch";
   var STYLE_ID = "cppdocs-style";
   /* PROTOCOL:start — генерируется из extension/lib/protocol.js, руками не править */
-  var PROTO = {"VERSION":2,"METHODS":["run","action","log"],"WRITABLE":["cpp-docs-progress.json"],"EVENTS":["editor","stamp","data","theme"],"EVENT_FILES":{"cpp-docs-editor.js":"editor","cpp-docs-stamp.js":"stamp"},"MAX_BODY":8388608,"MAX_CODE":200000,"MAX_TESTS":20,"MAX_LOG":4000,"RUN_TIMEOUT_MS":30000,"ACTION_TIMEOUT_MS":8000};
+  var PROTO = {"VERSION":2,"METHODS":["run","action","log"],"WRITABLE":["cpp-docs-progress.json"],"EVENTS":["editor","stamp","data","theme","progress"],"EVENT_FILES":{"cpp-docs-editor.js":"editor","cpp-docs-stamp.js":"stamp","cpp-docs-progress.json":"progress"},"MAX_BODY":8388608,"MAX_CODE":200000,"MAX_TESTS":20,"MAX_LOG":4000,"RUN_TIMEOUT_MS":60000,"ACTION_TIMEOUT_MS":8000};
   /* PROTOCOL:end */
   var LS_KEY = "cppdocs.ui.v1";
   // Шрифты чтения — только те, что уже есть в системе (без встраивания, офлайн).
@@ -48,15 +58,15 @@
     serif:  { label: "Сериф",     stack: "Cambria, Georgia, 'PT Serif', 'Times New Roman', serif" },
     soft:   { label: "Мягкий",    stack: "Candara, 'Segoe UI', Optima, 'Trebuchet MS', system-ui, sans-serif" },
     round:  { label: "Округлый",  stack: "'Comic Sans MS', 'Segoe Print', 'Chalkboard SE', 'Comic Neue', cursive" },
-    // Шрифты с хорошей кириллицей. Берутся, только если установлены в системе (окно офлайн и
-    // шрифтов с собой не везёт); нет шрифта — остаётся системный.
-    inter:  { label: "Inter",     stack: "Inter, 'Inter Variable', 'Segoe UI', system-ui, sans-serif" },
-    ptroot: { label: "PT Root",   stack: "'PT Root UI', 'PT Sans', 'Segoe UI', system-ui, sans-serif" },
-    golos:  { label: "Golos",     stack: "'Golos Text', 'Golos UI', 'Segoe UI', system-ui, sans-serif" },
+    // Шрифты с хорошей кириллицей — ВСТРОЕНЫ в расширение (extension/fonts/*.woff2, лицензия OFL):
+    // ставить их в систему не нужно. Имя «CppDocs …» — чтобы не спорить с установленной копией.
+    inter:  { label: "Inter",     stack: "'CppDocs Inter', Inter, 'Segoe UI', system-ui, sans-serif", sample: "Чёткий и строгий" },
+    ptsans: { label: "PT Sans",   stack: "'CppDocs PT Sans', 'PT Sans', 'Segoe UI', system-ui, sans-serif", sample: "Мягкий и книжный" },
+    golos:  { label: "Golos",     stack: "'CppDocs Golos', 'Golos Text', 'Segoe UI', system-ui, sans-serif", sample: "Современный и живой" },
   };
-  var VERSION = "3.0.0";
+  var VERSION = "3.5.2";
   // Идентификатор баннера «Что нового»: пока state.whatsnew !== этого значения — показываем баннер.
-  var WHATSNEW = "igry2-2026-09";
+  var WHATSNEW = "landscapes-2026-09";
   // Логотип как data-URI. В оболочке VS Code рантайм не может грузить файл с диска, поэтому
   // картинка встроена. Значение подставляет `node scripts/embed-logo.js` из docs/screenshots/logo-embed.png.
   var LOGO_URI = "data:image/webp;base64,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";
@@ -101,7 +111,6 @@
     };
     if (typeof d.dataUrl === "string") out.dataUrl = d.dataUrl;
     if (typeof d.stampUrl === "string") out.stampUrl = d.stampUrl;
-    if (typeof d.runtimeUrl === "string") out.runtimeUrl = d.runtimeUrl;
     if (typeof d.editorUrl === "string") out.editorUrl = d.editorUrl;
     if (typeof d.stickersUrl === "string") out.stickersUrl = d.stickersUrl;
     if (typeof d.stickersAllUrl === "string") out.stickersAllUrl = d.stickersAllUrl;
@@ -181,7 +190,7 @@
     for (var k in BAD_KEYS) if (Object.prototype.hasOwnProperty.call(st, k)) return null;
     return st;
   }
-  function readMirror() { var u = progressUrl(), txt = u ? nodeRead(u) : null; return txt ? unwrapProgress(txt) : null; }
+  function readMirror() { var u = progressUrl(), txt = u ? fileRead(u) : null; return txt ? unwrapProgress(txt) : null; }
   function savedAtOf(s) { return s && typeof s._savedAt === "number" && isFinite(s._savedAt) ? s._savedAt : 0; }
   function loadState() {
     var s = {}, hadLs = false;
@@ -201,15 +210,43 @@
     return s;
   }
   // Записать зеркало. Не затираем более новое (импорт или другое окно VS Code записали позже нас).
+  // Метку зеркала знаем из событий «progress» и своих записей (mirrorAt), а файл перечитываем
+  // асинхронно — синхронный XHR на каждое сохранение подвисал бы главный поток VS Code.
+  var mirrorAt = 0;
   function writeMirror(unloading) {
     _mirrorTimer = null;
     var u = progressUrl(); if (!u) return;
-    try {
-      var cur = readMirror();
-      if (cur && savedAtOf(cur) > savedAtOf(state)) return;
-      var text = JSON.stringify({ format: PROGRESS_FORMAT, version: 1, savedAt: savedAtOf(state), state: state });
-      bridgeWrite(u, text, unloading);     // у окна нет Node (песочница VS Code): пишет расширение
-    } catch (e) {}
+    function put() {
+      if (mirrorAt > savedAtOf(state)) return;
+      try {
+        var text = JSON.stringify({ format: PROGRESS_FORMAT, version: 1, savedAt: savedAtOf(state), state: state });
+        if (bridgeWrite(u, text, unloading)) mirrorAt = savedAtOf(state);   // у окна нет Node (песочница VS Code): пишет расширение
+      } catch (e) {}
+    }
+    // При закрытии окна ждать нельзя — пишем по уже известной метке.
+    if (unloading || IN_PANEL || typeof appReadAsync !== "function") { put(); return; }
+    appReadAsync(u, function (txt) {
+      var cur = txt ? unwrapProgress(txt) : null;
+      if (cur) mirrorAt = Math.max(mirrorAt, savedAtOf(cur));
+      put();
+    });
+  }
+  // Прогресс поменяли снаружи (другое окно VS Code, боковая панель, импорт): приходит метка savedAt.
+  // Новее нашей — перечитываем зеркало и берём прогресс оттуда.
+  function onProgressEvent(txt) {
+    var at = 0;
+    try { var o = JSON.parse(String(txt)); at = o && typeof o.savedAt === "number" ? o.savedAt : 0; } catch (e) { return; }
+    if (at) mirrorAt = Math.max(mirrorAt, at);
+    if (!at || at <= savedAtOf(state)) return;
+    var apply = function (m) {
+      if (!m || savedAtOf(m) <= savedAtOf(state)) return;
+      adoptProgress(m);
+      try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {}
+      try { onExternalProgress(); } catch (e) {}
+    };
+    if (IN_PANEL || typeof appReadAsync !== "function") { apply(readMirror()); return; }
+    var u = progressUrl(); if (!u) return;
+    appReadAsync(u, function (t) { apply(t ? unwrapProgress(t) : null); });
   }
   // При закрытии окна VS Code обычный fetch может оборваться — зеркало уходит через sendBeacon.
   function flushMirror() { if (_mirrorTimer) { clearTimeout(_mirrorTimer); writeMirror(true); } }
@@ -222,7 +259,7 @@
   // нормализуется по SCHEMA: словари — только объекты, флаги — только булевы, числа — конечные и в
   // пределах. Всё, что растёт само (выделения, прокрутка, прочитанные разделы, дни), подрезается,
   // чтобы не упереться в лимит localStorage (~5 МБ на всё окно VS Code).
-  var STATE_VERSION = 3;
+  var STATE_VERSION = 4;
   var MIGRATIONS = {
     // v1: выделения-маркер — были массивом строк, стали [{t, c}] (цвет y|p|g)
     1: function (s) {
@@ -243,6 +280,8 @@
     2: function (s) { if (s.layoutV !== 2) s.navHidden = true; delete s.layoutV; },
     // v3: дни активности — не флаг, а число действий за день (для тепловой карты)
     3: function (s) { var d = plainMap(s.days); Object.keys(d).forEach(function (k) { if (d[k] === true) d[k] = 1; }); s.days = d; },
+    // v4: шрифт «PT Root» (не было в комплекте) заменён встроенным PT Sans
+    4: function (s) { if (s.rfont === "ptroot") s.rfont = "ptsans"; },
   };
   function migrateState(s) {
     var v = typeof s.v === "number" && isFinite(s.v) ? s.v : (s.layoutV === 2 ? 2 : 0);   // до версий знаком была только layoutV
@@ -253,13 +292,13 @@
   }
   // Словари прогресса и настроек: { ключ: … }.
   var MAP_KEYS = ["read", "stepsDone", "boss", "missed", "secSeen", "solved", "notes", "days", "pins", "collapsed",
-    "cards", "scroll", "checks", "exams", "challenge", "hl", "marks", "dailyDone"];
+    "cards", "scroll", "checks", "exams", "challenge", "hl", "marks", "dailyDone", "ach", "weekly", "records"];
   // Скаляры: [тип, по умолчанию, (для строк) допустимые значения].
   var SCALARS = {
     wide: ["boolean", false], dense: ["boolean", false], expandNotes: ["boolean", false], termHints: ["boolean", true],
     noAnim: ["boolean", false], noCelebrate: ["boolean", false], covers: ["boolean", true], docked: ["boolean", false],
     tourDone: ["boolean", false], focus: ["boolean", false], rolled: ["boolean", false], navHidden: ["boolean", true],
-    navHiddenHome: ["boolean", false], codeWrap: ["boolean", false], bySection: ["boolean", false],
+    navHiddenHome: ["boolean", false], codeWrap: ["boolean", false], bySection: ["boolean", false], repeatShowCode: ["boolean", false],
     navFilter: ["string", "all", ["all", "unread", "pinned", "noted"]],
     theme: ["string", "auto", ["auto", "light", "dark", "sepia"]],
     palette: ["string", "auto"], homeBg: ["string", "image", ["image", "stars", "none"]],
@@ -291,24 +330,41 @@
   }
   // Подрезка растущих словарей. files — известные материалы (rel → true) или null (данных ещё нет).
   var PRUNE = { hlFiles: 300, hlPerFile: 60, scroll: 400, notes: 400, noteLen: 20000, days: 400, missed: 200, dailyDone: 400, marks: 500 };
-  function keepLast(map, n) {   // ключи-даты / произвольные: оставить n последних по сортировке ключей
+  function keepLast(map, n) {   // ключи-даты («2026-09-27»): оставить n последних по сортировке ключей
     var keys = Object.keys(map);
     if (keys.length <= n) return;
     keys.sort().slice(0, keys.length - n).forEach(function (k) { delete map[k]; });
+  }
+  // Ключи-пути материалов: по алфавиту резать нельзя — пропали бы заметки к «01-…», а не старые.
+  // Оставляем сперва недавно открытые (state.recent), дальше — по порядку добавления (новые в конце).
+  function keepRecent(map, n, recent) {
+    var keys = Object.keys(map);
+    if (keys.length <= n) return;
+    var rank = {};
+    (recent || []).forEach(function (r, i) { var rel = String(r).split("#")[0]; if (rank[rel] === undefined) rank[rel] = i; });
+    var ordered = keys.map(function (k, i) { var r = rank[String(k).split("#")[0]]; return { k: k, fresh: r === undefined ? -1 : r, i: i }; });
+    ordered.sort(function (a, b) {
+      if ((a.fresh >= 0) !== (b.fresh >= 0)) return a.fresh >= 0 ? -1 : 1;   // недавние — вперёд
+      if (a.fresh >= 0) return a.fresh - b.fresh;
+      return b.i - a.i;                                                        // прочие — новые вперёд
+    });
+    ordered.slice(n).forEach(function (x) { delete map[x.k]; });
   }
   function pruneState(s, files) {
     if (files) ["scroll", "secSeen", "hl", "notes"].forEach(function (k) {   // материал удалили из доков — его хвосты тоже
       Object.keys(s[k]).forEach(function (rel) { if (!files[rel]) delete s[k][rel]; });
     });
     Object.keys(s.hl).forEach(function (rel) { if (s.hl[rel].length > PRUNE.hlPerFile) s.hl[rel] = s.hl[rel].slice(-PRUNE.hlPerFile); });
-    keepLast(s.hl, PRUNE.hlFiles);
-    keepLast(s.scroll, PRUNE.scroll);
-    keepLast(s.notes, PRUNE.notes);
+    keepRecent(s.hl, PRUNE.hlFiles, s.recent);
+    keepRecent(s.scroll, PRUNE.scroll, s.recent);
+    keepRecent(s.notes, PRUNE.notes, s.recent);
     Object.keys(s.notes).forEach(function (rel) { if (typeof s.notes[rel] !== "string") delete s.notes[rel]; else if (s.notes[rel].length > PRUNE.noteLen) s.notes[rel] = s.notes[rel].slice(0, PRUNE.noteLen); });
     keepLast(s.days, PRUNE.days);
     keepLast(s.dailyDone, PRUNE.dailyDone);
-    keepLast(s.missed, PRUNE.missed);
-    keepLast(s.marks, PRUNE.marks);
+    keepLast(s.records, PRUNE.dailyDone);
+    keepLast(s.weekly, 104);
+    keepRecent(s.missed, PRUNE.missed, null);
+    keepRecent(s.marks, PRUNE.marks, s.recent);
     return s;
   }
   function knownFiles() {
@@ -319,6 +375,7 @@
   var _saves = 0;
   function saveState() {
     state._savedAt = Math.max(Date.now(), savedAtOf(state) + 1);   // монотонно: импорт ставит метку «на минуту вперёд»
+    try { achOnSave(); } catch (e) {}                                  // новые достижения — в эту же запись
     if (++_saves % 50 === 0) { try { pruneState(state, knownFiles()); } catch (e) {} }   // растущее — подрезать изредка
     var text = JSON.stringify(state);
     // На пределе localStorage (~5 МБ на всё окно VS Code) — жертвуем восстановимым: прокрутка и
@@ -333,7 +390,7 @@
   // синхронизации окно B при сохранении затёрло бы отметки, сделанные в окне A. Событие storage
   // приходит в остальные окна — забираем оттуда прогресс (настройки вида у каждого окна свои).
   var PROGRESS_KEYS = ["dailyDone", "read", "stepsDone", "boss", "missed", "secSeen", "solved", "notes", "days", "pins",
-    "cards", "checks", "exams", "challenge", "hl", "marks"];
+    "cards", "checks", "exams", "challenge", "hl", "marks", "ach", "weekly", "records"];
   function adoptProgress(other) {
     PROGRESS_KEYS.forEach(function (k) { state[k] = plainMap(other[k]); });
     if (Array.isArray(other.recent)) state.recent = other.recent.slice(0, 50);

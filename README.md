@@ -12,9 +12,9 @@
 поиск по содержимому · оглавление и переходы по внутренним ссылкам · прогресс изучения · ноль зависимостей
 
 [![CI](https://github.com/moonlivedt-oss/cpp-panel-Moon/actions/workflows/ci.yml/badge.svg)](https://github.com/moonlivedt-oss/cpp-panel-Moon/actions/workflows/ci.yml)
-![version](https://img.shields.io/badge/version-3.5.0-cba6f7)
+![version](https://img.shields.io/badge/version-3.5.2-cba6f7)
 ![vscode](https://img.shields.io/badge/VS%20Code-%5E1.85-007ACC?logo=visualstudiocode&logoColor=white)
-![tests](https://img.shields.io/badge/тесты-251%20ok-a6e3a1)
+![tests](https://img.shields.io/badge/тесты-724%20ok-a6e3a1)
 ![deps](https://img.shields.io/badge/зависимостей-0-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
@@ -39,7 +39,7 @@ npm run install:vsix     # собрать пакет и сразу постав�
 
 ```bash
 npm run package          # только собрать dist/cpp-docs-panel-<версия>.vsix
-npm test                 # смоук-тест (172 проверки, VS Code не нужен)
+npm test                 # все тесты (724 проверок, VS Code не нужен)
 npm run check            # синтаксис + тесты
 npm run preview:window   # собрать build/preview-window.html — посмотреть окно в браузере
 ```
@@ -181,6 +181,11 @@ npm run preview:window   # собрать build/preview-window.html — посм
 |---|---|---|
 | `cppDocs.path` | *(пусто)* | где искать документацию, если проект открыт не из своей папки |
 | `cppDocs.openInPreview` | `true` | открывать файлы в режиме чтения; `false` — как текст |
+| `cppDocs.paths` | *(пусто)* | несколько возможных папок с документацией: берётся первая существующая |
+| `cppDocs.editorBridge` | `true` | подсказка в окне по слову/ошибке под курсором в .cpp |
+| `cppDocs.styleHints` | `true` | подсказки по правилам курса в открытом .cpp (синяя волна, «Почему так») |
+| `cppDocs.localRun` | `false` | «Запустить» в заданиях: компиляция локальным компилятором и прогон по тестам |
+| `cppDocs.compiler` | *(пусто)* | компилятор для «Запустить»; пусто — автопоиск g++ → clang++ → cl |
 
 Папка ищется в таком порядке: `docs` внутри открытого проекта → корень открытого проекта →
 значение `cppDocs.path`. Если ничего не нашлось, панель покажет подсказку, а не пустоту.
@@ -190,14 +195,15 @@ npm run preview:window   # собрать build/preview-window.html — посм
 ## FAQ / Решение проблем
 
 **Плавающая пилюля «C++» не появляется.**
-Окно рисует загрузчик custom-css. Проверь, что установлен **Custom UI Style** или **Custom CSS
-and JS**, выполнена команда **«…подключить плавающее окно»** и окно перезагружено. Состояние
-покажет команда **«Документация C++: проверить плавающее окно»**.
+Окно встраивает само расширение (или Moon Core, если он установлен и модуль `cppdocs` разрешён) —
+сторонние загрузчики не нужны. Выполни **«…подключить плавающее окно»** и перезагрузи окно VS Code.
+Состояние и кто встраивает окно покажет **«Документация C++: проверить плавающее окно»**; подробности
+сбоев — **«Документация C++: показать журнал»**. Без правки VS Code то же окно открывается во вкладке:
+**«…открыть окно во вкладке»**.
 
 **После обновления VS Code окно пропало.**
-Это ограничение механизма custom-css, не расширения. С **Custom UI Style** патч переживает
-обновления; с **Custom CSS and JS** его нужно включать заново (**Enable Custom CSS and JS** +
-перезапуск). Боковая панель работает всегда, без загрузчика.
+Обновление перезаписывает оболочку VS Code. Расширение само предложит «Восстановить»; с Moon Core
+вопрос задаёт ядро. Боковая панель и окно во вкладке работают всегда.
 
 **Панель пустая / «документация не найдена».**
 Материалы ищутся в `docs/` открытого проекта, затем в его корне, затем по `cppDocs.path`. Открой
@@ -274,7 +280,7 @@ cpp-docs-panel/
 ```bash
 npm run package          # собрать dist/cpp-docs-panel-<версия>.vsix
 npm run install:vsix     # собрать и сразу поставить в VS Code
-npm test                 # смоук-тест (172 проверки, VS Code не нужен)
+npm test                 # все тесты (724 проверок, VS Code не нужен)
 npm run check            # node --check + смоук-тест одной командой
 npm run preview          # build/preview.html — боковая панель в браузере
 npm run preview:window   # build/preview-window.html — плавающее окно в браузере

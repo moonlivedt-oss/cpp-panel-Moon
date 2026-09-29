@@ -6,6 +6,7 @@
   // ненулевой прогресс по тому, что пользователь ещё не открывал.
   function openFile(rel, hash, silent) {
     hideHome();
+    hideTour();
     var map = fileMap();
     var f = map[String(rel).toLowerCase()];
     if (!f) return;
@@ -38,6 +39,7 @@
     // мягкое проявление статьи
     articleEl.classList.remove("fade"); void articleEl.offsetWidth; articleEl.classList.add("fade");
     resolveImages();
+    try { annotateAhead(articleEl, f.rel); } catch (e) { reportError("забегаем вперёд", e); }
     buildOutline(headings);
     collectHeadings();
     buildRouteNav(f);
@@ -96,7 +98,7 @@
   }
   // Значки разделов (рисованные, без лиц). Группы без значка — с цветной точкой, как раньше.
   var GROUP_BADGE = {
-    "Справочник по темам": "badge-ref", "Задачник": "badge-tasks", "Примеры программ": "badge-examples",
+    "Справочник по темам": "badge-ref", "Справка и словари": "badge-ref", "Задачник": "badge-tasks", "Примеры программ": "badge-examples",
     "Сквозной проект": "badge-proekt", "Создание игр": "badge-igry", "Главное": "badge-main", "Мои заметки": "badge-notes"
   };
   function groupBadge(label) {

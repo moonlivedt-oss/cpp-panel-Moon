@@ -40,4 +40,4 @@ async function dispatch(context, method, body, opts) {
 /** Сколько ошибок окна пришло за сессию (для «проверить плавающее окно»). */
 function windowErrorCount() { return _errors; }
 
-module.exports = { dispatch, windowErrorCount, logFromWindow };
+module.exports = { dispatch, windowErrorCount };

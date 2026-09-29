@@ -6,7 +6,7 @@
 
 **Уровень:** 🟡 нужна база · **Опирается на:** [Контейнеры](06-konteynery.md), [Функции](04-funkcii.md)
 
-[← Начни отсюда](../00-НАЧНИ-ОТСЮДА.md) · [← Контейнеры: vector, map, set, pair](06-konteynery.md) · [struct, математика, файлы →](08-struct-fayly.md) · [Примеры программ](../examples/README.md)
+[← Начни отсюда](../00-НАЧНИ-ОТСЮДА.md) · [Маршрут изучения](../00-marshrut.md) · [← Контейнеры](06-konteynery.md) · [struct, математика, файлы →](08-struct-fayly.md)
 
 ---
 
@@ -202,6 +202,26 @@ long long total = std::accumulate(v.begin(), v.end(), 0LL);   // сумма
 
 > **`0LL`, а не `0`.** Начальное значение задаёт тип, в котором идёт сложение. С `0` сумма считается в `int` и молча переполняется на больших данных.
 
+```badgood
+Ручной цикл | Готовый алгоритм
+int best = v[0];
+for (std::size_t i = 1; i < v.size(); ++i)
+  if (v[i] > best)
+    best = v[i];
+
+int positives = 0;
+for (int x : v)
+  if (x > 0) ++positives;
+---
+int best = *std::max_element(v.begin(), v.end());
+
+auto positives = std::count_if(v.begin(), v.end(),
+    [](int x) { return x > 0; });
+
+// имя алгоритма говорит, ЧТО делаем,
+// а цикл — только КАК
+```
+
 ### Со своим правилом — через лямбду
 
 Лямбда отвечает на вопрос алгоритма. Для `sort` вопрос звучит «первый должен идти раньше второго?», для `count_if` — «этот элемент подходит?».
@@ -229,6 +249,20 @@ if (it != v.end())
 bool anyNegative = std::any_of(v.begin(), v.end(), [](int x) { return x < 0; });   // → 0
 bool allPositive = std::all_of(v.begin(), v.end(), [](int x) { return x > 0; });   // → 1
 bool noneZero   = std::none_of(v.begin(), v.end(), [](int x) { return x == 0; });  // → 1
+```
+
+```cpp alt: Товары: сначала дешёвые, при равной цене — по имени
+struct Item { std::string name; int price; };
+std::vector<Item> shop = {{"щит", 30}, {"меч", 50}, {"лук", 30}};
+std::sort(shop.begin(), shop.end(), [](const Item &a, const Item &b) {
+  return a.price != b.price ? a.price < b.price : a.name < b.name;
+});
+```
+
+```cpp alt: Сколько студентов сдали
+std::vector<int> marks = {5, 2, 4, 3, 2};
+auto passed = std::count_if(marks.begin(), marks.end(), [](int m) { return m >= 3; });
+std::cout << "Сдали: " << passed << " из " << marks.size() << "\n";
 ```
 
 **Лови результат в `auto`.** `count_if` возвращает не `int`, а `ptrdiff_t`, и присваивание в `int` даст предупреждение от `-Wconversion`.
@@ -387,6 +421,22 @@ auto best = std::max_element(group.begin(), group.end(),
 std::cout << best->name << " " << best->score;    // → Аня 95
 ```
 
+```cpp alt: Самый опасный монстр в волне
+struct Monster { std::string name; int atk; };
+std::vector<Monster> wave = {{"гоблин", 2}, {"дракон", 15}, {"скелет", 4}};
+auto boss = std::max_element(wave.begin(), wave.end(),
+    [](const Monster &a, const Monster &b) { return a.atk < b.atk; });
+std::cout << boss->name << "\n";   // дракон
+```
+
+```cpp alt: Самый дешёвый рейс
+struct Flight { std::string to; int price; };
+std::vector<Flight> list = {{"Казань", 4200}, {"Сочи", 6100}, {"Пермь", 3900}};
+auto cheap = std::min_element(list.begin(), list.end(),
+    [](const Flight &a, const Flight &b) { return a.price < b.price; });
+std::cout << cheap->to << " за " << cheap->price << "\n";
+```
+
 ### По шагам: как `max_element` ищет максимум
 
 Внутри `std::max_element` — обычный цикл «помню лучшего и сравниваю с каждым». Вот он вручную:
@@ -487,6 +537,61 @@ bool hasDupSet(const std::vector<int> &v) {
 ```
 
 На учебных данных из десятка чисел разницы не будет — пиши самый понятный вариант. Думать про `O(…)` стоит, когда данных тысячи и больше или когда программа вдруг «задумалась»: первым делом ищи цикл в цикле.
+
+**Живой пример:** сколько сравнений делает проверка «есть ли повторы» каждый с каждым — и сколько работы у `std::set`.
+
+```live
+@N = 10 [2..2000 step 2]
+---
+// каждый с каждым: O(n²)
+for (int i = 0; i < {N}; ++i)
+    for (int j = i + 1; j < {N}; ++j)
+        if (v[i] == v[j]) return true;
+---
+сравнений в худшем случае: {N*(N-1)/2}
+вставок в std::set вместо этого: {N}
+```
+
+```challenge
+@id c1n524av
+@type run
+@hint Храни пары `std::pair<std::string, int>` или `struct { std::string name; int score; }` в векторе.
+@hint Правило для `std::sort`: `a.score != b.score ? a.score > b.score : a.name < b.name`.
+Отсортируй студентов: по баллам от большего к меньшему, при равных баллах — по имени по алфавиту. Вход: `n`, потом `n` пар «имя баллы». Вывод: имена через пробел.
+---
+#include <iostream>
+#include <string>
+#include <vector>
+
+int main() {
+    int n = 0;
+    std::cin >> n;
+    // твой код: прочитать, отсортировать, напечатать имена
+}
+---
+3 Bob 70 Ann 90 Cid 70 => Ann Bob Cid
+2 Zed 5 Amy 5 => Amy Zed
+1 Solo 1 => Solo
+---
+#include <algorithm>
+#include <iostream>
+#include <string>
+#include <vector>
+
+struct Student { std::string name; int score = 0; };
+
+int main() {
+    int n = 0;
+    std::cin >> n;
+    std::vector<Student> v(static_cast<std::size_t>(n));
+    for (Student &s : v) std::cin >> s.name >> s.score;
+    std::sort(v.begin(), v.end(), [](const Student &a, const Student &b) {
+        return a.score != b.score ? a.score > b.score : a.name < b.name;
+    });
+    for (std::size_t i = 0; i < v.size(); ++i) std::cout << (i ? " " : "") << v[i].name;
+    std::cout << "\n";
+}
+```
 
 ## Рецепты: хочу X → вот код
 
@@ -678,4 +783,4 @@ for (int x : v) std::cout << x << " ";
 
 ---
 
-[← Начни отсюда](../00-НАЧНИ-ОТСЮДА.md) · [← Контейнеры: vector, map, set, pair](06-konteynery.md) · [struct, математика, файлы →](08-struct-fayly.md) · [Примеры программ](../examples/README.md)
+[← Начни отсюда](../00-НАЧНИ-ОТСЮДА.md) · [Маршрут изучения](../00-marshrut.md) · [← Контейнеры](06-konteynery.md) · [struct, математика, файлы →](08-struct-fayly.md)

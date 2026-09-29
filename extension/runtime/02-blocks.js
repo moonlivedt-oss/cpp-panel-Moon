@@ -1278,12 +1278,14 @@
     if (shown < list.length) { list[shown].hidden = false; shown++; hb.setAttribute("data-shown", String(shown)); }
     if (shown >= list.length) btn.hidden = true;
     else btn.textContent = "💡 Подсказка " + (shown + 1) + " из " + list.length;
+    try { noteHint(hb.closest(".cd-ch")); } catch (e) {}
     syncSolution(hb.closest(".cd-ch"));
   }
   function solutionShow(btn) {
     var hb = btn.closest(".cd-hints"); if (!hb || btn.disabled) return;
     var sol = hb.querySelector(".cd-sol"); if (sol) sol.hidden = false;
     btn.hidden = true;
+    var chb = hb.closest(".cd-ch"); if (chb) { chb.__solShown = true; try { noteHint(chb); } catch (e) {} }
   }
   // Тесты формата «вход => ожидаемый вывод» (как ```tests); «#строка» — подпись.
   // «\n» внутри входа/вывода — перевод строки: так задаются многострочный ввод (getline) и вывод.

@@ -48,6 +48,10 @@
   // прислало адрес webview (https://…vscode-cdn.net/…) — берём как есть.
   function resUrl(u) {
     if (IN_PANEL && /^https:\/\/[^"'()\s<>]+$/.test(String(u || ""))) return String(u);
+    // Превью в браузере (npm run preview:window / dev): картинки отдаёт локальный сервер превью.
+    // В оболочке VS Code страница открыта по vscode-file:, так что эта ветка там не срабатывает.
+    if (typeof location !== "undefined" && /^https?:$/.test(location.protocol) &&
+        /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/[^"'()\s<>]*$/.test(String(u || ""))) return String(u);
     return appUrl(u);
   }
   function appRead(u) {
@@ -61,8 +65,23 @@
     } catch (e) { return null; }       // файла нет — оболочка отвечает ошибкой сети
   }
   var _bridge = null, _bridgeAt = 0;
+  // Через Moon Core: события модуля вместо своего потока (подписываемся один раз).
+  var _mcSubscribed = false;
+  function mcSubscribe() {
+    if (_mcSubscribed || !MCM) return;
+    _mcSubscribed = true;
+    _esLive = true;   // контекст редактора и метка приходят событиями — опрос файлов не нужен
+    try {
+      MCM.on("editor", function (txt) { var p = parseEditorText(String(txt)); if (p) { editorPayload = p; applyEditorPayload(p); } });
+      MCM.on("stamp", function (txt) { applyStampText(String(txt)); });
+      MCM.on("progress", function (txt) { onProgressEvent(String(txt)); });
+    } catch (e) { _esLive = false; }
+  }
   function bridgeInfo() {
     if (IN_PANEL) return null;
+    // Moon Core: события — через его мост, но свой мост расширения тоже жив: им пишем зеркало
+    // прогресса (у моста Moon Core лимит 1 МБ и нет sendBeacon при закрытии окна).
+    if (MCM) mcSubscribe();
     if (_bridge && Date.now() - _bridgeAt < 10000) return _bridge;
     _bridgeAt = Date.now();
     var d = DATA(), txt = appRead((d && d.bridgeUrl) || bootVal("bridgeUrl"));
@@ -82,7 +101,7 @@
         var fresh = !prev || prev.token !== _bridge.token;
         // «я на связи» — для «Проверить плавающее окно» (один раз на адрес моста)
         if (fresh && typeof fetch === "function") try { fetch("http://127.0.0.1:" + _bridge.port + "/ping/" + _bridge.token, { cache: "no-store" }).catch(function () {}); } catch (e) {}
-        if (fresh) connectEvents();
+        if (fresh && !MCM) connectEvents();
       }
     } catch (e) {}
     return _bridge;
@@ -121,6 +140,7 @@
       if (p) { editorPayload = p; applyEditorPayload(p); }
     });
     _es.addEventListener("stamp", function (ev) { applyStampText(ev.data); });
+    _es.addEventListener("progress", function (ev) { onProgressEvent(ev.data); });
   }
   // Записать зеркало прогресса через мост (во вкладке — сообщением). Асинхронно; true — запрос ушёл.
   function bridgeWrite(u, text, beacon) {
@@ -128,7 +148,7 @@
     if (PROTO.WRITABLE.indexOf(name) === -1) return false;
     if (IN_PANEL) { try { VSC.postMessage({ type: "write", name: name, text: String(text) }); return true; } catch (e) { return false; } }
     var b = bridgeInfo();
-    if (!b) return false;
+    if (!b) return MCM ? mcWrite(name, text) : false;
     var target = "http://127.0.0.1:" + b.port + "/w/" + b.token + "/" + name;
     // sendBeacon переживает выгрузку страницы; text/plain не требует CORS-предзапроса.
     if (beacon && typeof navigator !== "undefined" && navigator.sendBeacon) {
@@ -138,7 +158,28 @@
     try {
       fetch(target, {
         method: "POST", body: String(text), headers: { "Content-Type": "text/plain" }, mode: "cors", cache: "no-store",
-      }).then(function (r) { if (!r.ok) bridgeFailed(b); }, function () { bridgeFailed(b); });   // сбой — возьмём другой хост
+      }).then(function (r) { if (!r.ok) { bridgeFailed(b); if (MCM) mcWrite(name, text); } },
+        function () { bridgeFailed(b); if (MCM) mcWrite(name, text); });   // сбой — возьмём другой хост (или мост Moon Core)
+      return true;
+    } catch (e) { return false; }
+  }
+  // Запись через мост Moon Core: у него лимит тела запроса ~1 МБ. Больше — не молчим, а сообщаем
+  // (журнал + один раз подсказка): иначе прогресс тихо переставал бы сохраняться.
+  var MC_MAX_WRITE = 1000 * 1000, _mcBigWarned = false;
+  function mcWrite(name, text) {
+    text = String(text);
+    if (text.length > MC_MAX_WRITE) {
+      if (!_mcBigWarned) {
+        _mcBigWarned = true;
+        reportError("зеркало прогресса", new Error("зеркало " + Math.round(text.length / 1024) + " КБ больше лимита моста Moon Core; мост расширения недоступен"));
+        toast("Резервная копия прогресса не сохранилась: слишком большая. Проверь «Документация C++: проверить плавающее окно».", true);
+      }
+      return false;
+    }
+    try {
+      MCM.rpc("write", { name: name, text: text }).then(function (r) {
+        if (!r || !r.ok) reportError("зеркало прогресса", new Error((r && r.error) || "мост Moon Core не принял запись"));
+      }, function () {});
       return true;
     } catch (e) { return false; }
   }
@@ -168,6 +209,14 @@
       var id = "q" + Date.now() + "-" + (++_rpcSeq);
       _rpcWait[id] = function (r) { delete _rpcWait[id]; finish(r); };
       try { VSC.postMessage({ type: "rpc", id: id, method: method, body: body }); } catch (e) { delete _rpcWait[id]; finish(null); }
+      return;
+    }
+    if (MCM) {
+      // Мост Moon Core сам выбирает хост этого окна; ответ модуля — { ok, result }.
+      try {
+        // Своё ожидание: «Запустить» идёт до минуты, а у моста Moon Core по умолчанию 8 с.
+        MCM.rpc(method, body, { timeoutMs: Math.max(1000, timeoutMs - 1000) }).then(function (r) { finish(r && r.ok ? r.result : null); }, function () { finish(null); });
+      } catch (e) { finish(null); }
       return;
     }
     var hosts = bridgeHosts(), i = 0;
@@ -207,16 +256,18 @@
     // адрес самой страницы (скрипты VS Code — отдельные .js). Во вкладке страница целиком наша.
     window.addEventListener("error", function (ev) {
       if (!ev) return;
-      var mine = IN_PANEL || (ev.filename && typeof location !== "undefined" && String(ev.filename).split("?")[0] === String(location.href).split("?")[0]);
+      var fn = String(ev.filename || "").split("?")[0];
+      var mine = IN_PANEL || (fn && typeof location !== "undefined" && fn === String(location.href).split("?")[0]) ||
+        /mooncore-mod-cppdocs\.js$/.test(fn);   // файл модуля Moon Core рядом с оболочкой
       if (mine) reportError("window.onerror", ev.error || ev.message);
     });
     if (IN_PANEL) window.addEventListener("unhandledrejection", function (ev) { reportError("promise", ev && ev.reason); });
   } catch (e) {}
-  function nodeRead(u) {
+  // Прочитать файл хранилища/расширения (vscode-file://; во вкладке — только зеркало прогресса).
+  function fileRead(u) {
     if (IN_PANEL) return u && u === progressUrl() && typeof window.__CPPDOCS_MIRROR__ === "string" ? window.__CPPDOCS_MIRROR__ : null;
     return appRead(u);
   }
-  function nodeWrite(u, text) { return bridgeWrite(u, text); }
   // Асинхронное чтение (данные окна — сотни КБ: синхронный запрос подвесил бы интерфейс VS Code).
   function appReadAsync(u, cb) {
     if (IN_PANEL) { cb(null); return; }

@@ -60,7 +60,9 @@ const NOISY = "#include <iostream>\nint main(){ for(int i=0;i<50000;i++) std::ce
 const CPP20 = "#include <format>\n#include <iostream>\n#include <string>\nint main(){std::string a,b; std::getline(std::cin,a); std::getline(std::cin,b);" +
   " std::cout << std::format(\"{}+{}\", a.starts_with(\"x\") ? 1 : 0, b.size()) << \"\\n\" << b;}";
 const CRASH = "#include <iostream>\nint main(){ std::cerr << \"беда\"; return 3; }";
-const HANG = "int main(){ volatile unsigned long long i = 0; for(;;) ++i; }";
+// Верный ответ напечатан, но потом программа падает (исключение из at) — тест не засчитывается.
+const OK_THEN_CRASH = "#include <iostream>\n#include <vector>\nint main(){ std::cout << \"ok\" << std::endl; std::vector<int> v; return v.at(5); }";
+const HANG ="int main(){ volatile unsigned long long i = 0; for(;;) ++i; }";
 
 const uncaught = [];
 process.on("uncaughtException", (e) => uncaught.push(String(e && (e.code || e.message) || e)));
@@ -105,12 +107,36 @@ test("Напиши и запусти: компиляция и тесты", { ski
     const res = await R.handleRun({ id: "t6", code: CRASH, tests: [{ in: "", out: "ok" }] });
     assert.equal(res.tests[0].exit, 3);
     assert.match(res.tests[0].stderr, /беда/);
+    assert.match(res.tests[0].crash, /код 3|abort/);
+  });
+  await t.test("верный вывод, но программа упала — тест не пройден, причина в ответе", async () => {
+    const res = await R.handleRun({ id: "t6b", code: OK_THEN_CRASH, tests: [{ in: "", out: "ok" }] });
+    assert.equal(res.ok, false, JSON.stringify(res.tests));
+    assert.equal(res.tests[0].pass, false);
+    assert.ok(res.tests[0].crash, "есть причина падения");
   });
   await t.test("зависшая программа снимается по таймауту", { timeout: 30000 }, async () => {
     const t0 = Date.now();
     const res = await R.handleRun({ id: "t7", code: HANG, tests: [{ in: "", out: "" }] });
     assert.match(res.tests[0].got, /превышено время/);
     assert.ok(Date.now() - t0 < 25000);
+  });
+  await t.test("зависла на первом тесте — остальные не гоняются, ответ укладывается в бюджет", { timeout: 30000 }, async () => {
+    const t0 = Date.now();
+    const res = await R.handleRun({ id: "t7b", code: HANG, tests: [{ in: "", out: "" }, { in: "", out: "" }, { in: "", out: "" }] });
+    assert.equal(res.stopped, "hang", JSON.stringify(res));
+    assert.equal(res.tests.length, 3);
+    assert.ok(res.tests[1].skipped && res.tests[2].skipped, JSON.stringify(res.tests));
+    assert.ok(Date.now() - t0 < 15000, "один таймаут, а не три");
+  });
+  await t.test("режим contains: строки ожидаемого есть в выводе по порядку, подсказки ввода свои", async (tt) => {
+    const CALC = "#include <iostream>\nint main(){int a,b; std::cout<<\"First: \"; std::cin>>a; std::cout<<\"Second: \"; std::cin>>b; std::cout<<a<<\" + \"<<b<<\" = \"<<a+b<<\"\\nBye!\";}";
+    const ok = await R.handleRun({ id: "c1", code: CALC, mode: "contains", tests: [{ in: "2 3", out: "2 + 3 = 5\nbye" }] });
+    // Антивирус (Kaspersky) иногда блокирует свежий MinGW-exe — это не ошибка кода.
+    if (/заблокирован/.test(JSON.stringify(ok.tests))) { tt.skip("антивирус заблокировал запуск"); return; }
+    assert.equal(ok.ok, true, JSON.stringify(ok.tests));
+    const bad = await R.handleRun({ id: "c2", code: CALC, mode: "contains", tests: [{ in: "2 3", out: "bye\n2 + 3 = 5" }] });
+    assert.equal(bad.ok, false, "порядок строк важен");
   });
   await t.test("очередь: запросы сверх лимита получают busy, остальные выполняются", async () => {
     const all = await Promise.all([0, 1, 2, 3, 4].map((i) => R.handleRun({ id: "q" + i, code: SUM, tests: [{ in: "1", out: "1" }] })));
@@ -132,6 +158,26 @@ test("Напиши и запусти: проверки запроса", async (t
     assert.equal(res.stage, "io");
   });
   await t.test("normRunOut: '15\\n' == ' 15 '", () => assert.equal(R.normRunOut("15\n"), R.normRunOut(" 15 ")));
+  await t.test("outputMatches: exact — как раньше, contains — части строк по порядку без учёта регистра", () => {
+    assert.equal(R.outputMatches("15\n", "15"), true);
+    assert.equal(R.outputMatches("Введите: 15", "15"), false);
+    assert.equal(R.outputMatches("Введите: 15\nИТОГ ok", "15\nитог", "contains"), true);
+    assert.equal(R.outputMatches("a\nb", "b\na", "contains"), false);
+  });
+  await t.test("бюджет ответа меньше ожидания окна (ответ не теряется)", () => {
+    const P = require(path.join(EXT, "lib", "protocol.js"));
+    assert.ok(R.RUN_BUDGET_MS < P.RUN_TIMEOUT_MS && R.RUN_BUDGET_MS >= 10000);
+  });
+  await t.test("отпечаток компилятора меняется вместе с файлом (обновили g++ — кэш не отдаст старое)", () => {
+    const os = require("os");
+    const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "cppdocs-cc-")), "g++.exe");
+    fs.writeFileSync(f, "a");
+    const s1 = R.compilerStamp({ cmd: "g++", path: f });
+    fs.writeFileSync(f, "bbbb");
+    const s2 = R.compilerStamp({ cmd: "g++", path: f });
+    assert.notEqual(s1, s2);
+    assert.equal(R.compilerStamp({ cmd: "g++" }), "g++");
+  });
 });
 
 test("Действия окна", async (t) => {
@@ -170,4 +216,15 @@ test("Действия окна", async (t) => {
     assert.ok(out.every((r) => r.ok));
     assert.ok(out.some((r) => r.dropped));
   });
+});
+
+test("Напиши и запусти: причина падения простыми словами", () => {
+  const { crashReason } = R;
+  assert.equal(crashReason({ code: 0 }), "");
+  assert.equal(crashReason({ timeout: true, code: 1 }), "");
+  assert.match(crashReason({ code: 3 }), /abort/);
+  assert.match(crashReason({ code: -1073741819 }), /чужой памяти/);    // 0xC0000005 как отрицательное число
+  assert.match(crashReason({ code: 0xC00000FD }), /рекурсия/);
+  assert.match(crashReason({ code: null, signal: "SIGSEGV" }), /чужой памяти/);
+  assert.match(crashReason({ code: 7 }), /код 7/);
 });

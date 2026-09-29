@@ -1,14 +1,30 @@
   // ==== runtime/08-view.js — меню настроек, подсказки-термины, история, маршрут ====
-  // ------- меню вида: шрифт / ширина / плотность -------
+  // ------- настройки: окно поверх окна документации, с вкладками -------
   function wireViewMenu() {
+    if (winEl && viewMenu.parentNode !== winEl) winEl.appendChild(viewMenu);
     buildViewMenu();
     viewBtn.addEventListener("click", function (e) {
       e.stopPropagation();
-      viewMenu.hidden = !viewMenu.hidden;
+      if (viewMenu.hidden) openSettings(); else viewMenu.hidden = true;
     });
-    document.addEventListener("mousedown", function (e) {
-      if (viewMenu && !viewMenu.hidden && !viewMenu.contains(e.target) && e.target !== viewBtn) viewMenu.hidden = true;
-    }, true);
+    // клик по затемнению вокруг карточки — закрыть
+    viewMenu.addEventListener("mousedown", function (e) { if (e.target === viewMenu) viewMenu.hidden = true; });
+  }
+  function openSettings(tab) {
+    if (!viewMenu) return;
+    buildViewMenu();                                  // картинки палитр и отметки — свежие
+    if (tab) showSetTab(tab);
+    viewMenu.hidden = false;
+    try { var c = viewMenu.querySelector(".cd-set-x"); if (c) c.focus(); } catch (e) {}
+  }
+  var setTab = "look";
+  function showSetTab(k) {
+    setTab = k;
+    viewMenu.querySelectorAll(".cd-set-tab").forEach(function (b) {
+      var on = b.getAttribute("data-tab") === k;
+      b.classList.toggle("on", on); b.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    viewMenu.querySelectorAll(".cd-set-page").forEach(function (pg) { pg.hidden = pg.getAttribute("data-tab") !== k; });
   }
   function segRow(label, buttons) {
     // 3+ кнопок (или длинные подписи) не влезают в строку — кладём контрол под подпись на всю ширину.
@@ -19,12 +35,15 @@
     row.appendChild(seg);
     return row;
   }
-  function vmSection(title) {
-    var s = el("div", null, title); s.className = "cd-vm-sec"; viewMenu.appendChild(s);
+  // Пейзаж палитры для карточки (та же картинка, что на главной); файла нет — null.
+  function palThumb(k) {
+    var d = DATA(), dir = (d && d.extDirUrl) || bootVal("extDirUrl");
+    var have = (d && Array.isArray(d.bgImages)) ? d.bgImages : [];
+    var name = have.indexOf("bg-" + k + ".webp") !== -1 ? "bg-" + k + ".webp" : (have.indexOf("bg-default.webp") !== -1 ? "bg-default.webp" : "");
+    return dir && name ? resUrl(String(dir).replace(/\/+$/, "") + "/" + name) : null;
   }
   function buildViewMenu() {
     viewMenu.textContent = "";
-    var mtitle = el("div", null, "Настройки"); mtitle.className = "cd-vm-title"; viewMenu.appendChild(mtitle);
     // шрифт
     var minus = el("button", null, "A−"); minus.type = "button"; minus.title = "Меньше";
     var val = el("button", null, ""); val.type = "button"; val.disabled = true; val.style.cursor = "default";
@@ -34,7 +53,7 @@
     minus.addEventListener("click", function () { stepFs(-0.1); });
     plus.addEventListener("click", function () { stepFs(0.1); });
     showFs();
-    var rowFont = segRow("Шрифт", [minus, val, plus]);
+    var rowFont = segRow("Размер текста", [minus, val, plus]);
     // ширина
     var wN = el("button", null, "Уже"); var wW = el("button", null, "Шире");
     wN.type = "button"; wW.type = "button";
@@ -61,7 +80,7 @@
     cMinus.addEventListener("click", function () { stepCfs(-0.5); });
     cPlus.addEventListener("click", function () { stepCfs(0.5); });
     showCfs();
-    var rowCodeFs = segRow("Код", [cMinus, cVal, cPlus]);
+    var rowCodeFs = segRow("Размер кода", [cMinus, cVal, cPlus]);
     // режим фокуса: скрыть навигацию и оглавление, оставить только текст
     var fcOn = el("button", null, "Вкл"); var fcOff = el("button", null, "Выкл");
     fcOn.type = "button"; fcOff.type = "button";
@@ -120,6 +139,10 @@
     var tA = el("button", null, "Авто"); var tL = el("button", null, "Светлая"); var tD = el("button", null, "Тёмная"); var tSep = el("button", null, "Сепия");
     tA.type = "button"; tL.type = "button"; tD.type = "button"; tSep.type = "button";
     tSep.title = "Тёплый «бумажный» фон — мягче для глаз";
+    [[tA, "auto"], [tL, "light"], [tD, "dark"], [tSep, "sepia"]].forEach(function (p) {   // мини-окно темы на кнопке
+      var mini = el("span", null); mini.className = "cd-th-mini th-" + p[1];
+      setHTML(mini, "<i></i><i></i><i></i>"); p[0].insertBefore(mini, p[0].firstChild); p[0].classList.add("cd-th-btn");
+    });
     function showT() {
       tA.classList.toggle("on", state.theme === "auto");
       tL.classList.toggle("on", state.theme === "light");
@@ -134,17 +157,23 @@
     showT();
     var rowTheme = segRow("Тема", [tA, tL, tD, tSep]);
     // палитра: «как в редакторе» или готовый набор (фон + акцент + цвета кода)
-    var rowPal = el("div", null); rowPal.className = "cd-vm-row stack";
+    var rowPal = el("div", null); rowPal.className = "cd-vm-row stack cards";
     var palLbl = el("span", null, "Палитра"); palLbl.className = "cd-vm-lbl"; rowPal.appendChild(palLbl);
     var palGrid = el("div", null); palGrid.className = "cd-pal-grid"; rowPal.appendChild(palGrid);
     var palBtns = [];
     ["auto"].concat(Object.keys(PALETTES)).forEach(function (k) {
       var P = PALETTES[k];
       var b = el("button", null); b.type = "button"; b.className = "cd-pal";
-      var sw = el("span", null); sw.className = "cd-pal-sw";
-      sw.style.background = P ? "linear-gradient(135deg," + P.bg + " 48%," + P.ac + " 52%," + P.glow + ")"
-        : "linear-gradient(135deg,#1e1e2e 48%,var(--cppdocs-ac,#89b4fa) 52%)";
-      b.appendChild(sw); b.appendChild(el("span", null, P ? P.name : "Как в редакторе"));
+      // карточка: пейзаж палитры (если есть) + точки её цветов + имя
+      var th = el("span", null); th.className = "cd-pal-th";
+      var img = palThumb(k);
+      th.style.backgroundImage = img ? "url(" + img + ")" : (P ? "linear-gradient(135deg," + P.bg + " 40%," + P.ac + " 75%," + P.glow + ")"
+        : "linear-gradient(135deg,#1e1e2e 40%,var(--cppdocs-ac,#89b4fa) 80%)");
+      var dots = el("span", null); dots.className = "cd-pal-dots";
+      (P ? [P.ac, P.glow, P.ts, P.tn] : ["var(--cppdocs-ac,#89b4fa)"]).forEach(function (c) { var i = el("i", null); i.style.background = c; dots.appendChild(i); });
+      th.appendChild(dots);
+      b.appendChild(th);
+      var nm = el("span", null, P ? P.name : "Как в редакторе"); nm.className = "cd-pal-nm"; b.appendChild(nm);
       b.title = P ? "Фон, акцент и подсветка кода «" + P.name + "»" : "Акцент из темы VS Code / обоев custom-bg";
       b.setAttribute("data-pal", k);
       b.addEventListener("click", function () {
@@ -159,7 +188,7 @@
       b.classList.toggle("on", (state.palette || "auto") === k);
       palBtns.push(b); palGrid.appendChild(b);
     });
-    var palNote = el("div", null, "В светлой теме и сепии палитра меняет только акцент."); palNote.className = "cd-pal-note";
+    var palNote = el("div", null, "В светлой теме и сепии палитра меняет только акцент. Картинка — фон главной (режим «Пейзаж»)."); palNote.className = "cd-pal-note";
     rowPal.appendChild(palNote);
     // фон главной: пейзаж под палитру / звёздное небо прогресса / без рисунка
     var hbI = el("button", null, "Пейзаж"), hbS = el("button", null, "Звёзды"), hbN = el("button", null, "Пусто");
@@ -188,19 +217,26 @@
     var rowCelebrate = segRow("Праздник", [cOn, cOff]);
     // шрифт чтения
     var fontBtns = [];
+    var rowRead = el("div", null); rowRead.className = "cd-vm-row stack cards";
+    var frLbl = el("span", null, "Шрифт текста"); frLbl.className = "cd-vm-lbl"; rowRead.appendChild(frLbl);
+    var fontGrid = el("div", null); fontGrid.className = "cd-font-grid"; rowRead.appendChild(fontGrid);
     Object.keys(RFONTS).forEach(function (key) {
-      var b = el("button", null, RFONTS[key].label); b.type = "button";
-      b.className = (state.rfont === key ? "on" : "");
-      if (RFONTS[key].stack) b.style.fontFamily = RFONTS[key].stack;  // превью прямо на кнопке
+      var F = RFONTS[key];
+      var b = el("button", null); b.type = "button"; b.className = "cd-font" + ((state.rfont || "system") === key ? " on" : "");
+      var aa = el("span", null, "Аа"); aa.className = "cd-font-aa";
+      if (F.stack) aa.style.fontFamily = F.stack;                     // образец прямо на карточке
+      b.appendChild(aa);
+      var nm = el("span", null, F.label); nm.className = "cd-font-nm"; b.appendChild(nm);
+      if (F.sample) { var tag = el("span", null, "встроен"); tag.className = "cd-font-tag"; b.appendChild(tag); }
+      b.title = F.sample ? F.label + " — " + F.sample.toLowerCase() + " (встроен в расширение)" : F.label;
       b.addEventListener("click", function () {
         state.rfont = key; saveState(); applyReaderPrefs();
         fontBtns.forEach(function (x) { x.classList.remove("on"); });
         b.classList.add("on");
       });
-      fontBtns.push(b);
+      fontBtns.push(b); fontGrid.appendChild(b);
     });
-    var rowRead = segRow("Шрифт", fontBtns);
-    var fNote = el("div", null, "Inter, PT Root и Golos берутся, если установлены в системе; иначе — системный."); fNote.className = "cd-pal-note";
+    var fNote = el("div", null, "Inter, PT Sans и Golos встроены в расширение — устанавливать их не нужно."); fNote.className = "cd-pal-note";
     rowRead.appendChild(fNote);
     // обложки тем
     var cvOn = el("button", null, "Вкл"), cvOff = el("button", null, "Выкл");
@@ -221,10 +257,20 @@
     bsSec.addEventListener("click", function () { setBs(true); });
     showBs();
     var rowBySec = segRow("Длинные темы", [bsAll, bsSec]);
-    // Раскладка по секциям — чтобы 11 настроек читались, а не сливались в один список.
-    vmSection("Текст");        viewMenu.appendChild(rowFont); viewMenu.appendChild(rowCodeFs); viewMenu.appendChild(rowInterval); viewMenu.appendChild(rowWidth); viewMenu.appendChild(rowRead); viewMenu.appendChild(rowBySec);
-    vmSection("Оформление");   viewMenu.appendChild(rowTheme); viewMenu.appendChild(rowPal); viewMenu.appendChild(rowHomeBg); viewMenu.appendChild(rowCovers); viewMenu.appendChild(rowFocus); viewMenu.appendChild(rowGhost); viewMenu.appendChild(rowList);
-    vmSection("Поведение");    viewMenu.appendChild(rowNotes); viewMenu.appendChild(rowHints); viewMenu.appendChild(rowAnim); viewMenu.appendChild(rowCelebrate);
+    // Живой образец текста: видно, как ляжет шрифт/размер/интервал, не выходя из настроек.
+    var sample = el("div", null); sample.className = "cd-set-sample";
+    setHTML(sample, '<div class="cd-ss-h">Переменная — коробка с именем</div>' +
+      '<p>Сначала объяви, потом используй: <code>int score = 0;</code> — и счёт готов.</p>' +
+      '<pre class="cd-ss-code"><code>for (int i = 0; i &lt; 3; ++i)\n    std::cout &lt;&lt; i &lt;&lt; " ";</code></pre>');
+    function syncSample() {
+      var rf = RFONTS[state.rfont] || RFONTS.system;
+      sample.style.fontFamily = rf.stack || "inherit";
+      sample.style.zoom = String(state.fs || 1);
+      sample.classList.toggle("cd-lh-tight", state.lh === "tight");
+      sample.classList.toggle("cd-lh-roomy", state.lh === "roomy");
+      var pre = sample.querySelector("pre"); if (pre) pre.style.fontSize = (state.codeFs || 12.5) + "px";
+    }
+    syncSample();
     // Прогресс: копия в файл и загрузка из файла (диалоги показывает расширение)
     var pExp = el("button", null, "Сохранить копию…"), pImp = el("button", null, "Загрузить…");
     pExp.type = pImp.type = "button";
@@ -239,7 +285,43 @@
     var pNote = el("div", null, "Копия делается и сама — раз в день, последние 14 дней."); pNote.className = "cd-pal-note";
     var rowProgress = segRow("Резервная копия прогресса", [pExp, pImp]);
     rowProgress.appendChild(pNote);
-    vmSection("Прогресс");     viewMenu.appendChild(rowProgress);
+    // Окно настроек: шапка + вкладки слева + страница справа.
+    viewMenu.setAttribute("role", "dialog"); viewMenu.setAttribute("aria-label", "Настройки");
+    var card = el("div", null); card.className = "cd-set-card";
+    var head = el("div", null); head.className = "cd-set-head";
+    setHTML(head, '<span class="cd-set-ic">' + emo("ui-settings", "⚙") + '</span><div class="cd-set-ht"><b>Настройки</b>' +
+      "<span>Всё меняется сразу — сохранять не нужно</span></div>" +
+      '<button class="cd-set-x" type="button" title="Закрыть" aria-label="Закрыть">✕</button>');
+    head.querySelector(".cd-set-x").addEventListener("click", function () { viewMenu.hidden = true; });
+    card.appendChild(head);
+    var bodyEl = el("div", null); bodyEl.className = "cd-set-body";
+    var tabs = el("div", null); tabs.className = "cd-set-tabs"; tabs.setAttribute("role", "tablist");
+    var pagesEl = el("div", null); pagesEl.className = "cd-set-pages";
+    var PAGES = [
+      ["look", emo("ui-tab-look", "🎨"), "Вид", "Тема, палитра и фон главной", [rowTheme, rowPal, rowHomeBg, rowCovers]],
+      ["text", emo("ui-tab-text", "🔤"), "Текст", "Шрифт и размеры — образец меняется сразу", [sample, rowRead, rowFont, rowCodeFs, rowInterval, rowWidth, rowBySec]],
+      ["window", emo("ui-tab-window", "🪟"), "Окно", "Как окно ведёт себя поверх редактора", [rowFocus, rowGhost, rowList]],
+      ["behave", emo("ui-tab-behave", "✨"), "Поведение", "Разборы, подсказки и анимации", [rowNotes, rowHints, rowAnim, rowCelebrate]],
+      ["progress", emo("ui-tab-progress", "💾"), "Прогресс", "Резервная копия изученного", [rowProgress]],
+    ];
+    PAGES.forEach(function (P) {
+      var t = el("button", null); t.type = "button"; t.className = "cd-set-tab"; t.setAttribute("role", "tab"); t.setAttribute("data-tab", P[0]);
+      setHTML(t, '<span class="cd-set-tic">' + P[1] + "</span><span>" + escapeHtml(P[2]) + "</span>");
+      t.addEventListener("click", function () { showSetTab(P[0]); });
+      tabs.appendChild(t);
+      var pg = el("div", null); pg.className = "cd-set-page"; pg.setAttribute("data-tab", P[0]); pg.setAttribute("role", "tabpanel");
+      var ph = el("div", null); ph.className = "cd-set-ph";
+      setHTML(ph, "<b>" + escapeHtml(P[2]) + "</b><span>" + escapeHtml(P[3]) + "</span>");
+      pg.appendChild(ph);
+      P[4].forEach(function (r) { pg.appendChild(r); });
+      pagesEl.appendChild(pg);
+    });
+    bodyEl.appendChild(tabs); bodyEl.appendChild(pagesEl);
+    card.appendChild(bodyEl);
+    viewMenu.appendChild(card);
+    // Любой клик в настройках мог поменять шрифт/размер — обновим образец (обработчики кнопок уже отработали).
+    card.addEventListener("click", syncSample);
+    showSetTab(setTab);
   }
   // Классы темы окна: сепия — отдельный тёплый набор; светлая — когда не сепия и тема светлая.
   // ---- Знакомство в 3 шага (первое открытие окна) ----
@@ -296,6 +378,11 @@
     else { tip.style.top = "auto"; tip.style.bottom = (wr.height - above) + "px"; }
     try { tourEl.querySelector(".cd-tour-next").focus(); } catch (e) {}
   }
+  // Материал открылся поверх тура (из редактора, по ссылке): подсветка указывала бы в пустоту —
+  // прячем тур, не отмечая его пройденным.
+  function hideTour() {
+    if (tourEl && !tourEl.hidden) { tourEl.hidden = true; if (tourEl.parentNode) tourEl.parentNode.removeChild(tourEl); }
+  }
   function endTour() {
     if (tourEl) { tourEl.hidden = true; if (tourEl.parentNode) tourEl.parentNode.removeChild(tourEl); }
     state.tourDone = true; saveState();
@@ -325,6 +412,7 @@
       articleEl.classList.toggle("cd-lh-roomy", state.lh === "roomy");
     }
     applyThemeClasses();
+    try { ensureFonts(); } catch (e) {}                  // данные с адресом папки могли прийти позже
     var rf = RFONTS[state.rfont] || RFONTS.system;
     winEl.style.setProperty("--cd-rfont", rf.stack || "inherit");
     applyResponsive();
@@ -339,6 +427,7 @@
     if (nav && getComputedStyle(nav).display !== "none") navW = nav.offsetWidth;
     var narrow = winEl.offsetWidth < 860 || winEl.offsetWidth - navW - 198 < 640;
     winEl.classList.toggle("narrow", narrow);
+    winEl.classList.toggle("tiny", winEl.offsetWidth < 640);          // совсем узко: настройки — вкладки строкой
     winEl.classList.toggle("tightbar", winEl.offsetWidth < 1050);   // маскоту у кнопок нужна ширина — иначе прячем
     winEl.classList.toggle("short", winEl.offsetHeight < 720);
     if (!narrow) winEl.classList.remove("ol-peek");

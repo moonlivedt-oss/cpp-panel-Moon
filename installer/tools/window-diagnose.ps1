@@ -49,11 +49,17 @@ $extBase = Join-Path $env:USERPROFILE ".vscode\extensions"
 $extDirs = @(Get-ChildItem -Path $extBase -Directory -ErrorAction SilentlyContinue |
   Where-Object { $_.Name -like "*cpp-docs-panel*" })
 if (-not $extDirs.Count) { L "  НЕ установлено (ни moonlivedt.*, ни local.*)" }
+$obsolete = @{}
+try {
+  $oj = [System.IO.File]::ReadAllText((Join-Path $extBase ".obsolete"), [System.Text.Encoding]::UTF8) | ConvertFrom-Json
+  $oj.PSObject.Properties | ForEach-Object { if ($_.Value) { $obsolete[$_.Name] = $true } }
+} catch {}
 foreach ($d in $extDirs) {
   $rt = Join-Path $d.FullName "cpp-docs-runtime.js"
   $rtInfo = "рантайм НЕТ"
   if (Test-Path $rt) { $rtInfo = "рантайм " + [math]::Round((Get-Item $rt).Length/1KB) + " КБ" }
-  L ("  " + $d.Name + "  | " + $rtInfo)
+  $obs = ""; if ($obsolete[$d.Name]) { $obs = "  | УСТАРЕЛА (VS Code её не грузит, удалит сам)" }
+  L ("  " + $d.Name + "  | " + $rtInfo + $obs)
 }
 L ""
 
@@ -102,14 +108,36 @@ else {
     try { $txt = [System.IO.File]::ReadAllText($wb, [System.Text.Encoding]::UTF8) } catch {}
     L ("  ---- " + $wb)
     L ("     наши маркеры START/END: " + (Cnt $txt $START) + " / " + (Cnt $txt $END))
-    L ("     CSP-мета присутствует: " + ($txt -match '<meta\s+[^>]*Content-Security-Policy') + "  (если True И есть наш блок -> инлайн заблокирован!)")
+    $csp = [regex]::Match($txt, '<meta\s+[^>]*Content-Security-Policy[^>]*>', 'IgnoreCase')
+    L ("     CSP-мета присутствует: " + $csp.Success)
+    $ttm = [regex]::Match($csp.Value, '(?:^|[;"''\s])trusted-types(?=[\s;"])([^;>"]*)', 'IgnoreCase')
+    if ($ttm.Success) {
+      L ("     CSP Trusted Types пускает политику окна cppdocs: " + ($ttm.Groups[1].Value -match '\scppdocs(\s|$)') + "  (False -> окно не появится; обновите Moon Core или переподключите окно)")
+    }
+    if ($csp.Success -and $txt.IndexOf($START) -ge 0) {
+      $nm = [regex]::Match($txt, '<script nonce="([A-Za-z0-9]+)"')
+      $armed = $nm.Success -and $csp.Value.IndexOf("'nonce-" + $nm.Groups[1].Value + "'") -ge 0
+      L ("     CSP пропускает наш nonce: " + $armed + "  (False при CSP -> скрипты окна заблокированы; переподключите окно)")
+    }
     L ("     window.__CPPDOCS__ впечатан: " + ($txt.IndexOf("window.__CPPDOCS__") -ge 0))
     L ("     files:[] (пустые данные): " + ($txt.IndexOf('"files":[]') -ge 0))
-    L ("     рантайм впечатан (__CPPDOCS_RUNTIME__): " + ($txt.IndexOf("__CPPDOCS_RUNTIME__") -ge 0))
+    $rtSrc = [regex]::Match($txt, '<script[^>]*\ssrc="([^"]*)"[^>]*data-cppdocs-sha="([0-9a-f]{64})"')
+    if ($rtSrc.Success) {
+      L ("     рантайм подключён ссылкой: " + $rtSrc.Groups[1].Value)
+      L ("     sha рантайма в ссылке: " + $rtSrc.Groups[2].Value.Substring(0, 12) + "...")
+    } else {
+      L ("     рантайм впечатан инлайном (__CPPDOCS_RUNTIME__): " + ($txt.IndexOf("__CPPDOCS_RUNTIME__") -ge 0))
+    }
+    L ("     Moon Core в оболочке: " + ($txt.IndexOf("<!-- MOONCORE-START -->") -ge 0) + "  (True -> окно ведёт Moon Core, модуль cppdocs)")
     L ("     id пилюли (cppdocs-launch): " + ($txt.IndexOf("cppdocs-launch") -ge 0))
     if ($txt.IndexOf($START) -ge 0 -and $txt.IndexOf($END) -ge 0) {
       $blk = $txt.Substring($txt.IndexOf($START), $txt.IndexOf($END) - $txt.IndexOf($START))
       L ("     в нашем блоке закрывающих </script>: " + (Cnt $blk "</script>") + " (должно быть 2)")
+      if ($rtSrc.Success) {
+        # Ссылка ведёт в globalStorage (vscode-file://vscode-app/<путь>): файл должен существовать.
+        $rp = [uri]::UnescapeDataString(($rtSrc.Groups[1].Value -replace '^vscode-file://vscode-app/', '')) -replace '/', '\'
+        L ("     файл рантайма по ссылке существует: " + (Test-Path -LiteralPath $rp))
+      }
     }
     L ("     маркеры загрузчиков (VSCODE-CUSTOM-CSS): " + (Cnt $txt "VSCODE-CUSTOM-CSS"))
     L ("     бэкап .cppdocs-backup рядом: " + (Test-Path ("$wb.cppdocs-backup")))
@@ -120,4 +148,3 @@ else {
   }
 }
 L ""
-L "==================== КОНЕЦ ОТЧЁТА ===================="
