@@ -14,6 +14,7 @@
 //   lib/bridge.js         мост окно→расширение (HTTP 127.0.0.1) и поток событий
 //   lib/progress.js       резервные копии прогресса, экспорт/импорт
 //   lib/style.js          подсказки по стилю в .cpp
+//   lib/smart-snippets.js быстрые слова: вставка с учётом уже подключённых #include и функций
 //
 // Рантайм самого окна — cpp-docs-runtime.js (один файл: впечатывается в оболочку целиком).
 
@@ -34,6 +35,7 @@ const actions = require('./lib/actions');
 const { registerProgress } = require('./lib/progress');
 const { startBridge } = require('./lib/bridge');
 const { registerStyleHints } = require('./lib/style');
+const { registerSmartSnippets } = require('./lib/smart-snippets');
 const { openWindowPanel } = require('./lib/panel');
 const { dispatch } = require('./lib/rpc');
 const { writeEditorContext, registerEditorBridge, openDocTarget } = require('./lib/editor-bridge');
@@ -82,6 +84,7 @@ function activate(context) {
   try { actions.watchWindowEvents(context); } catch (e) { log('события окна', e); }
   try { registerProgress(context); } catch (e) { log('резервная копия прогресса', e); }
   try { registerStyleHints(context, (rel, hash) => openDocTarget(context, rel, hash)); } catch (e) { log('подсказки по стилю', e); }
+  try { registerSmartSnippets(context); } catch (e) { log('быстрые слова', e); }
   try { cleanupLeftovers(); } catch (e) { log('уборка хвостов', e); }
   try { win.ensureRuntimeCurrent(context); } catch (e) { log('обновление рантайма окна', e); }
 

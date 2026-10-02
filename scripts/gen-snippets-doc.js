@@ -1,63 +1,46 @@
-// Генерирует docs/zametki/00-bystrye-slova.md из пользовательского cpp.json со сниппетами.
-// Источник по умолчанию: %APPDATA%\Code\User\snippets\cpp.json (можно передать путь аргументом).
-// Запуск: node scripts/gen-snippets-doc.js [путь-к-cpp.json]
+// Генерирует docs/zametki/00-bystrye-slova.md из каталога быстрых слов расширения
+// (extension/lib/snippets-data.js) — того же, из которого их вставляет редактор.
+// Запуск: npm run docs:slova
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
+const { SNIPPETS, FUNCS, plainBody } = require('../extension/lib/snippets-data');
 
-const src = process.argv[2] ||
-  path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'),
-            'Code', 'User', 'snippets', 'cpp.json');
 const outFile = path.join(__dirname, '..', 'docs', 'zametki', '00-bystrye-slova.md');
 
-const raw = fs.readFileSync(src, 'utf8');
-const obj = JSON.parse(raw.replace(/^\s*\/\/.*$/gm, ''));   // допускаем //-комментарии (jsonc)
-
-// Секции берём из строк-разделителей «// ─── Имя ───», сниппеты — по ключам верхнего уровня.
-const keySet = new Set(Object.keys(obj));
 const groups = [];
-let cur = null;
-for (const line of raw.split('\n')) {
-  const sec = line.match(/^\s*\/\/\s*─+\s*(.+?)\s*─+\s*$/);
-  if (sec) { cur = { name: sec[1].trim(), keys: [] }; groups.push(cur); continue; }
-  const key = line.match(/^\s*"([^"]+)"\s*:\s*\{\s*$/);
-  if (key && keySet.has(key[1])) {
-    if (!cur) { cur = { name: 'Прочее', keys: [] }; groups.push(cur); }
-    cur.keys.push(key[1]);
-  }
+for (const sn of SNIPPETS) {
+  let g = groups.find((x) => x.name === sn.section);
+  if (!g) { g = { name: sn.section, items: [] }; groups.push(g); }
+  g.items.push(sn);
 }
 
-const hasChoice = (k) => /\$\{\d+\|/.test((obj[k].body || []).join('\n'));
-// Убираем плейсхолдеры сниппета, чтобы показать чистый код: ${1:def}->def, ${1|a,b|}->a, $1/$0->''.
-const clean = (code) => code
-  .replace(/\$\{\d+\|([^,|}]*)(?:,[^|}]*)*\|\}/g, '$1')
-  .replace(/\$\{\d+:([^}]*)\}/g, '$1')
-  .replace(/\$\{\d+\}/g, '')
-  .replace(/\$\d+/g, '')
-  .replace(/\\\$/g, '$')
-  .replace(/[ \t]+$/gm, '')
-  .replace(/\n{3,}/g, '\n\n')
-  .trim();
+const hasChoice = (sn) => /\$\{\d+\|/.test(sn.body.join('\n'));
+const tidy = (code) => code.replace(/\t/g, '    ').replace(/[ \t]+$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
+// Для функций ввода показываем само определение (его слово и добавляет), для остальных — тело.
+const codeOf = (sn) => tidy(sn.kind === 'func' ? FUNCS[sn.func].code.join('\n') : plainBody(sn.body.join('\n')));
 const b64 = (s) => Buffer.from(s, 'utf8').toString('base64');
 // Описание для блока snippets: <x> -> `<x>` (экранировать | не нужно — это не таблица).
-const descS = (d) => d.replace(/<([a-z_]+)>/g, '`<$1>`');
+const descS = (d) => d.replace(/<([a-z_.]+)>/g, '`<$1>`');
+const addsOf = (sn) => {
+  const parts = [];
+  if (sn.includes && sn.includes.length) parts.push(sn.includes.map((h) => '<' + h + '>').join(', '));
+  if (sn.needs && sn.needs.length) parts.push(sn.needs.join(', '));
+  return parts.length ? ' (сам добавит: ' + parts.join('; ') + ')' : '';
+};
 
 const out = [];
 out.push('# Быстрые слова', '');
 out.push('> Все сниппеты C++: напечатай слово из колонки «Печатай» и нажми **Tab**. Значок ⌄ — при вставке появится меню выбора. **Нажми на строку — раскроется её код.**', '');
-out.push('Слова живут в `%APPDATA%\\Code\\User\\snippets\\cpp.json`. После вставки `Tab` прыгает по местам для заполнения, а `⌄` открывает список вариантов (стрелки + Enter).', '');
-out.push('> **Подсказка про `#include`.** Если в колонке написано «Нужен `<vector>`», а заголовок не подключён — код подчеркнётся красным. Наведи курсор, нажми `Ctrl + .` и выбери «Add #include» — VS Code (cpptools) допишет строку сам.', '');
-out.push('> _Страница собрана автоматически: `npm run docs:slova`. Правь сниппеты, потом перегенерируй._', '');
+out.push('Слова встроены в расширение «Документация C++» (настройка `cppDocs.smartSnippets`). После вставки `Tab` прыгает по местам для заполнения, а `⌄` открывает список вариантов (стрелки + Enter).', '');
+out.push('> **Про `#include` и функции ввода.** Слово само дописывает недостающие `#include` к остальным — уже подключённые не повторяются. `readint`, `readdouble`, `readline`, `readyesno` внутри функции вставляют вызов, а саму функцию кладут над ней, если её ещё нет. Вне функций то же слово вставляет определение.', '');
+out.push('> _Страница собрана автоматически: `npm run docs:slova`. Слова правятся в `extension/lib/snippets-data.js`, потом перегенерируй._', '');
 out.push('---', '');
 let total = 0;
 for (const g of groups) {
-  if (!g.keys.length) continue;
   out.push('## ' + g.name, '', '```snippets');
-  for (const k of g.keys) {
+  for (const sn of g.items) {
     total++;
-    const body = obj[k].body || [];
-    const code = clean(Array.isArray(body) ? body.join('\n') : String(body));
-    out.push([obj[k].prefix, hasChoice(k) ? '1' : '0', descS(obj[k].description || ''), b64(code)].join('\t'));
+    out.push([sn.prefix, hasChoice(sn) ? '1' : '0', descS(sn.desc + addsOf(sn)), b64(codeOf(sn))].join('\t'));
   }
   out.push('```', '');
 }
@@ -66,4 +49,4 @@ out.push('_Всего слов: **' + total + '**._ Знаешь слово — 
 
 fs.mkdirSync(path.dirname(outFile), { recursive: true });
 fs.writeFileSync(outFile, out.join('\n'));
-console.log('Готово: ' + path.relative(path.join(__dirname, '..'), outFile) + ' (' + total + ' слов) из ' + src);
+console.log('Готово: ' + path.relative(path.join(__dirname, '..'), outFile) + ' (' + total + ' слов) из extension/lib/snippets-data.js');

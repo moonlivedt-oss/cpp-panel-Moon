@@ -270,4 +270,4 @@ function registerStyleHints(context, openDocTarget) {
   vscode.workspace.textDocuments.forEach(lint);
 }
 
-module.exports = { RULES, findStyleIssues, registerStyleHints };
+module.exports = { RULES, findStyleIssues, registerStyleHints, blankNonCode };
