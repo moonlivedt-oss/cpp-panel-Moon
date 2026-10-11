@@ -1,6 +1,6 @@
 <div align="center">
 
-[Русский](README.md) · **English**
+[Русский](README.md) / **English**
 
 <img src="docs/screenshots/logo.png" alt="C++ Docs logo: an open book and the VS Code mark" width="120">
 
@@ -8,8 +8,8 @@
 
 ### Your whole project reference inside VS Code — a floating reader window over the editor and a sidebar panel
 
-Floating window (drag & resize) · read with C++ highlighting right in the window<br>
-full-text search · table of contents and internal-link jumps · study progress · zero dependencies
+Floating window (drag & resize) / read with C++ highlighting right in the window<br>
+full-text search / table of contents and internal-link jumps / study progress / zero dependencies
 
 [![CI](https://github.com/moonlivedt-oss/cpp-panel-Moon/actions/workflows/ci.yml/badge.svg)](https://github.com/moonlivedt-oss/cpp-panel-Moon/actions/workflows/ci.yml)
 ![version](https://img.shields.io/badge/version-3.5.2-cba6f7)
@@ -20,7 +20,7 @@ full-text search · table of contents and internal-link jumps · study progress 
 
 <img src="docs/screenshots/hero.png" alt="Floating «C++ Documentation» window over code: navigator on the left, home screen with progress on the right" width="880">
 
-<sub>One extension file · custom .vsix packer · install with one command</sub>
+<sub>One extension file / custom .vsix packer / install with one command</sub>
 
 </div>
 
@@ -65,7 +65,7 @@ window** over the editor, with syntax highlighting and internal-link jumps.
 | Grouping by meaning | no | no | **yes — reference / examples / tools, own markers** |
 | Full-text search | no | no | **yes — title, description and content, multi-word, ё/е** |
 | Reading time and size | no | no | **yes — "~N min" and section count per document** |
-| Study progress | no | no | **yes — "read N of M · %" + a "Continue" button** |
+| Study progress | no | no | **yes — "read N of M / %" + a "Continue" button** |
 | File table of contents | no | partial | **yes — `##`/`###` sections, jump to the right line** |
 | Internal-link jumps | no | no | **yes — across files, jumping to the anchor** |
 | Reading over the editor | no | separate tab | **yes — a floating window, drag & resize** |
@@ -82,9 +82,9 @@ window** over the editor, with syntax highlighting and internal-link jumps.
 | **Live labels** | the title comes from the file's first `#`, the description from the first `>` quote line; new files show up on their own, no code edits needed |
 | **Reading time** | each document shows an estimated "~N min" and a section count: size at a glance |
 | **Search** | over title, description **and file text**; **multiple words** (`map vector` — both); case-insensitive **and ё/е**; matches are highlighted, exact ones on top, text hits show a context snippet; on empty results it shows what you searched for |
-| **Progress and "Continue"** | a "read N of M · %" bar; the **"Continue"** button opens the next unread document in order; the "read" mark can be toggled by hand (circle / check on hover) |
+| **Progress and "Continue"** | a "read N of M / %" bar; the **"Continue"** button opens the next unread document in order; the "read" mark can be toggled by hand (circle / check on hover) |
 | **Always fresh** | the panel watches `*.md` and refreshes itself; a green dot marks files changed within a day |
-| **Keyboard** | `↑` `↓` `PageUp` `PageDown` select · `Enter` open · `Esc` clear · `/` or `Ctrl+K` focus search · `Ctrl+Alt+D` open the panel and focus search |
+| **Keyboard** | `↑` `↓` `PageUp` `PageDown` select / `Enter` open / `Esc` clear / `/` or `Ctrl+K` focus search / `Ctrl+Alt+D` open the panel and focus search |
 | **Collapsible groups** | click a header; state and search text survive tab switches |
 | **Pinned** | a star on hover pins a document to the top group; kept across sessions |
 | **Table of contents** | an item expands its sections (`##`/`###`); a click opens the file at the right line |
@@ -198,7 +198,7 @@ shared.
 | `Ctrl+Alt+M` | Open the menu as a standalone panel (full width) |
 | `/` or `Ctrl+K` | Focus search (when the panel is focused) |
 | `↑` `↓` `PageUp` `PageDown` | Select a document |
-| `Enter` | Open the selected · `Esc` — clear search |
+| `Enter` | Open the selected / `Esc` — clear search |
 
 ---
 
@@ -360,5 +360,5 @@ MIT — see [LICENSE](LICENSE). The docs in `docs/` are part of the project; use
 <div align="center">
   <sub><b>C++ Docs</b> — the whole project reference in one draggable window, zero dependencies.</sub>
   <br>
-  <sub>Found a bug or have an idea? — <a href="https://github.com/moonlivedt-oss/cpp-panel-Moon/issues">Issues</a> · <a href="https://github.com/moonlivedt-oss/cpp-panel-Moon/discussions">Discussions</a></sub>
+  <sub>Found a bug or have an idea? — <a href="https://github.com/moonlivedt-oss/cpp-panel-Moon/issues">Issues</a> / <a href="https://github.com/moonlivedt-oss/cpp-panel-Moon/discussions">Discussions</a></sub>
 </div>
