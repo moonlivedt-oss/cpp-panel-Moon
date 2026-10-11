@@ -375,7 +375,7 @@
   function showBridgeError(diag) {
     if (!bridgeEl) return;
     var ex = explainCompileError(diag.msg);
-    setBridge("Ошибка" + (diag.line ? " · строка " + diag.line : ""), ex.t + ". " + ex.fix, errorDocTarget(ex.h), "Разобрать", true, ex.ex);
+    setBridge("Ошибка" + (diag.line ? " | строка " + diag.line : ""), ex.t + ". " + ex.fix, errorDocTarget(ex.h), "Разобрать", true, ex.ex);
   }
   function bridgeOpen() {
     var t = bridgeTarget;

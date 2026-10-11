@@ -53,7 +53,7 @@
     applyExpandNotes();         // режим «только основное»: свернуть/раскрыть все разборы
     syncBookmarks();
     renderNotes(f);
-    addKicker(f);       // «Создание игр · тема 3 из 9 · ~12 мин» — где я в курсе
+    addKicker(f);       // «Создание игр | тема 3 из 9 | ~12 мин» — где я в курсе
     if (state.rolled) applyRoll();   // свёрнутая полоска показывает новую тему
     appendSeeAlso(f);   // блок «Смотри также» — связанные материалы в конце
     // «Разобрался → следующая» и «Предыдущая / Следующая» — самым последним, где заканчивается чтение
@@ -526,7 +526,7 @@
     return '<div class="cd-home-week cd-heat" aria-label="Активность за ' + HEAT_WEEKS + ' недель: дней с занятиями ' + active + '">' +
       '<div class="cd-hm-heads">' + heads + '</div><div class="cd-hm-grid">' + cols + '</div>' +
       '<div class="cd-hm-foot"><span class="cd-wk-n">' + active + " " + plural(active, ["день", "дня", "дней"]) + " за " + HEAT_WEEKS + " недель" +
-      (streak ? " · серия " + streak : "") + '</span><span class="cd-hm-leg">меньше <i class="cd-hm-c l0"></i><i class="cd-hm-c l1"></i><i class="cd-hm-c l2"></i><i class="cd-hm-c l3"></i><i class="cd-hm-c l4"></i> больше</span></div></div>';
+      (streak ? " | серия " + streak : "") + '</span><span class="cd-hm-leg">меньше <i class="cd-hm-c l0"></i><i class="cd-hm-c l1"></i><i class="cd-hm-c l2"></i><i class="cd-hm-c l3"></i><i class="cd-hm-c l4"></i> больше</span></div></div>';
   }
   function streakDays() {
     var d = new Date();

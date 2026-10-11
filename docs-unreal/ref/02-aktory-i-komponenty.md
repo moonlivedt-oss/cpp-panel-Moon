@@ -2,7 +2,7 @@
 
 > Из чего состоит мир Unreal: уровень, акторы, компоненты, ассеты — и чем они отличаются. Как ставить объекты, чем Static отличается от Movable, как группировать — и World Partition, которым разбит твой ландшафт.
 
-← [Интерфейс](01-interfeys.md) · дальше → [Материалы](03-materialy.md)
+← [Интерфейс](01-interfeys.md) / дальше → [Материалы](03-materialy.md)
 
 ---
 
@@ -67,7 +67,7 @@
 
 ## Подвижность: Static, Stationary, Movable
 
-У моделей и источников света в Сведениях, сразу под Преобразованиями, есть переключатель **Подвижность** (Mobility) из трёх кнопок: **Статичный · Неподвижный · Подвижный**. Он говорит движку, **будет ли объект меняться во время игры**. Если не находишь — набери `mobility` в поиске Сведений.
+У моделей и источников света в Сведениях, сразу под Преобразованиями, есть переключатель **Подвижность** (Mobility) из трёх кнопок: **Статичный / Неподвижный / Подвижный**. Он говорит движку, **будет ли объект меняться во время игры**. Если не находишь — набери `mobility` в поиске Сведений.
 
 | Значение | Простыми словами | Подходит для |
 |---|---|---|
@@ -230,8 +230,8 @@ Ctrl+G — сгруппировать
 
 ---
 
-📚 **Оригинал у Epic (на английском):** [Placing Actors](https://dev.epicgames.com/documentation/unreal-engine/placing-actors-in-unreal-engine) · [Actor Mobility](https://dev.epicgames.com/documentation/unreal-engine/actor-mobility-in-unreal-engine) · [Grouping Actors](https://dev.epicgames.com/documentation/unreal-engine/grouping-actors-in-unreal-engine)
+📚 **Оригинал у Epic (на английском):** [Placing Actors](https://dev.epicgames.com/documentation/unreal-engine/placing-actors-in-unreal-engine) / [Actor Mobility](https://dev.epicgames.com/documentation/unreal-engine/actor-mobility-in-unreal-engine) / [Grouping Actors](https://dev.epicgames.com/documentation/unreal-engine/grouping-actors-in-unreal-engine)
 
 ---
 
-← [Интерфейс](01-interfeys.md) · дальше → [Материалы](03-materialy.md)
+← [Интерфейс](01-interfeys.md) / дальше → [Материалы](03-materialy.md)

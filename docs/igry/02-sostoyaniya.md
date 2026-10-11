@@ -4,7 +4,7 @@
 >
 > Нужна база: [`switch` и `enum class`](../ref/03-logika-cikly.md#enum-class--имена-вместо-магических-чисел), [функции](../ref/04-funkcii.md).
 
-[← Время и игровой цикл](01-vremya-i-cikl.md) · [Карта и поиск пути →](03-karta-i-put.md) · [Сквозной проект](../proekt/01-podzemelye.md)
+[← Время и игровой цикл](01-vremya-i-cikl.md) / [Карта и поиск пути →](03-karta-i-put.md) / [Сквозной проект](../proekt/01-podzemelye.md)
 
 ---
 
@@ -361,4 +361,4 @@ while (state != State::Quit) {
 
 ---
 
-[← Время и игровой цикл](01-vremya-i-cikl.md) · [Карта и поиск пути →](03-karta-i-put.md)
+[← Время и игровой цикл](01-vremya-i-cikl.md) / [Карта и поиск пути →](03-karta-i-put.md)

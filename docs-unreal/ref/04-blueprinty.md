@@ -2,7 +2,7 @@
 
 > Визуальное программирование в Unreal по картинкам: как создать блюпринт, из чего состоит его окно, как ставить ноды, тянуть провода, заводить переменные и компилировать. Все скриншоты — из твоего редактора; номера на них совпадают с номерами в таблицах.
 
-← [Материалы](03-materialy.md) · дальше → [Ландшафт](05-landshaft.md)
+← [Материалы](03-materialy.md) / дальше → [Ландшафт](05-landshaft.md)
 
 ---
 
@@ -575,6 +575,6 @@ Completed → Set Max Walk Speed = 600
 
 ---
 
-📚 **Оригинал у Epic (на английском):** [Blueprints Visual Scripting](https://dev.epicgames.com/documentation/unreal-engine/blueprints-visual-scripting-in-unreal-engine) · [Introduction to Blueprints](https://dev.epicgames.com/documentation/unreal-engine/introduction-to-blueprints-visual-scripting-in-unreal-engine) · [Anatomy of a Blueprint](https://dev.epicgames.com/documentation/unreal-engine/anatomy-of-a-blueprint-in-unreal-engine)
+📚 **Оригинал у Epic (на английском):** [Blueprints Visual Scripting](https://dev.epicgames.com/documentation/unreal-engine/blueprints-visual-scripting-in-unreal-engine) / [Introduction to Blueprints](https://dev.epicgames.com/documentation/unreal-engine/introduction-to-blueprints-visual-scripting-in-unreal-engine) / [Anatomy of a Blueprint](https://dev.epicgames.com/documentation/unreal-engine/anatomy-of-a-blueprint-in-unreal-engine)
 
-← [Материалы](03-materialy.md) · дальше → [Ландшафт](05-landshaft.md)
+← [Материалы](03-materialy.md) / дальше → [Ландшафт](05-landshaft.md)

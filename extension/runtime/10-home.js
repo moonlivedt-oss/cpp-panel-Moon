@@ -20,7 +20,7 @@
     var parts = [];
     if (f.minutes) parts.push("~" + f.minutes + " мин");
     if (f.sections) parts.push(f.sections + " " + plural(f.sections, ["раздел", "раздела", "разделов"]));
-    return parts.join(" · ");
+    return parts.join(" | ");
   }
   // #17 Есть ли откуда грузить материалы (data/stamp-файл). Если да, но файлов ещё нет —
   // показываем скелет-заглушку («грузится»), а не пугающее «не найдено / проверь путь».
@@ -66,7 +66,7 @@
     var allDone = done >= total && total > 0;   // весь справочник пройден — время поздравить
     var hi = done > 0 ? "С возвращением!" : "Привет!";   // неразрывный пробел: «С» не повисает отдельной строкой
     var libName = libMeta().title.replace(/^Документация\s+/, "");   // «C++» / «Unreal Engine»
-    var sub = greeting() + (done > 0 ? " · продолжаем учить " + libName : " · документация " + libName + " у тебя под рукой");
+    var sub = greeting() + (done > 0 ? " | продолжаем учить " + libName : " | документация " + libName + " у тебя под рукой");
 
     var ts = taskStats(), streak = streakDays(), cc = cardCounts();
     var pct = total ? Math.round((done / total) * 100) : 0;
@@ -135,7 +135,7 @@
     // #9 Панель быстрых действий — запуск в один тап
     var qab = "";   // «▶ Продолжить» здесь убран: главное действие — большая карточка «Следующий шаг» выше
     if (ts.total) qab += '<button class="cd-qa cd-qa-rand" type="button">' + emo("ui-dice", "🎲") + " Случайная задача</button>";
-    if (cc.due + cc.neu > 0) qab += '<button class="cd-qa cd-qa-rev" type="button">' + emo("ui-cards", "🎴") + " Повторить" + (cc.due ? " · " + cc.due : "") + "</button>";
+    if (cc.due + cc.neu > 0) qab += '<button class="cd-qa cd-qa-rev" type="button">' + emo("ui-cards", "🎴") + " Повторить" + (cc.due ? " | " + cc.due : "") + "</button>";
     qab += '<button class="cd-qa cd-qa-find" type="button">⌕ Найти</button>';
     qab += '<button class="cd-qa cd-qa-prog" type="button">' + emo("icon-route", "") + " Прогресс</button>";
     qab += '<button class="cd-qa cd-qa-guide" type="button">' + emo("ui-guide", "📖") + " Обучение</button>";
@@ -151,13 +151,13 @@
       var allBtn = cc.due + cc.neu > 0 ? '<span class="cd-hw-all" role="button" tabindex="0" title="Повторить всё, что ждёт сегодня">повторить все →</span>' : "";
       if (warmupDoneToday()) {
         cardsHtml += '<div class="cd-home-warm done"><span class="cd-hw-ic">✓</span>' +
-          '<div class="cd-hc-main"><div class="cd-hc-lbl">Разминка дня · сделана</div>' +
+          '<div class="cd-hc-main"><div class="cd-hc-lbl">Разминка дня | сделана</div>' +
           '<div class="cd-hc-meta">' + escapeHtml(restTxt) + "</div></div>" + allBtn + "</div>";
       } else {
         var wn = Math.min(WARMUP_N, cc.total);
         cardsHtml += '<div class="cd-home-warm" role="button" tabindex="0"><span class="cd-hw-ic">' + emo("ui-warm", "🌅") + '</span>' +
           '<div class="cd-hc-main"><div class="cd-hc-lbl">Разминка дня</div>' +
-          '<div class="cd-hc-title">' + wn + " " + plural(wn, ["карточка", "карточки", "карточек"]) + " · около 2 минут</div>" +
+          '<div class="cd-hc-title">' + wn + " " + plural(wn, ["карточка", "карточки", "карточек"]) + " | около 2 минут</div>" +
           '<div class="cd-hc-meta">' + escapeHtml(restTxt) + "</div></div>" + allBtn +
           '<div class="cd-hc-arrow">→</div></div>';
       }
@@ -183,7 +183,7 @@
       else if (nF) { primary = nF; lbl = "▶ Следующий шаг"; reason = "следующая неизученная тема"; }
       else { primary = lastF || findFile(/00-нач|начни/i) || d.files[0]; lbl = "▶ Начать здесь"; reason = ""; }
       if (primary) {
-        var meta = [reason, metaOf(primary)].filter(function (x) { return x; }).join(" · ");
+        var meta = [reason, metaOf(primary)].filter(function (x) { return x; }).join(" | ");
         html += '<button class="cd-home-cont" data-rel="' + escapeHtml(primary.rel) + '">' +
           '<div class="cd-hc-main"><div class="cd-hc-lbl">' + lbl + '</div>' +
           '<div class="cd-hc-title">' + escapeHtml(primary.title || primary.name) + '</div>' +
@@ -195,10 +195,10 @@
           var spPct = sp.kind === "steps" && sp.n ? Math.round((sp.i + 1) / sp.n * 100) : 0;
           html += '<button class="cd-home-spot" type="button">' +
             '<span class="cd-spot-ic">' + (sp.kind === "boss" ? "♛" : "↩") + "</span>" +
-            '<span class="cd-spot-main"><span class="cd-spot-lbl">Вы остановились · ' + (sp.kind === "boss" ? "босс темы" : "разбор по шагам") + "</span>" +
+            '<span class="cd-spot-main"><span class="cd-spot-lbl">Вы остановились | ' + (sp.kind === "boss" ? "босс темы" : "разбор по шагам") + "</span>" +
             '<span class="cd-spot-t">' + escapeHtml(sp.title || "без названия") + "</span>" +
             '<span class="cd-spot-f">' + escapeHtml(spF.title || spF.name) +
-            (sp.kind === "steps" && sp.n ? " · шаг " + (sp.i + 1) + " из " + sp.n : "") + "</span>" +
+            (sp.kind === "steps" && sp.n ? " | шаг " + (sp.i + 1) + " из " + sp.n : "") + "</span>" +
             (spPct ? '<span class="cd-spot-bar"><i style="width:' + spPct + '%"></i></span>' : "") +
             '</span><span class="cd-spot-go">→</span></button>';
         }
@@ -265,7 +265,7 @@
         var label = state.marks[k] || (mf && (mf.title || mf.name)) || rel;
         mchips += '<button class="cd-home-chip cd-home-mark" data-rel="' + escapeHtml(mf.rel) +
           '" data-hash="#' + escapeHtml(slug) + '" style="--gcolor:' + escapeHtml(mf.groupColor || "var(--ac)") +
-          '" title="' + escapeHtml((mf.title || mf.name) + " · раздел") + '">★ ' + escapeHtml(label) + "</button>";
+          '" title="' + escapeHtml((mf.title || mf.name) + " | раздел") + '">★ ' + escapeHtml(label) + "</button>";
       });
       marksHtml = secHead("Закладки", markKeys.length, "#cba6f7") + '<div class="cd-home-chips">' + mchips + "</div>";
     }
@@ -585,7 +585,7 @@
     if (!logoEl) return;
     var pct = total ? Math.round((done / total) * 100) : 0;
     logoEl.style.setProperty("--lp", String(pct));
-    logoEl.title = "Изучено " + done + " из " + total + " (" + pct + "%) · на главную";
+    logoEl.title = "Изучено " + done + " из " + total + " (" + pct + "%) | на главную";
     logoEl.setAttribute("aria-label", logoEl.title);
   }
   // «🎴 N» — карточки к повторению (#5). Клик: «Разминка дня», а если она сделана — всё, что ждёт.
@@ -674,7 +674,7 @@
     edBtnEl.querySelector(".cd-hed-e").textContent = f && f.errs ? String(f.errs) : "";
     var tip = off ? "Связь с редактором выключена" : !f ? "C/C++-файл в редакторе не открыт" :
       f.name + (f.errs ? " — " + f.errs + " " + plural(f.errs, ["ошибка", "ошибки", "ошибок"]) : " — ошибок нет");
-    edBtnEl.title = tip + " · подробнее"; edBtnEl.setAttribute("aria-label", tip);
+    edBtnEl.title = tip + " | подробнее"; edBtnEl.setAttribute("aria-label", tip);
     if (edPopEl && !edPopEl.hidden) renderEdPop();
     fitHead();
   }
@@ -687,7 +687,7 @@
     else if (!f) row("📄", "muted", "Открой <b>.cpp</b>-файл в редакторе — окно подскажет по слову под курсором и объяснит ошибки простым языком.");
     else {
       row("📄", "", "<b>" + escapeHtml(f.name) + "</b>" + (f.lang ? ' <span class="cd-ep-sub">' + escapeHtml(f.lang) + "</span>" : ""));
-      if (f.errs) row("⚠", "bad", f.errs + " " + plural(f.errs, ["ошибка", "ошибки", "ошибок"]) + (f.first && f.first.line ? " · первая — строка " + f.first.line : "") +
+      if (f.errs) row("⚠", "bad", f.errs + " " + plural(f.errs, ["ошибка", "ошибки", "ошибок"]) + (f.first && f.first.line ? " | первая — строка " + f.first.line : "") +
         (f.first ? '<button class="cd-ep-go" type="button" data-act="err">Разобрать ошибку</button>' : ""));
       else row("✓", "good", "Ошибок нет");
     }

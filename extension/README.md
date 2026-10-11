@@ -31,8 +31,8 @@
 <div align="center">
 <table>
 <tr>
-<td align="center" width="66%"><img src="https://raw.githubusercontent.com/moonlivedt-oss/cpp-panel-Moon/main/docs/screenshots/window.png" alt="Плавающее окно в режиме чтения: навигатор слева, текст с подсветкой C++ и кнопкой «копировать», оглавление справа" width="620"><br><sub><b>Плавающее окно</b> · читалка поверх кода</sub></td>
-<td align="center" width="34%"><img src="https://raw.githubusercontent.com/moonlivedt-oss/cpp-panel-Moon/main/docs/screenshots/panel-sidebar.png" alt="Боковая панель: группы материалов, поиск, полоса прогресса" width="280"><br><sub><b>Боковая панель</b> · всегда под рукой</sub></td>
+<td align="center" width="66%"><img src="https://raw.githubusercontent.com/moonlivedt-oss/cpp-panel-Moon/main/docs/screenshots/window.png" alt="Плавающее окно в режиме чтения: навигатор слева, текст с подсветкой C++ и кнопкой «копировать», оглавление справа" width="620"><br><sub><b>Плавающее окно</b> / читалка поверх кода</sub></td>
+<td align="center" width="34%"><img src="https://raw.githubusercontent.com/moonlivedt-oss/cpp-panel-Moon/main/docs/screenshots/panel-sidebar.png" alt="Боковая панель: группы материалов, поиск, полоса прогресса" width="280"><br><sub><b>Боковая панель</b> / всегда под рукой</sub></td>
 </tr>
 </table>
 </div>
@@ -52,7 +52,7 @@
 
 - 🔎 **Поиск по всему тексту** материалов — по названию, описанию и содержимому,
   без учёта регистра и без разницы «ё/е».
-- 🟢 **Прогресс обучения** — отметки «изучено», полоса «N из M · %» и кнопка
+- 🟢 **Прогресс обучения** — отметки «изучено», полоса «N из M / %» и кнопка
   **▶ Продолжить** к следующему неизученному материалу.
 - 🎨 **Подсветка C++ и bash**, кнопки «копировать код», таблицы, оглавление файла,
   сворачиваемые подсказки, переходы по ссылкам между материалами.

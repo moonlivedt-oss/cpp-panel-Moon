@@ -2,7 +2,7 @@
 
 > Материалы по картинкам: редактор материалов, главные выходы, ноды и провода, параметры и инстансы — на учебном камне `M_DemoMaterial`. Чтобы потом читать `M_Terrain` и `M_Foliage` без страха. Номера на скриншотах совпадают с номерами в таблицах.
 
-← [Акторы, компоненты, уровни](02-aktory-i-komponenty.md) · дальше → [Блюпринты](04-blueprinty.md)
+← [Акторы, компоненты, уровни](02-aktory-i-komponenty.md) / дальше → [Блюпринты](04-blueprinty.md)
 
 ---
 
@@ -328,6 +328,6 @@ Lerp             — [[L]]
 
 ---
 
-📚 **Оригинал у Epic (на английском):** [Unreal Engine Materials](https://dev.epicgames.com/documentation/unreal-engine/unreal-engine-materials) · [Material Instances](https://dev.epicgames.com/documentation/unreal-engine/instanced-materials-in-unreal-engine)
+📚 **Оригинал у Epic (на английском):** [Unreal Engine Materials](https://dev.epicgames.com/documentation/unreal-engine/unreal-engine-materials) / [Material Instances](https://dev.epicgames.com/documentation/unreal-engine/instanced-materials-in-unreal-engine)
 
-← [Акторы, компоненты, уровни](02-aktory-i-komponenty.md) · дальше → [Блюпринты](04-blueprinty.md)
+← [Акторы, компоненты, уровни](02-aktory-i-komponenty.md) / дальше → [Блюпринты](04-blueprinty.md)

@@ -598,14 +598,14 @@ if (api && typeof api.bfsDist === "function") {
   check("```lootsim из одной строки — не симулятор", api.render(FN + "lootsim\nОдин = 1\n" + FN).indexOf("cd-lootsim") === -1);
   var savedData = global.window.__CPPDOCS__;
   global.window.__CPPDOCS__ = { root: "", files: [
-    { rel: "proekt/02-glava-1-osnovy.md", title: "Подземелье · Глава 1. Герой",
+    { rel: "proekt/02-glava-1-osnovy.md", title: "Подземелье | Глава 1. Герой",
       md: "## Квест 1. Раз\n" + FN + "checklist\nКвест 1 готов, если:\n- пункт А\n- пункт Б\n" + FN + "\n" +
           "## Квест 2. Два\n" + FN + "checklist\n- пункт В\n" + FN + "\n## Прочее\n" + FN + "checklist\n- чужой пункт\n" + FN + "\n" },
   ] };
   var qs = api.collectQuests();
   check("квесты: два квеста, у каждого — пункты своего чек-листа",
     qs && qs.chapters[0].quests.length === 2 && qs.chapters[0].quests[0].items.length === 2 && qs.chapters[0].quests[1].items.length === 1);
-  check("квесты: «Подземелье · » снято с названия главы", qs.chapters[0].title === "Глава 1. Герой");
+  check("квесты: «Подземелье | » снято с названия главы", qs.chapters[0].title === "Глава 1. Герой");
   var qm = api.render(FN + "quests\n" + FN);
   check("```quests: карта с прогрессом и ссылкой на следующий квест", qm.indexOf("cd-qmap") !== -1 && qm.indexOf("из 2") !== -1 && qm.indexOf("Следующий") !== -1);
   global.window.__CPPDOCS__ = savedData;

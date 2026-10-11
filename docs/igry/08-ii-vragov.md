@@ -4,7 +4,7 @@
 >
 > Нужна база: [состояния игры](02-sostoyaniya.md), [карта и поиск пути](03-karta-i-put.md), [сущности](05-sushchnosti-i-boy.md).
 
-[← Сохранения](07-sokhraneniya.md) · [Физика прыжка →](09-fizika-pryzhka.md) · [Сквозной проект](../proekt/01-podzemelye.md)
+[← Сохранения](07-sokhraneniya.md) / [Физика прыжка →](09-fizika-pryzhka.md) / [Сквозной проект](../proekt/01-podzemelye.md)
 
 ---
 
@@ -446,4 +446,4 @@ A: Вынести параметры в данные: радиус обзора,
 
 ---
 
-[← Сохранения](07-sokhraneniya.md) · [Физика прыжка →](09-fizika-pryzhka.md)
+[← Сохранения](07-sokhraneniya.md) / [Физика прыжка →](09-fizika-pryzhka.md)

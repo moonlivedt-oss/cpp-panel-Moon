@@ -2,7 +2,7 @@
 
 > Как понять, почему тормозит, по картинкам: счётчики `stat fps` / `stat unit` / `stat gpu`, режимы просмотра «Сложность шейдера» и «Визуализация Nanite», настройки качества — и что крутить в этом проекте. Все скриншоты и цифры — с твоего уровня `num1`.
 
-← [Ландшафт](05-landshaft.md) · дальше → [Карта меню](07-menyu.md)
+← [Ландшафт](05-landshaft.md) / дальше → [Карта меню](07-menyu.md)
 
 ---
 
@@ -287,6 +287,6 @@ float fps = 1000.0 / frameMs;
 
 ---
 
-📚 **Оригинал у Epic (на английском):** [Stat Commands](https://dev.epicgames.com/documentation/unreal-engine/stat-commands-in-unreal-engine) · [Viewport Modes](https://dev.epicgames.com/documentation/unreal-engine/viewport-modes-in-unreal-engine) · [Scalability Reference](https://dev.epicgames.com/documentation/unreal-engine/scalability-reference-for-unreal-engine)
+📚 **Оригинал у Epic (на английском):** [Stat Commands](https://dev.epicgames.com/documentation/unreal-engine/stat-commands-in-unreal-engine) / [Viewport Modes](https://dev.epicgames.com/documentation/unreal-engine/viewport-modes-in-unreal-engine) / [Scalability Reference](https://dev.epicgames.com/documentation/unreal-engine/scalability-reference-for-unreal-engine)
 
-← [Ландшафт](05-landshaft.md) · дальше → [Карта меню](07-menyu.md)
+← [Ландшафт](05-landshaft.md) / дальше → [Карта меню](07-menyu.md)

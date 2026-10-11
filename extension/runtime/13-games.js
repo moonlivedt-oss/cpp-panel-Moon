@@ -21,7 +21,7 @@
     files.forEach(function (f) {
       if (!f.md) { loading = true; return; }
       var lines = String(f.md).replace(/\r\n?/g, "\n").split("\n");
-      var ch = { rel: f.rel, title: String(f.title || f.name).replace(/^Подземелье\s*·\s*/, ""), quests: [] };
+      var ch = { rel: f.rel, title: String(f.title || f.name).replace(/^Подземелье\s*[·—–|/-]\s*/, ""), quests: [] };
       var q = null, fence = null, buf = [];
       lines.forEach(function (ln) {
         var fm = ln.match(/^```\s*([A-Za-z]*)/);
@@ -62,10 +62,10 @@
     });
     var pct = total ? Math.round(done / total * 100) : 0;
     var nextHtml = next
-      ? '<a class="cd-qm-next" href="' + escapeHtml("../" + next.ch.rel + "#" + next.q.slug) + '">Следующий: <b>Квест ' + next.q.n + " · " + escapeHtml(next.q.title) + "</b> →</a>"
+      ? '<a class="cd-qm-next" href="' + escapeHtml("../" + next.ch.rel + "#" + next.q.slug) + '">Следующий: <b>Квест ' + next.q.n + " | " + escapeHtml(next.q.title) + "</b> →</a>"
       : '<div class="cd-qm-next win">🏆 Все квесты пройдены — игра ваша. Дальше — бонус-квесты ниже.</div>';
     return '<div class="cd-qmap"><div class="cd-qm-head"><div class="cd-qm-ttl">🗺️ Путь героя</div>' +
-      '<div class="cd-qm-sum">пройдено <b>' + done + "</b> из " + total + " · " + pct + "%</div></div>" +
+      '<div class="cd-qm-sum">пройдено <b>' + done + "</b> из " + total + " | " + pct + "%</div></div>" +
       '<div class="cd-qm-bar"><i style="width:' + pct + '%"></i></div>' + chHtml + nextHtml +
       '<div class="cd-qm-note">Квест засчитывается, когда отмечены все пункты его чек-листа «готово, если».</div></div>';
   }
@@ -117,11 +117,11 @@
     box.querySelectorAll(".cd-ls-row").forEach(function (row, i) {
       var share = S.total ? S.cnt[i] / S.total * 100 : 0;
       row.querySelector(".cd-ls-bar b").style.width = Math.min(100, share) + "%";
-      row.querySelector(".cd-ls-got").textContent = S.total ? S.cnt[i] + " · " + (Math.round(share * 10) / 10) + "%" : "—";
+      row.querySelector(".cd-ls-got").textContent = S.total ? S.cnt[i] + " | " + (Math.round(share * 10) / 10) + "%" : "—";
     });
     setHTML(box.querySelector(".cd-ls-trail"), S.trail.map(function (p) { return '<i class="r' + p + '" title="' + escapeHtml(rows[p].name) + '"></i>'; }).join(""));
     box.querySelector(".cd-ls-stat").textContent = S.total
-      ? "Открыто: " + S.total + " · последний: " + rows[S.trail[S.trail.length - 1]].name + " · без «" + rows[last].name + "» подряд сейчас " + S.dry +
+      ? "Открыто: " + S.total + " | последний: " + rows[S.trail[S.trail.length - 1]].name + " | без «" + rows[last].name + "» подряд сейчас " + S.dry +
         ", самая длинная серия " + S.maxDry + (S.total < 100 ? ". Открой ×1000 — доли подтянутся к заявленным." : ".")
       : "Пока ни одного сундука. Черта на полоске — заявленный шанс.";
     return true;

@@ -211,7 +211,7 @@
     var metaParts = [];
     if (f.minutes) metaParts.push("~" + f.minutes + " мин");
     if (f.sections) metaParts.push(f.sections + " " + plural(f.sections, ["раздел", "раздела", "разделов"]));
-    if (metaParts.length) { var meta = el("div", null, metaParts.join(" · ")); meta.className = "cd-it-meta"; item.appendChild(meta); }
+    if (metaParts.length) { var meta = el("div", null, metaParts.join(" | ")); meta.className = "cd-it-meta"; item.appendChild(meta); }
 
     var act = el("div", null); act.className = "cd-it-act";
     var readB = el("button", null, state.read[f.rel] ? "✓" : "○");
@@ -252,7 +252,7 @@
     if (d) d.files.forEach(function (f) { if (state.read[f.rel]) done++; });
     var pct = total ? Math.round((done / total) * 100) : 0;
     if (fillEl) fillEl.style.width = pct + "%";
-    if (ptextEl) ptextEl.textContent = "изучено " + done + " из " + total + " · " + pct + "%";
+    if (ptextEl) ptextEl.textContent = "изучено " + done + " из " + total + " | " + pct + "%";
     if (continueBtn) continueBtn.disabled = done >= total;
     syncLogoRing(done, total);
   }
@@ -626,7 +626,7 @@
     });
     var bar = articleEl.querySelector(".cd-secbar");
     if (bar) {
-      bar.querySelector(".cd-sect").textContent = "Раздел " + (i + 1) + " из " + secCount + (title ? " · " + title : "");
+      bar.querySelector(".cd-sect").textContent = "Раздел " + (i + 1) + " из " + secCount + (title ? " | " + title : "");
       bar.querySelector(".cd-secp i").style.width = Math.round((i + 1) / secCount * 100) + "%";
       bar.querySelector('[data-d="-1"]').disabled = i === 0;
       bar.querySelector('[data-d="1"]').disabled = i === secCount - 1;
@@ -706,7 +706,7 @@
     var html = '<b>' + (idx >= 0 ? idx + 1 : 0) + "/" + secs.length + "</b>" +
       (dots ? '<span class="cd-sp-dots">' + dots + "</span>" : '<span class="cd-sp-bar"><i style="width:' + Math.round(read / secs.length * 100) + '%"></i></span>');
     if (secProgEl.innerHTML !== html) setHTML(secProgEl, html);
-    secProgEl.title = "Раздел " + (idx + 1) + " из " + secs.length + " · прочитано " + read;
+    secProgEl.title = "Раздел " + (idx + 1) + " из " + secs.length + " | прочитано " + read;
     secProgEl.hidden = false;
   }
   function flashHeading(node) {

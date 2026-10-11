@@ -461,7 +461,7 @@ class DocsViewProvider {
             if (it.sections > 0) {
               metaParts.push(it.sections + ' ' + pluralRu(it.sections, ['раздел', 'раздела', 'разделов']));
             }
-            const metaText = metaParts.join(' · ');
+            const metaText = metaParts.join(' | ');
             return `
         <div id="opt-${index}" class="item${it.fresh ? ' fresh' : ''}${isRead ? ' read' : ''}" role="option" aria-selected="false"
              data-index="${index++}" data-file="${escapeHtml(it.file)}" data-read="${isRead ? '1' : '0'}"
@@ -799,7 +799,7 @@ class DocsViewProvider {
 
 <div class="panel-head">
   <span class="panel-title">📘 ${escapeHtml(docs.libraryInfo().title)}</span>
-  <span class="panel-sub">справочник · примеры · задачник — клик открывает материал</span>
+  <span class="panel-sub">справочник | примеры | задачник — клик открывает материал</span>
 </div>
 
 <div class="top" id="top">
@@ -1241,7 +1241,7 @@ ${showTasks ? `<div class="actions">
       items.filter((el) => el.dataset.read === '1').map((el) => el.dataset.file)
     );
     const pct = files.size ? Math.round((doneFiles.size / files.size) * 100) : 0;
-    if (progressText) progressText.textContent = 'изучено ' + doneFiles.size + ' из ' + files.size + ' · ' + pct + '%';
+    if (progressText) progressText.textContent = 'изучено ' + doneFiles.size + ' из ' + files.size + ' | ' + pct + '%';
     if (progressFill) progressFill.style.width = pct + '%';
     if (continueBtn) continueBtn.disabled = doneFiles.size >= files.size;   // всё изучено — гаснет
   }

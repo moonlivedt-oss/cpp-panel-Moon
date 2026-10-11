@@ -76,7 +76,7 @@
     if (checkF) {
       var passedN = Object.keys(state.exams).filter(function (k) { return state.exams[k] && state.exams[k].passed; }).length;
       html += '<button class="cd-track-exam" type="button" data-rel="' + escapeHtml(checkF.rel) + '">Итоговые проверки этапов' +
-        (passedN ? " · сдано " + passedN : "") + " →</button>";
+        (passedN ? " | сдано " + passedN : "") + " →</button>";
     }
     return html + "</div>";
   }
@@ -231,10 +231,10 @@
     var done = !!state.dailyDone[cdDate(0)], streak = dailyStreak();
     return '<div class="cd-home-warm cd-daily' + (done ? " done" : "") + '"' + (done ? "" : ' role="button" tabindex="0"') + '>' +
       '<span class="cd-hw-ic">' + (done ? "✓" : emo("ui-dice", "🎯")) + "</span>" +
-      '<div class="cd-hc-main"><div class="cd-hc-lbl">Задача дня · ' + escapeHtml(DAILY_TYPES[dc.type] || "задание") + (done ? " · решена" : "") + "</div>" +
+      '<div class="cd-hc-main"><div class="cd-hc-lbl">Задача дня | ' + escapeHtml(DAILY_TYPES[dc.type] || "задание") + (done ? " | решена" : "") + "</div>" +
       '<div class="cd-hc-title">' + escapeHtml(dc.prompt || "Задание из темы") + "</div>" +
-      '<div class="cd-hc-meta">' + escapeHtml(dc.title) + (streak ? " · серия " + streak + " " + plural(streak, ["день", "дня", "дней"]) : " · реши — начнётся серия") +
-      (function () { var r = ""; try { r = dailyRecordLine(dc.type); } catch (e) {} return r ? " · " + escapeHtml(r) : ""; })() + "</div></div>" +
+      '<div class="cd-hc-meta">' + escapeHtml(dc.title) + (streak ? " | серия " + streak + " " + plural(streak, ["день", "дня", "дней"]) : " | реши — начнётся серия") +
+      (function () { var r = ""; try { r = dailyRecordLine(dc.type); } catch (e) {} return r ? " | " + escapeHtml(r) : ""; })() + "</div></div>" +
       (done ? "" : '<div class="cd-hc-arrow">→</div>') + "</div>";
   }
   function buildWarmupQueue() {
@@ -284,7 +284,7 @@
   }
   function reviewTopHtml() {
     return '<div class="cd-rv-top">' +
-      '<span class="cd-rv-count">' + (reviewWarmup ? "Разминка · " : "Повторение · ") + Math.min(reviewPos + 1, reviewQueue.length) + " / " + reviewQueue.length + "</span>" +
+      '<span class="cd-rv-count">' + (reviewWarmup ? "Разминка | " : "Повторение | ") + Math.min(reviewPos + 1, reviewQueue.length) + " / " + reviewQueue.length + "</span>" +
       reviewTrackHtml() +
       (reviewUndo ? '<button class="cd-rv-undo" type="button" title="Отменить последнюю оценку">↶ Назад</button>' : "") +
       '<button class="cd-rv-close" type="button" title="Закрыть">✕</button></div>';

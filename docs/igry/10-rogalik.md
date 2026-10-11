@@ -4,7 +4,7 @@
 >
 > Нужна база: все темы раздела «Создание игр» — от [времени и игрового цикла](01-vremya-i-cikl.md) до [ИИ врагов](08-ii-vragov.md).
 
-[← Физика прыжка](09-fizika-pryzhka.md) · [Создание игр: начало](01-vremya-i-cikl.md) · [Сквозной проект](../proekt/01-podzemelye.md)
+[← Физика прыжка](09-fizika-pryzhka.md) / [Создание игр: начало](01-vremya-i-cikl.md) / [Сквозной проект](../proekt/01-podzemelye.md)
 
 ---
 
@@ -552,4 +552,4 @@ int main() {
 
 ---
 
-[← Физика прыжка](09-fizika-pryzhka.md) · [Создание игр: начало](01-vremya-i-cikl.md) · [Сквозной проект](../proekt/01-podzemelye.md)
+[← Физика прыжка](09-fizika-pryzhka.md) / [Создание игр: начало](01-vremya-i-cikl.md) / [Сквозной проект](../proekt/01-podzemelye.md)

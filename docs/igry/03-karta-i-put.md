@@ -4,7 +4,7 @@
 >
 > Нужна база: [вектор и `vector<string>`](../ref/06-konteynery.md#таблица-чисел-vectorvectorint), [очередь `queue`](../ref/06-konteynery.md#очередь-и-стек-queue-и-stack), [поле-сетка из кирпичиков](../ref/21-igra-v-konsoli.md#поле-сетка-из-строк).
 
-[← Состояния игры](02-sostoyaniya.md) · [Случайность и лут →](04-sluchaynost-i-lut.md) · [Сквозной проект](../proekt/01-podzemelye.md)
+[← Состояния игры](02-sostoyaniya.md) / [Случайность и лут →](04-sluchaynost-i-lut.md) / [Сквозной проект](../proekt/01-podzemelye.md)
 
 ---
 
@@ -478,4 +478,4 @@ bool walkable(const std::vector<std::string> &map, int x, int y) {
 
 ---
 
-[← Состояния игры](02-sostoyaniya.md) · [Случайность и лут →](04-sluchaynost-i-lut.md)
+[← Состояния игры](02-sostoyaniya.md) / [Случайность и лут →](04-sluchaynost-i-lut.md)

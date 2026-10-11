@@ -13,7 +13,7 @@ const path = require('path');
 const course = require('../extension/lib/course');
 
 const DIR = path.join(__dirname, '..', 'docs', 'ref');
-const START = '[← Начни отсюда](../00-НАЧНИ-ОТСЮДА.md) · [Маршрут изучения](../00-marshrut.md)';
+const START = '[← Начни отсюда](../00-НАЧНИ-ОТСЮДА.md) / [Маршрут изучения](../00-marshrut.md)';
 const LABEL = {
   '01-osnovy': 'Основы', '02-vvod-vyvod': 'Ввод и вывод', '03-logika-cikly': 'Логика и циклы', '04-funkcii': 'Функции',
   '05-stroki': 'Строки', '06-konteynery': 'Контейнеры', '07-algoritmy': 'Алгоритмы', '08-struct-fayly': 'struct, математика, файлы',
@@ -28,8 +28,8 @@ const LABEL = {
 function navLine(base) {
   const nb = course.neighbours(base);
   let s = START;
-  if (nb && nb.prev) s += ' · [← ' + LABEL[nb.prev] + '](' + nb.prev + '.md)';
-  if (nb && nb.next) s += ' · [' + LABEL[nb.next] + ' →](' + nb.next + '.md)';
+  if (nb && nb.prev) s += ' / [← ' + LABEL[nb.prev] + '](' + nb.prev + '.md)';
+  if (nb && nb.next) s += ' / [' + LABEL[nb.next] + ' →](' + nb.next + '.md)';
   return s;
 }
 

@@ -138,7 +138,7 @@
     });
     title.appendChild(titleEl);
     title.appendChild(rollInfoEl);
-    // Середина шапки: карточки к повторению · связь с редактором · «Дальше».
+    // Середина шапки: карточки к повторению | связь с редактором | «Дальше».
     var hx = el("div", null); hx.className = "cd-hx";
     revBellEl = el("button", null); revBellEl.type = "button"; revBellEl.className = "cd-hpill cd-hrev"; revBellEl.hidden = true;
     revBellEl.addEventListener("click", function (e) { e.stopPropagation(); if (warmupDoneToday()) startReview(); else startWarmup(); });

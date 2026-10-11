@@ -4,7 +4,7 @@
 >
 > Нужна база: [время и игровой цикл](01-vremya-i-cikl.md), [строки](../ref/05-stroki.md). Код этой темы — **только для Windows** (как и твоя сборка MSYS2).
 
-[← Сущности и бой](05-sushchnosti-i-boy.md) · [Сохранения →](07-sokhraneniya.md) · [Сквозной проект](../proekt/01-podzemelye.md)
+[← Сущности и бой](05-sushchnosti-i-boy.md) / [Сохранения →](07-sokhraneniya.md) / [Сквозной проект](../proekt/01-podzemelye.md)
 
 ---
 
@@ -387,4 +387,4 @@ A: Проверяет, нажата ли клавиша, не останавли
 
 ---
 
-[← Сущности и бой](05-sushchnosti-i-boy.md) · [Сохранения →](07-sokhraneniya.md)
+[← Сущности и бой](05-sushchnosti-i-boy.md) / [Сохранения →](07-sokhraneniya.md)

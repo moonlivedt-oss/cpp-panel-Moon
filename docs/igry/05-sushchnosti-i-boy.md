@@ -4,7 +4,7 @@
 >
 > Нужна база: [`struct` и вектор структур](../ref/08-struct-fayly.md#вектор-структур-полный-рабочий-пример), [алгоритмы и лямбды](../ref/07-algoritmy.md#со-своим-правилом--через-лямбду).
 
-[← Случайность и лут](04-sluchaynost-i-lut.md) · [Консоль как экран →](06-konsol-ekran.md) · [Сквозной проект](../proekt/01-podzemelye.md)
+[← Случайность и лут](04-sluchaynost-i-lut.md) / [Консоль как экран →](06-konsol-ekran.md) / [Сквозной проект](../proekt/01-podzemelye.md)
 
 ---
 
@@ -439,4 +439,4 @@ for (Unit &e : enemies)
 
 ---
 
-[← Случайность и лут](04-sluchaynost-i-lut.md) · [Консоль как экран →](06-konsol-ekran.md)
+[← Случайность и лут](04-sluchaynost-i-lut.md) / [Консоль как экран →](06-konsol-ekran.md)

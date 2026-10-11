@@ -903,7 +903,7 @@
       var rec = state.exams[exam.id];
       html = '<div class="cd-quiz cd-exam" data-exam="' + escapeHtml(exam.id) + '" data-topics="' + escapeHtml(exam.topics.join(",")) + '" data-total="' + qs.length + '">' +
         '<div class="cd-quiz-head">Итоговая проверка' +
-        (rec && rec.passed ? ' <span class="cd-exam-badge">зачтено · лучший результат ' + rec.best + " из " + rec.total + "</span>" : "") + "</div>" +
+        (rec && rec.passed ? ' <span class="cd-exam-badge">зачтено | лучший результат ' + rec.best + " из " + rec.total + "</span>" : "") + "</div>" +
         '<div class="cd-exam-rule">Засчитывается первый ответ на каждый вопрос. Зачёт — от ' + Math.ceil(qs.length * EXAM_PASS) + " верных из " + qs.length + ".</div>";
     } else {
       html = '<div class="cd-quiz"><div class="cd-quiz-head">Проверь себя</div>';
@@ -979,7 +979,7 @@
     var dd = Math.round((new Date(rec.due) - new Date(t)) / 86400000);
     return { status: "later", days: dd };
   }
-  // Что будет с интервалом при оценке g — без сохранения (подпись на кнопке «Помню · через 2 дн.»).
+  // Что будет с интервалом при оценке g — без сохранения (подпись на кнопке «Помню | через 2 дн.»).
   function cdPreview(id, grade) {
     var rec = state.cards[id] || { ivl: 0, ease: 2.3 };
     if (grade === 0) return 1;
@@ -1573,7 +1573,7 @@
     }
     var hh = st.heap.map(function (b) {
       return '<div class="cd-mem-blk' + (b.dead ? " dead" : "") + '" data-id="#' + escapeHtml(b.id) + '"><span class="cd-mem-bid">#' + escapeHtml(b.id) + "</span>" +
-        '<span class="cd-mem-bt">' + escapeHtml(b.type) + (b.dead ? " · освобождено" : "") + "</span>" + (b.val ? memVal(b.val) : "") + "</div>";
+        '<span class="cd-mem-bt">' + escapeHtml(b.type) + (b.dead ? " | освобождено" : "") + "</span>" + (b.val ? memVal(b.val) : "") + "</div>";
     }).join("");
     setHTML(box.querySelector(".cd-mem-stack"), sh || '<div class="cd-mem-empty">пусто</div>');
     setHTML(box.querySelector(".cd-mem-heap"), hh || '<div class="cd-mem-empty">пусто</div>');
@@ -4653,7 +4653,7 @@
     });
     title.appendChild(titleEl);
     title.appendChild(rollInfoEl);
-    // Середина шапки: карточки к повторению · связь с редактором · «Дальше».
+    // Середина шапки: карточки к повторению | связь с редактором | «Дальше».
     var hx = el("div", null); hx.className = "cd-hx";
     revBellEl = el("button", null); revBellEl.type = "button"; revBellEl.className = "cd-hpill cd-hrev"; revBellEl.hidden = true;
     revBellEl.addEventListener("click", function (e) { e.stopPropagation(); if (warmupDoneToday()) startReview(); else startWarmup(); });
@@ -5170,7 +5170,7 @@
     var metaParts = [];
     if (f.minutes) metaParts.push("~" + f.minutes + " мин");
     if (f.sections) metaParts.push(f.sections + " " + plural(f.sections, ["раздел", "раздела", "разделов"]));
-    if (metaParts.length) { var meta = el("div", null, metaParts.join(" · ")); meta.className = "cd-it-meta"; item.appendChild(meta); }
+    if (metaParts.length) { var meta = el("div", null, metaParts.join(" | ")); meta.className = "cd-it-meta"; item.appendChild(meta); }
 
     var act = el("div", null); act.className = "cd-it-act";
     var readB = el("button", null, state.read[f.rel] ? "✓" : "○");
@@ -5211,7 +5211,7 @@
     if (d) d.files.forEach(function (f) { if (state.read[f.rel]) done++; });
     var pct = total ? Math.round((done / total) * 100) : 0;
     if (fillEl) fillEl.style.width = pct + "%";
-    if (ptextEl) ptextEl.textContent = "изучено " + done + " из " + total + " · " + pct + "%";
+    if (ptextEl) ptextEl.textContent = "изучено " + done + " из " + total + " | " + pct + "%";
     if (continueBtn) continueBtn.disabled = done >= total;
     syncLogoRing(done, total);
   }
@@ -5585,7 +5585,7 @@
     });
     var bar = articleEl.querySelector(".cd-secbar");
     if (bar) {
-      bar.querySelector(".cd-sect").textContent = "Раздел " + (i + 1) + " из " + secCount + (title ? " · " + title : "");
+      bar.querySelector(".cd-sect").textContent = "Раздел " + (i + 1) + " из " + secCount + (title ? " | " + title : "");
       bar.querySelector(".cd-secp i").style.width = Math.round((i + 1) / secCount * 100) + "%";
       bar.querySelector('[data-d="-1"]').disabled = i === 0;
       bar.querySelector('[data-d="1"]').disabled = i === secCount - 1;
@@ -5665,7 +5665,7 @@
     var html = '<b>' + (idx >= 0 ? idx + 1 : 0) + "/" + secs.length + "</b>" +
       (dots ? '<span class="cd-sp-dots">' + dots + "</span>" : '<span class="cd-sp-bar"><i style="width:' + Math.round(read / secs.length * 100) + '%"></i></span>');
     if (secProgEl.innerHTML !== html) setHTML(secProgEl, html);
-    secProgEl.title = "Раздел " + (idx + 1) + " из " + secs.length + " · прочитано " + read;
+    secProgEl.title = "Раздел " + (idx + 1) + " из " + secs.length + " | прочитано " + read;
     secProgEl.hidden = false;
   }
   function flashHeading(node) {
@@ -6215,7 +6215,7 @@
     return -1;
   }
   // Первый экран статьи в окне — сразу к делу. На GitHub .md читаются как есть, а в окне:
-  //  • строка ссылок «← Начни отсюда · ← Строки · …» (вверху и внизу) дублирует кнопки
+  //  • строка ссылок «← Начни отсюда | ← Строки | …» (вверху и внизу) дублирует кнопки
   //    «Предыдущая / Следующая» и «назад» — прячем её и соседнюю черту;
   //  • «Что в этом файле» дублирует панель «На странице» — прячем раздел целиком;
   //  • врезку «Определения функций этой темы … в Словаре функций» сжимаем в чип под заголовком;
@@ -6229,7 +6229,7 @@
     if (!/^←/.test(txt)) return false;
     var rest = txt;
     for (var i = 0; i < links.length; i++) rest = rest.replace(links[i].textContent.replace(/\s+/g, " ").trim(), "");
-    return /^[\s·|]*$/.test(rest);
+    return /^[\s·|/]*$/.test(rest);
   }
   function tidyArticle(headings) {
     if (!articleEl) return headings;
@@ -6426,7 +6426,7 @@
     winEl.classList.toggle("rolled", !!state.rolled);
     if (state.rollW) winEl.style.setProperty("--roll-w", state.rollW + "px");
     if (rollInfoEl) {
-      // Полоска: значок раздела · тема › раздел · сколько прочитано.
+      // Полоска: значок раздела | тема › раздел | сколько прочитано.
       var home = winEl.classList.contains("home") || !current;
       var t = home ? "Главная" : (current.title || current.name).split(/[:(]/)[0].trim();
       var sec = !home && crumbEl ? crumbEl.textContent : "";
@@ -6553,7 +6553,7 @@
     var parts = [];
     if (f.minutes) parts.push("~" + f.minutes + " мин");
     if (f.sections) parts.push(f.sections + " " + plural(f.sections, ["раздел", "раздела", "разделов"]));
-    return parts.join(" · ");
+    return parts.join(" | ");
   }
   // #17 Есть ли откуда грузить материалы (data/stamp-файл). Если да, но файлов ещё нет —
   // показываем скелет-заглушку («грузится»), а не пугающее «не найдено / проверь путь».
@@ -6599,7 +6599,7 @@
     var allDone = done >= total && total > 0;   // весь справочник пройден — время поздравить
     var hi = done > 0 ? "С возвращением!" : "Привет!";   // неразрывный пробел: «С» не повисает отдельной строкой
     var libName = libMeta().title.replace(/^Документация\s+/, "");   // «C++» / «Unreal Engine»
-    var sub = greeting() + (done > 0 ? " · продолжаем учить " + libName : " · документация " + libName + " у тебя под рукой");
+    var sub = greeting() + (done > 0 ? " | продолжаем учить " + libName : " | документация " + libName + " у тебя под рукой");
 
     var ts = taskStats(), streak = streakDays(), cc = cardCounts();
     var pct = total ? Math.round((done / total) * 100) : 0;
@@ -6668,7 +6668,7 @@
     // #9 Панель быстрых действий — запуск в один тап
     var qab = "";   // «▶ Продолжить» здесь убран: главное действие — большая карточка «Следующий шаг» выше
     if (ts.total) qab += '<button class="cd-qa cd-qa-rand" type="button">' + emo("ui-dice", "🎲") + " Случайная задача</button>";
-    if (cc.due + cc.neu > 0) qab += '<button class="cd-qa cd-qa-rev" type="button">' + emo("ui-cards", "🎴") + " Повторить" + (cc.due ? " · " + cc.due : "") + "</button>";
+    if (cc.due + cc.neu > 0) qab += '<button class="cd-qa cd-qa-rev" type="button">' + emo("ui-cards", "🎴") + " Повторить" + (cc.due ? " | " + cc.due : "") + "</button>";
     qab += '<button class="cd-qa cd-qa-find" type="button">⌕ Найти</button>';
     qab += '<button class="cd-qa cd-qa-prog" type="button">' + emo("icon-route", "") + " Прогресс</button>";
     qab += '<button class="cd-qa cd-qa-guide" type="button">' + emo("ui-guide", "📖") + " Обучение</button>";
@@ -6684,13 +6684,13 @@
       var allBtn = cc.due + cc.neu > 0 ? '<span class="cd-hw-all" role="button" tabindex="0" title="Повторить всё, что ждёт сегодня">повторить все →</span>' : "";
       if (warmupDoneToday()) {
         cardsHtml += '<div class="cd-home-warm done"><span class="cd-hw-ic">✓</span>' +
-          '<div class="cd-hc-main"><div class="cd-hc-lbl">Разминка дня · сделана</div>' +
+          '<div class="cd-hc-main"><div class="cd-hc-lbl">Разминка дня | сделана</div>' +
           '<div class="cd-hc-meta">' + escapeHtml(restTxt) + "</div></div>" + allBtn + "</div>";
       } else {
         var wn = Math.min(WARMUP_N, cc.total);
         cardsHtml += '<div class="cd-home-warm" role="button" tabindex="0"><span class="cd-hw-ic">' + emo("ui-warm", "🌅") + '</span>' +
           '<div class="cd-hc-main"><div class="cd-hc-lbl">Разминка дня</div>' +
-          '<div class="cd-hc-title">' + wn + " " + plural(wn, ["карточка", "карточки", "карточек"]) + " · около 2 минут</div>" +
+          '<div class="cd-hc-title">' + wn + " " + plural(wn, ["карточка", "карточки", "карточек"]) + " | около 2 минут</div>" +
           '<div class="cd-hc-meta">' + escapeHtml(restTxt) + "</div></div>" + allBtn +
           '<div class="cd-hc-arrow">→</div></div>';
       }
@@ -6716,7 +6716,7 @@
       else if (nF) { primary = nF; lbl = "▶ Следующий шаг"; reason = "следующая неизученная тема"; }
       else { primary = lastF || findFile(/00-нач|начни/i) || d.files[0]; lbl = "▶ Начать здесь"; reason = ""; }
       if (primary) {
-        var meta = [reason, metaOf(primary)].filter(function (x) { return x; }).join(" · ");
+        var meta = [reason, metaOf(primary)].filter(function (x) { return x; }).join(" | ");
         html += '<button class="cd-home-cont" data-rel="' + escapeHtml(primary.rel) + '">' +
           '<div class="cd-hc-main"><div class="cd-hc-lbl">' + lbl + '</div>' +
           '<div class="cd-hc-title">' + escapeHtml(primary.title || primary.name) + '</div>' +
@@ -6728,10 +6728,10 @@
           var spPct = sp.kind === "steps" && sp.n ? Math.round((sp.i + 1) / sp.n * 100) : 0;
           html += '<button class="cd-home-spot" type="button">' +
             '<span class="cd-spot-ic">' + (sp.kind === "boss" ? "♛" : "↩") + "</span>" +
-            '<span class="cd-spot-main"><span class="cd-spot-lbl">Вы остановились · ' + (sp.kind === "boss" ? "босс темы" : "разбор по шагам") + "</span>" +
+            '<span class="cd-spot-main"><span class="cd-spot-lbl">Вы остановились | ' + (sp.kind === "boss" ? "босс темы" : "разбор по шагам") + "</span>" +
             '<span class="cd-spot-t">' + escapeHtml(sp.title || "без названия") + "</span>" +
             '<span class="cd-spot-f">' + escapeHtml(spF.title || spF.name) +
-            (sp.kind === "steps" && sp.n ? " · шаг " + (sp.i + 1) + " из " + sp.n : "") + "</span>" +
+            (sp.kind === "steps" && sp.n ? " | шаг " + (sp.i + 1) + " из " + sp.n : "") + "</span>" +
             (spPct ? '<span class="cd-spot-bar"><i style="width:' + spPct + '%"></i></span>' : "") +
             '</span><span class="cd-spot-go">→</span></button>';
         }
@@ -6798,7 +6798,7 @@
         var label = state.marks[k] || (mf && (mf.title || mf.name)) || rel;
         mchips += '<button class="cd-home-chip cd-home-mark" data-rel="' + escapeHtml(mf.rel) +
           '" data-hash="#' + escapeHtml(slug) + '" style="--gcolor:' + escapeHtml(mf.groupColor || "var(--ac)") +
-          '" title="' + escapeHtml((mf.title || mf.name) + " · раздел") + '">★ ' + escapeHtml(label) + "</button>";
+          '" title="' + escapeHtml((mf.title || mf.name) + " | раздел") + '">★ ' + escapeHtml(label) + "</button>";
       });
       marksHtml = secHead("Закладки", markKeys.length, "#cba6f7") + '<div class="cd-home-chips">' + mchips + "</div>";
     }
@@ -7118,7 +7118,7 @@
     if (!logoEl) return;
     var pct = total ? Math.round((done / total) * 100) : 0;
     logoEl.style.setProperty("--lp", String(pct));
-    logoEl.title = "Изучено " + done + " из " + total + " (" + pct + "%) · на главную";
+    logoEl.title = "Изучено " + done + " из " + total + " (" + pct + "%) | на главную";
     logoEl.setAttribute("aria-label", logoEl.title);
   }
   // «🎴 N» — карточки к повторению (#5). Клик: «Разминка дня», а если она сделана — всё, что ждёт.
@@ -7207,7 +7207,7 @@
     edBtnEl.querySelector(".cd-hed-e").textContent = f && f.errs ? String(f.errs) : "";
     var tip = off ? "Связь с редактором выключена" : !f ? "C/C++-файл в редакторе не открыт" :
       f.name + (f.errs ? " — " + f.errs + " " + plural(f.errs, ["ошибка", "ошибки", "ошибок"]) : " — ошибок нет");
-    edBtnEl.title = tip + " · подробнее"; edBtnEl.setAttribute("aria-label", tip);
+    edBtnEl.title = tip + " | подробнее"; edBtnEl.setAttribute("aria-label", tip);
     if (edPopEl && !edPopEl.hidden) renderEdPop();
     fitHead();
   }
@@ -7220,7 +7220,7 @@
     else if (!f) row("📄", "muted", "Открой <b>.cpp</b>-файл в редакторе — окно подскажет по слову под курсором и объяснит ошибки простым языком.");
     else {
       row("📄", "", "<b>" + escapeHtml(f.name) + "</b>" + (f.lang ? ' <span class="cd-ep-sub">' + escapeHtml(f.lang) + "</span>" : ""));
-      if (f.errs) row("⚠", "bad", f.errs + " " + plural(f.errs, ["ошибка", "ошибки", "ошибок"]) + (f.first && f.first.line ? " · первая — строка " + f.first.line : "") +
+      if (f.errs) row("⚠", "bad", f.errs + " " + plural(f.errs, ["ошибка", "ошибки", "ошибок"]) + (f.first && f.first.line ? " | первая — строка " + f.first.line : "") +
         (f.first ? '<button class="cd-ep-go" type="button" data-act="err">Разобрать ошибку</button>' : ""));
       else row("✓", "good", "Ошибок нет");
     }
@@ -7455,7 +7455,7 @@
     applyExpandNotes();         // режим «только основное»: свернуть/раскрыть все разборы
     syncBookmarks();
     renderNotes(f);
-    addKicker(f);       // «Создание игр · тема 3 из 9 · ~12 мин» — где я в курсе
+    addKicker(f);       // «Создание игр | тема 3 из 9 | ~12 мин» — где я в курсе
     if (state.rolled) applyRoll();   // свёрнутая полоска показывает новую тему
     appendSeeAlso(f);   // блок «Смотри также» — связанные материалы в конце
     // «Разобрался → следующая» и «Предыдущая / Следующая» — самым последним, где заканчивается чтение
@@ -7928,7 +7928,7 @@
     return '<div class="cd-home-week cd-heat" aria-label="Активность за ' + HEAT_WEEKS + ' недель: дней с занятиями ' + active + '">' +
       '<div class="cd-hm-heads">' + heads + '</div><div class="cd-hm-grid">' + cols + '</div>' +
       '<div class="cd-hm-foot"><span class="cd-wk-n">' + active + " " + plural(active, ["день", "дня", "дней"]) + " за " + HEAT_WEEKS + " недель" +
-      (streak ? " · серия " + streak : "") + '</span><span class="cd-hm-leg">меньше <i class="cd-hm-c l0"></i><i class="cd-hm-c l1"></i><i class="cd-hm-c l2"></i><i class="cd-hm-c l3"></i><i class="cd-hm-c l4"></i> больше</span></div></div>';
+      (streak ? " | серия " + streak : "") + '</span><span class="cd-hm-leg">меньше <i class="cd-hm-c l0"></i><i class="cd-hm-c l1"></i><i class="cd-hm-c l2"></i><i class="cd-hm-c l3"></i><i class="cd-hm-c l4"></i> больше</span></div></div>';
   }
   function streakDays() {
     var d = new Date();
@@ -8055,7 +8055,7 @@
     if (checkF) {
       var passedN = Object.keys(state.exams).filter(function (k) { return state.exams[k] && state.exams[k].passed; }).length;
       html += '<button class="cd-track-exam" type="button" data-rel="' + escapeHtml(checkF.rel) + '">Итоговые проверки этапов' +
-        (passedN ? " · сдано " + passedN : "") + " →</button>";
+        (passedN ? " | сдано " + passedN : "") + " →</button>";
     }
     return html + "</div>";
   }
@@ -8210,10 +8210,10 @@
     var done = !!state.dailyDone[cdDate(0)], streak = dailyStreak();
     return '<div class="cd-home-warm cd-daily' + (done ? " done" : "") + '"' + (done ? "" : ' role="button" tabindex="0"') + '>' +
       '<span class="cd-hw-ic">' + (done ? "✓" : emo("ui-dice", "🎯")) + "</span>" +
-      '<div class="cd-hc-main"><div class="cd-hc-lbl">Задача дня · ' + escapeHtml(DAILY_TYPES[dc.type] || "задание") + (done ? " · решена" : "") + "</div>" +
+      '<div class="cd-hc-main"><div class="cd-hc-lbl">Задача дня | ' + escapeHtml(DAILY_TYPES[dc.type] || "задание") + (done ? " | решена" : "") + "</div>" +
       '<div class="cd-hc-title">' + escapeHtml(dc.prompt || "Задание из темы") + "</div>" +
-      '<div class="cd-hc-meta">' + escapeHtml(dc.title) + (streak ? " · серия " + streak + " " + plural(streak, ["день", "дня", "дней"]) : " · реши — начнётся серия") +
-      (function () { var r = ""; try { r = dailyRecordLine(dc.type); } catch (e) {} return r ? " · " + escapeHtml(r) : ""; })() + "</div></div>" +
+      '<div class="cd-hc-meta">' + escapeHtml(dc.title) + (streak ? " | серия " + streak + " " + plural(streak, ["день", "дня", "дней"]) : " | реши — начнётся серия") +
+      (function () { var r = ""; try { r = dailyRecordLine(dc.type); } catch (e) {} return r ? " | " + escapeHtml(r) : ""; })() + "</div></div>" +
       (done ? "" : '<div class="cd-hc-arrow">→</div>') + "</div>";
   }
   function buildWarmupQueue() {
@@ -8263,7 +8263,7 @@
   }
   function reviewTopHtml() {
     return '<div class="cd-rv-top">' +
-      '<span class="cd-rv-count">' + (reviewWarmup ? "Разминка · " : "Повторение · ") + Math.min(reviewPos + 1, reviewQueue.length) + " / " + reviewQueue.length + "</span>" +
+      '<span class="cd-rv-count">' + (reviewWarmup ? "Разминка | " : "Повторение | ") + Math.min(reviewPos + 1, reviewQueue.length) + " / " + reviewQueue.length + "</span>" +
       reviewTrackHtml() +
       (reviewUndo ? '<button class="cd-rv-undo" type="button" title="Отменить последнюю оценку">↶ Назад</button>' : "") +
       '<button class="cd-rv-close" type="button" title="Закрыть">✕</button></div>';
@@ -8520,7 +8520,7 @@
       if (!m) return;                                       // словари и справка — не темы курса
       var deps = [], re = /\]\(([^)#\s]+\.md)/g, x;
       while ((x = re.exec(m[1]))) deps.push(resolveRel(f.rel, x[1]).rel.toLowerCase());
-      var lv = head.match(/\*\*Уровень:\*\*([^\n·]*)/);
+      var lv = head.match(/\*\*Уровень:\*\*([^\n·|/]*)/);
       // метки уровня в доках — красный/жёлтый кружок (U+1F534 / U+1F7E1)
       var level = lv && /🔴/.test(lv[1]) ? 3 : lv && /🟡/.test(lv[1]) ? 2 : 1;
       var t = { rel: f.rel, f: f, deps: deps, level: level, n: topicNum(f.rel), short: shortTitle(f), cards: [], ch: [], boss: [], tasks: [] };
@@ -8606,13 +8606,13 @@
   function weakAction(t, m) {
     var due = t.cards.filter(function (id) { var s = cdCardState(id).status; return s === "due"; }).length;
     var weakCards = t.cards.filter(function (id) { return cardStrength(id) < 0.5; }).length;
-    if (due) return { kind: "cards", label: "Повторить карточки темы · " + due, why: due + " " + plural(due, ["карточка ждёт", "карточки ждут", "карточек ждут"]) + " повторения" };
-    if (m.miss) return { kind: "miss", label: "Разобрать ошибки · " + m.miss, why: "ошибки в разборах этой темы ещё не отработаны" };
+    if (due) return { kind: "cards", label: "Повторить карточки темы | " + due, why: due + " " + plural(due, ["карточка ждёт", "карточки ждут", "карточек ждут"]) + " повторения" };
+    if (m.miss) return { kind: "miss", label: "Разобрать ошибки | " + m.miss, why: "ошибки в разборах этой темы ещё не отработаны" };
     var sec = nextSection(t.f);
     if (!state.read[t.rel] && sec) return { kind: "read", label: "Дочитать: «" + sec.text + "»", hash: sec.slug, why: "тема не дочитана" };
     var ch = t.ch.filter(function (id) { return !state.challenge[id]; });
     if (ch.length) return { kind: "task", label: "Решить задание темы", id: ch[0], why: "задания темы не решены" };
-    if (weakCards) return { kind: "cards", label: "Закрепить карточки · " + weakCards, why: "карточки ещё не окрепли" };
+    if (weakCards) return { kind: "cards", label: "Закрепить карточки | " + weakCards, why: "карточки ещё не окрепли" };
     return { kind: "read", label: "Перечитать тему", hash: "", why: "освоение пока ниже 60 %" };
   }
   function runWeakAction(rel, kind, extra) {
@@ -8684,7 +8684,7 @@
       var C = 2 * Math.PI * 15, off = C * (1 - pct / 100);
       var label = t.short.length > 16 ? t.short.slice(0, 15) + "…" : t.short;
       nodes += '<g class="cd-km-n ' + masteryTone(pct) + (open ? "" : " lock") + (t === next ? " next" : "") + '" data-krel="' + escapeHtml(t.rel) + '" tabindex="0" role="button">' +
-        "<title>" + escapeHtml(t.f.title || t.short) + " — освоено " + pct + "%" + (open ? "" : " · сначала опоры: " + t.deps.map(function (r) { var d = topicByRel(r); return d ? d.short : r; }).join(", ")) + "</title>" +
+        "<title>" + escapeHtml(t.f.title || t.short) + " — освоено " + pct + "%" + (open ? "" : " | сначала опоры: " + t.deps.map(function (r) { var d = topicByRel(r); return d ? d.short : r; }).join(", ")) + "</title>" +
         '<circle class="cd-km-bg" cx="' + p.x + '" cy="' + p.y + '" r="15"/>' +
         '<circle class="cd-km-fg" cx="' + p.x + '" cy="' + p.y + '" r="15" style="stroke-dasharray:' + C.toFixed(1) + ";stroke-dashoffset:" + off.toFixed(1) + '" transform="rotate(-90 ' + p.x + " " + p.y + ')"/>' +
         '<text class="cd-km-num" x="' + p.x + '" y="' + (p.y + 4) + '">' + (t.n || "•") + "</text>" +
@@ -8775,8 +8775,8 @@
     var r = weeklyBest(), prog = progressTopics();
     if (!prog.length || !prog.some(function (t) { return quizQuestionsOf(t.f).length; })) return "";
     return '<div class="cd-home-warm cd-weekly' + (r ? " done" : "") + '" role="button" tabindex="0"><span class="cd-hw-ic">' + emo("icon-route", "") + "</span>" +
-      '<div class="cd-hc-main"><div class="cd-hc-lbl">Экзамен недели' + (r ? " · сдан" : "") + "</div>" +
-      '<div class="cd-hc-title">' + (r ? "Лучший результат: " + r.best + " из " + r.total : WEEKLY_N + " вопросов из слабых тем · 10 минут") + "</div>" +
+      '<div class="cd-hc-main"><div class="cd-hc-lbl">Экзамен недели' + (r ? " | сдан" : "") + "</div>" +
+      '<div class="cd-hc-title">' + (r ? "Лучший результат: " + r.best + " из " + r.total : WEEKLY_N + " вопросов из слабых тем | 10 минут") + "</div>" +
       '<div class="cd-hc-meta">' + (r ? "можно пересдать — засчитается лучший" : "первый ответ на вопрос засчитывается, ошибки вернутся в разминку") + "</div></div>" +
       '<div class="cd-hc-arrow">→</div></div>';
   }
@@ -9027,7 +9027,7 @@
   }
   function dailyRecordLine(type) {
     var b = typeBest(type, null), t = state.records[cdDate(0)];
-    if (t && t.ms) return "сегодня " + mmss(t.ms) + (t.tries > 1 ? ", попыток " + t.tries : ", с первой попытки") + (b && b !== t ? " · рекорд " + mmss(b.ms) : "");
+    if (t && t.ms) return "сегодня " + mmss(t.ms) + (t.tries > 1 ? ", попыток " + t.tries : ", с первой попытки") + (b && b !== t ? " | рекорд " + mmss(b.ms) : "");
     return b ? "рекорд " + mmss(b.ms) : "";
   }
   function recordsHtml() {
@@ -9044,9 +9044,9 @@
     var last = keys.slice(0, 14).map(function (k) {
       var r = state.records[k];
       return "<li><span>" + escapeHtml(k) + "</span><span>" + escapeHtml(DAILY_TYPES[r.type] || "") + "</span><b>" + (r.ms ? mmss(r.ms) : "—") + "</b><span>" +
-        (r.tries || 1) + " " + plural(r.tries || 1, ["попытка", "попытки", "попыток"]) + (r.hint ? " · с подсказкой" : "") + "</span></li>";
+        (r.tries || 1) + " " + plural(r.tries || 1, ["попытка", "попытки", "попыток"]) + (r.hint ? " | с подсказкой" : "") + "</span></li>";
     }).join("");
-    return '<div class="cd-rec-sum">Серия задачи дня: <b>' + dailyStreak() + "</b> · всего решено: <b>" + keys.length + "</b></div>" +
+    return '<div class="cd-rec-sum">Серия задачи дня: <b>' + dailyStreak() + "</b> | всего решено: <b>" + keys.length + "</b></div>" +
       '<div class="tablewrap"><table class="cd-rec-t"><thead><tr><th>Вид</th><th>Решено</th><th>Лучшее время</th><th>Попыток в среднем</th><th>С первой без подсказок</th></tr></thead><tbody>' +
       rows + "</tbody></table></div>" + '<div class="cd-rec-last"><div>Последние дни</div><ul>' + last + "</ul></div>";
   }
@@ -9555,7 +9555,7 @@
     files.forEach(function (f) {
       if (!f.md) { loading = true; return; }
       var lines = String(f.md).replace(/\r\n?/g, "\n").split("\n");
-      var ch = { rel: f.rel, title: String(f.title || f.name).replace(/^Подземелье\s*·\s*/, ""), quests: [] };
+      var ch = { rel: f.rel, title: String(f.title || f.name).replace(/^Подземелье\s*[·—–|/-]\s*/, ""), quests: [] };
       var q = null, fence = null, buf = [];
       lines.forEach(function (ln) {
         var fm = ln.match(/^```\s*([A-Za-z]*)/);
@@ -9596,10 +9596,10 @@
     });
     var pct = total ? Math.round(done / total * 100) : 0;
     var nextHtml = next
-      ? '<a class="cd-qm-next" href="' + escapeHtml("../" + next.ch.rel + "#" + next.q.slug) + '">Следующий: <b>Квест ' + next.q.n + " · " + escapeHtml(next.q.title) + "</b> →</a>"
+      ? '<a class="cd-qm-next" href="' + escapeHtml("../" + next.ch.rel + "#" + next.q.slug) + '">Следующий: <b>Квест ' + next.q.n + " | " + escapeHtml(next.q.title) + "</b> →</a>"
       : '<div class="cd-qm-next win">🏆 Все квесты пройдены — игра ваша. Дальше — бонус-квесты ниже.</div>';
     return '<div class="cd-qmap"><div class="cd-qm-head"><div class="cd-qm-ttl">🗺️ Путь героя</div>' +
-      '<div class="cd-qm-sum">пройдено <b>' + done + "</b> из " + total + " · " + pct + "%</div></div>" +
+      '<div class="cd-qm-sum">пройдено <b>' + done + "</b> из " + total + " | " + pct + "%</div></div>" +
       '<div class="cd-qm-bar"><i style="width:' + pct + '%"></i></div>' + chHtml + nextHtml +
       '<div class="cd-qm-note">Квест засчитывается, когда отмечены все пункты его чек-листа «готово, если».</div></div>';
   }
@@ -9651,11 +9651,11 @@
     box.querySelectorAll(".cd-ls-row").forEach(function (row, i) {
       var share = S.total ? S.cnt[i] / S.total * 100 : 0;
       row.querySelector(".cd-ls-bar b").style.width = Math.min(100, share) + "%";
-      row.querySelector(".cd-ls-got").textContent = S.total ? S.cnt[i] + " · " + (Math.round(share * 10) / 10) + "%" : "—";
+      row.querySelector(".cd-ls-got").textContent = S.total ? S.cnt[i] + " | " + (Math.round(share * 10) / 10) + "%" : "—";
     });
     setHTML(box.querySelector(".cd-ls-trail"), S.trail.map(function (p) { return '<i class="r' + p + '" title="' + escapeHtml(rows[p].name) + '"></i>'; }).join(""));
     box.querySelector(".cd-ls-stat").textContent = S.total
-      ? "Открыто: " + S.total + " · последний: " + rows[S.trail[S.trail.length - 1]].name + " · без «" + rows[last].name + "» подряд сейчас " + S.dry +
+      ? "Открыто: " + S.total + " | последний: " + rows[S.trail[S.trail.length - 1]].name + " | без «" + rows[last].name + "» подряд сейчас " + S.dry +
         ", самая длинная серия " + S.maxDry + (S.total < 100 ? ". Открой ×1000 — доли подтянутся к заявленным." : ".")
       : "Пока ни одного сундука. Черта на полоске — заявленный шанс.";
     return true;
@@ -10162,13 +10162,13 @@
       if (t.pass) passed++;
       if (t.skipped) {   // хост остановил прогон: программа зависла или кончилось время
         rows += '<div class="cd-run-t skip"><span class="cd-run-tmark">–</span><span class="cd-run-tin">вход: <code>' +
-          testShow(t["in"] == null ? "∅" : t["in"]) + "</code> · не запускался</span></div>";
+          testShow(t["in"] == null ? "∅" : t["in"]) + "</code> | не запускался</span></div>";
         return;
       }
       rows += '<div class="cd-run-t ' + (t.pass ? "ok" : "bad") + '"><span class="cd-run-tmark">' + (t.pass ? "✓" : "✗") + "</span>" +
         '<span class="cd-run-tin">вход: <code>' + testShow(t["in"] == null ? "∅" : t["in"]) + "</code></span>" +
         (t.pass ? "" : '<span class="cd-run-tgot">вывод <code>' + testShow(t.got == null ? "" : t.got) +
-          '</code> · ждали <code>' + testShow(t.expected == null ? "" : t.expected) + "</code></span>") +
+          '</code> | ждали <code>' + testShow(t.expected == null ? "" : t.expected) + "</code></span>") +
         // программа упала: причина простыми словами + начало stderr (там часто what() исключения)
         (t.crash ? '<span class="cd-run-tcrash">💥 Программа упала: ' + escapeHtml(String(t.crash)) +
           (t.stderr ? '<code>' + escapeHtml(String(t.stderr).slice(0, 300)) + "</code>" : "") + "</span>" : "") + "</div>";
@@ -11187,7 +11187,7 @@
   function showBridgeError(diag) {
     if (!bridgeEl) return;
     var ex = explainCompileError(diag.msg);
-    setBridge("Ошибка" + (diag.line ? " · строка " + diag.line : ""), ex.t + ". " + ex.fix, errorDocTarget(ex.h), "Разобрать", true, ex.ex);
+    setBridge("Ошибка" + (diag.line ? " | строка " + diag.line : ""), ex.t + ". " + ex.fix, errorDocTarget(ex.h), "Разобрать", true, ex.ex);
   }
   function bridgeOpen() {
     var t = bridgeTarget;

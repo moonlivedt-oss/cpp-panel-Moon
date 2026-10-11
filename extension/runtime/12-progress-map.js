@@ -33,7 +33,7 @@
       if (!m) return;                                       // словари и справка — не темы курса
       var deps = [], re = /\]\(([^)#\s]+\.md)/g, x;
       while ((x = re.exec(m[1]))) deps.push(resolveRel(f.rel, x[1]).rel.toLowerCase());
-      var lv = head.match(/\*\*Уровень:\*\*([^\n·]*)/);
+      var lv = head.match(/\*\*Уровень:\*\*([^\n·|/]*)/);
       // метки уровня в доках — красный/жёлтый кружок (U+1F534 / U+1F7E1)
       var level = lv && /🔴/.test(lv[1]) ? 3 : lv && /🟡/.test(lv[1]) ? 2 : 1;
       var t = { rel: f.rel, f: f, deps: deps, level: level, n: topicNum(f.rel), short: shortTitle(f), cards: [], ch: [], boss: [], tasks: [] };
@@ -119,13 +119,13 @@
   function weakAction(t, m) {
     var due = t.cards.filter(function (id) { var s = cdCardState(id).status; return s === "due"; }).length;
     var weakCards = t.cards.filter(function (id) { return cardStrength(id) < 0.5; }).length;
-    if (due) return { kind: "cards", label: "Повторить карточки темы · " + due, why: due + " " + plural(due, ["карточка ждёт", "карточки ждут", "карточек ждут"]) + " повторения" };
-    if (m.miss) return { kind: "miss", label: "Разобрать ошибки · " + m.miss, why: "ошибки в разборах этой темы ещё не отработаны" };
+    if (due) return { kind: "cards", label: "Повторить карточки темы | " + due, why: due + " " + plural(due, ["карточка ждёт", "карточки ждут", "карточек ждут"]) + " повторения" };
+    if (m.miss) return { kind: "miss", label: "Разобрать ошибки | " + m.miss, why: "ошибки в разборах этой темы ещё не отработаны" };
     var sec = nextSection(t.f);
     if (!state.read[t.rel] && sec) return { kind: "read", label: "Дочитать: «" + sec.text + "»", hash: sec.slug, why: "тема не дочитана" };
     var ch = t.ch.filter(function (id) { return !state.challenge[id]; });
     if (ch.length) return { kind: "task", label: "Решить задание темы", id: ch[0], why: "задания темы не решены" };
-    if (weakCards) return { kind: "cards", label: "Закрепить карточки · " + weakCards, why: "карточки ещё не окрепли" };
+    if (weakCards) return { kind: "cards", label: "Закрепить карточки | " + weakCards, why: "карточки ещё не окрепли" };
     return { kind: "read", label: "Перечитать тему", hash: "", why: "освоение пока ниже 60 %" };
   }
   function runWeakAction(rel, kind, extra) {
@@ -197,7 +197,7 @@
       var C = 2 * Math.PI * 15, off = C * (1 - pct / 100);
       var label = t.short.length > 16 ? t.short.slice(0, 15) + "…" : t.short;
       nodes += '<g class="cd-km-n ' + masteryTone(pct) + (open ? "" : " lock") + (t === next ? " next" : "") + '" data-krel="' + escapeHtml(t.rel) + '" tabindex="0" role="button">' +
-        "<title>" + escapeHtml(t.f.title || t.short) + " — освоено " + pct + "%" + (open ? "" : " · сначала опоры: " + t.deps.map(function (r) { var d = topicByRel(r); return d ? d.short : r; }).join(", ")) + "</title>" +
+        "<title>" + escapeHtml(t.f.title || t.short) + " — освоено " + pct + "%" + (open ? "" : " | сначала опоры: " + t.deps.map(function (r) { var d = topicByRel(r); return d ? d.short : r; }).join(", ")) + "</title>" +
         '<circle class="cd-km-bg" cx="' + p.x + '" cy="' + p.y + '" r="15"/>' +
         '<circle class="cd-km-fg" cx="' + p.x + '" cy="' + p.y + '" r="15" style="stroke-dasharray:' + C.toFixed(1) + ";stroke-dashoffset:" + off.toFixed(1) + '" transform="rotate(-90 ' + p.x + " " + p.y + ')"/>' +
         '<text class="cd-km-num" x="' + p.x + '" y="' + (p.y + 4) + '">' + (t.n || "•") + "</text>" +
@@ -288,8 +288,8 @@
     var r = weeklyBest(), prog = progressTopics();
     if (!prog.length || !prog.some(function (t) { return quizQuestionsOf(t.f).length; })) return "";
     return '<div class="cd-home-warm cd-weekly' + (r ? " done" : "") + '" role="button" tabindex="0"><span class="cd-hw-ic">' + emo("icon-route", "") + "</span>" +
-      '<div class="cd-hc-main"><div class="cd-hc-lbl">Экзамен недели' + (r ? " · сдан" : "") + "</div>" +
-      '<div class="cd-hc-title">' + (r ? "Лучший результат: " + r.best + " из " + r.total : WEEKLY_N + " вопросов из слабых тем · 10 минут") + "</div>" +
+      '<div class="cd-hc-main"><div class="cd-hc-lbl">Экзамен недели' + (r ? " | сдан" : "") + "</div>" +
+      '<div class="cd-hc-title">' + (r ? "Лучший результат: " + r.best + " из " + r.total : WEEKLY_N + " вопросов из слабых тем | 10 минут") + "</div>" +
       '<div class="cd-hc-meta">' + (r ? "можно пересдать — засчитается лучший" : "первый ответ на вопрос засчитывается, ошибки вернутся в разминку") + "</div></div>" +
       '<div class="cd-hc-arrow">→</div></div>';
   }

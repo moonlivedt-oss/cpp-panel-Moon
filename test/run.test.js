@@ -183,7 +183,7 @@ test("Напиши и запусти: проверки запроса", async (t
 test("Действия окна", async (t) => {
   await t.test("заметка: цитата + ссылка на раздел + дата", () => {
     const entry = A.formatNoteEntry({ text: "vector  хранит\nэлементы подряд", rel: "ref/06-konteynery.md", title: "Контейнеры [x]", section: "Вектор", slug: "вектор" }, "2026-09-24");
-    assert.equal(entry, "> vector хранит элементы подряд\n>\n> — [Контейнеры x → Вектор](../ref/06-konteynery.md#вектор) · 2026-09-24\n");
+    assert.equal(entry, "> vector хранит элементы подряд\n>\n> — [Контейнеры x → Вектор](../ref/06-konteynery.md#вектор) | 2026-09-24\n");
   });
   await t.test("заметка: rel с «..» не превращается в ссылку", () => {
     assert.equal(A.formatNoteEntry({ text: "t", rel: "../../evil.md", title: "T" }, "d").indexOf("]("), -1);

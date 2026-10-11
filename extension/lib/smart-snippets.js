@@ -180,7 +180,7 @@ function describeAdds(adds) {
   const parts = [];
   if (adds.includes.length) parts.push(adds.includes.map((h) => '`<' + h + '>`').join(', '));
   if (adds.funcs.length) parts.push(adds.funcs.map((f) => '`' + f + '()`').join(', '));
-  return parts.length ? 'Добавит: ' + parts.join(' · ') : 'Всё нужное уже подключено';
+  return parts.length ? 'Добавит: ' + parts.join(' | ') : 'Всё нужное уже подключено';
 }
 
 function registerSmartSnippets(context) {

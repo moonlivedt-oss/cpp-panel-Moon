@@ -36,7 +36,7 @@ function formatNoteEntry(n, dateStr) {
   const slug = String(n.slug || '').replace(/[^\p{L}\p{N}\-_]/gu, '').slice(0, 120);
   const label = [plain(n.title, 80), plain(n.section, 80)].filter(Boolean).join(' → ') || 'источник';
   const src = rel ? '[' + label + '](../' + rel + (slug ? '#' + slug : '') + ')' : label;
-  return '> ' + text + '\n>\n> — ' + src + ' · ' + dateStr + '\n';
+  return '> ' + text + '\n>\n> — ' + src + ' | ' + dateStr + '\n';
 }
 /** Вставить запись в конец раздела «## Из справочника» (раздел создаётся в конце файла, если его нет). */
 function insertNoteEntry(md, entry) {

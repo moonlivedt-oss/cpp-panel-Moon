@@ -403,13 +403,13 @@
       if (t.pass) passed++;
       if (t.skipped) {   // хост остановил прогон: программа зависла или кончилось время
         rows += '<div class="cd-run-t skip"><span class="cd-run-tmark">–</span><span class="cd-run-tin">вход: <code>' +
-          testShow(t["in"] == null ? "∅" : t["in"]) + "</code> · не запускался</span></div>";
+          testShow(t["in"] == null ? "∅" : t["in"]) + "</code> | не запускался</span></div>";
         return;
       }
       rows += '<div class="cd-run-t ' + (t.pass ? "ok" : "bad") + '"><span class="cd-run-tmark">' + (t.pass ? "✓" : "✗") + "</span>" +
         '<span class="cd-run-tin">вход: <code>' + testShow(t["in"] == null ? "∅" : t["in"]) + "</code></span>" +
         (t.pass ? "" : '<span class="cd-run-tgot">вывод <code>' + testShow(t.got == null ? "" : t.got) +
-          '</code> · ждали <code>' + testShow(t.expected == null ? "" : t.expected) + "</code></span>") +
+          '</code> | ждали <code>' + testShow(t.expected == null ? "" : t.expected) + "</code></span>") +
         // программа упала: причина простыми словами + начало stderr (там часто what() исключения)
         (t.crash ? '<span class="cd-run-tcrash">💥 Программа упала: ' + escapeHtml(String(t.crash)) +
           (t.stderr ? '<code>' + escapeHtml(String(t.stderr).slice(0, 300)) + "</code>" : "") + "</span>" : "") + "</div>";

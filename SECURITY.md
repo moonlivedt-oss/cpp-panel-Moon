@@ -38,6 +38,6 @@
 (`subframe7536.custom-ui-style`) или **Custom CSS and JS** (`be5invis.vscode-custom-css`). Сам
 механизм внедрения (патч файлов воркбенча) реализуют эти расширения, а не данный проект.
 Уязвимости самого механизма внедрения сообщай в их репозитории:
-[Custom UI Style](https://github.com/subframe7536/vscode-custom-ui-style) ·
+[Custom UI Style](https://github.com/subframe7536/vscode-custom-ui-style) /
 [Custom CSS and JS](https://github.com/be5invis/vscode-custom-css). Боковая панель работает без
 загрузчика и этого механизма не задействует.

@@ -46,7 +46,7 @@ const library = require('./lib/library');
 // Якорь целостности рантайма: перед впечатыванием сверяем SHA-256 cpp-docs-runtime.js с этим
 // значением (подмена файла на диске не пройдёт). Ставит `npm run hash:runtime`; пусто — проверку
 // пропускаем. Доверенная точка тут сам extension.js.
-const RUNTIME_SHA256 = '70e2a94b509c173481eb0569c96ed290297b8951b791573f9633ee588abe86dd'; /* HASH:runtime — ставит scripts/hash-runtime.js */
+const RUNTIME_SHA256 = '8c9bf89a3cb3483d467724dbb0ef3f512d77452cbf885dc7be2a6a48aad60272'; /* HASH:runtime — ставит scripts/hash-runtime.js */
 win.setRuntimeAnchor(RUNTIME_SHA256);
 
 function activate(context) {

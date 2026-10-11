@@ -4,7 +4,7 @@
 >
 > Нужна база: [файлы](../ref/08-struct-fayly.md#21-файлы), [строки](../ref/05-stroki.md), [`map`](../ref/06-konteynery.md#12-словарь-stdmap), [исключения](../ref/14-isklyucheniya.md).
 
-[← Консоль как экран](06-konsol-ekran.md) · [ИИ врагов →](08-ii-vragov.md) · [Сквозной проект](../proekt/01-podzemelye.md)
+[← Консоль как экран](06-konsol-ekran.md) / [ИИ врагов →](08-ii-vragov.md) / [Сквозной проект](../proekt/01-podzemelye.md)
 
 ---
 
@@ -432,4 +432,4 @@ void autosave(const Save &s) {
 
 ---
 
-[← Консоль как экран](06-konsol-ekran.md) · [ИИ врагов →](08-ii-vragov.md)
+[← Консоль как экран](06-konsol-ekran.md) / [ИИ врагов →](08-ii-vragov.md)

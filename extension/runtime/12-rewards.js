@@ -158,7 +158,7 @@
   }
   function dailyRecordLine(type) {
     var b = typeBest(type, null), t = state.records[cdDate(0)];
-    if (t && t.ms) return "сегодня " + mmss(t.ms) + (t.tries > 1 ? ", попыток " + t.tries : ", с первой попытки") + (b && b !== t ? " · рекорд " + mmss(b.ms) : "");
+    if (t && t.ms) return "сегодня " + mmss(t.ms) + (t.tries > 1 ? ", попыток " + t.tries : ", с первой попытки") + (b && b !== t ? " | рекорд " + mmss(b.ms) : "");
     return b ? "рекорд " + mmss(b.ms) : "";
   }
   function recordsHtml() {
@@ -175,9 +175,9 @@
     var last = keys.slice(0, 14).map(function (k) {
       var r = state.records[k];
       return "<li><span>" + escapeHtml(k) + "</span><span>" + escapeHtml(DAILY_TYPES[r.type] || "") + "</span><b>" + (r.ms ? mmss(r.ms) : "—") + "</b><span>" +
-        (r.tries || 1) + " " + plural(r.tries || 1, ["попытка", "попытки", "попыток"]) + (r.hint ? " · с подсказкой" : "") + "</span></li>";
+        (r.tries || 1) + " " + plural(r.tries || 1, ["попытка", "попытки", "попыток"]) + (r.hint ? " | с подсказкой" : "") + "</span></li>";
     }).join("");
-    return '<div class="cd-rec-sum">Серия задачи дня: <b>' + dailyStreak() + "</b> · всего решено: <b>" + keys.length + "</b></div>" +
+    return '<div class="cd-rec-sum">Серия задачи дня: <b>' + dailyStreak() + "</b> | всего решено: <b>" + keys.length + "</b></div>" +
       '<div class="tablewrap"><table class="cd-rec-t"><thead><tr><th>Вид</th><th>Решено</th><th>Лучшее время</th><th>Попыток в среднем</th><th>С первой без подсказок</th></tr></thead><tbody>' +
       rows + "</tbody></table></div>" + '<div class="cd-rec-last"><div>Последние дни</div><ul>' + last + "</ul></div>";
   }

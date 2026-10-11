@@ -180,7 +180,7 @@
       var rec = state.exams[exam.id];
       html = '<div class="cd-quiz cd-exam" data-exam="' + escapeHtml(exam.id) + '" data-topics="' + escapeHtml(exam.topics.join(",")) + '" data-total="' + qs.length + '">' +
         '<div class="cd-quiz-head">Итоговая проверка' +
-        (rec && rec.passed ? ' <span class="cd-exam-badge">зачтено · лучший результат ' + rec.best + " из " + rec.total + "</span>" : "") + "</div>" +
+        (rec && rec.passed ? ' <span class="cd-exam-badge">зачтено | лучший результат ' + rec.best + " из " + rec.total + "</span>" : "") + "</div>" +
         '<div class="cd-exam-rule">Засчитывается первый ответ на каждый вопрос. Зачёт — от ' + Math.ceil(qs.length * EXAM_PASS) + " верных из " + qs.length + ".</div>";
     } else {
       html = '<div class="cd-quiz"><div class="cd-quiz-head">Проверь себя</div>';
@@ -256,7 +256,7 @@
     var dd = Math.round((new Date(rec.due) - new Date(t)) / 86400000);
     return { status: "later", days: dd };
   }
-  // Что будет с интервалом при оценке g — без сохранения (подпись на кнопке «Помню · через 2 дн.»).
+  // Что будет с интервалом при оценке g — без сохранения (подпись на кнопке «Помню | через 2 дн.»).
   function cdPreview(id, grade) {
     var rec = state.cards[id] || { ivl: 0, ease: 2.3 };
     if (grade === 0) return 1;
@@ -850,7 +850,7 @@
     }
     var hh = st.heap.map(function (b) {
       return '<div class="cd-mem-blk' + (b.dead ? " dead" : "") + '" data-id="#' + escapeHtml(b.id) + '"><span class="cd-mem-bid">#' + escapeHtml(b.id) + "</span>" +
-        '<span class="cd-mem-bt">' + escapeHtml(b.type) + (b.dead ? " · освобождено" : "") + "</span>" + (b.val ? memVal(b.val) : "") + "</div>";
+        '<span class="cd-mem-bt">' + escapeHtml(b.type) + (b.dead ? " | освобождено" : "") + "</span>" + (b.val ? memVal(b.val) : "") + "</div>";
     }).join("");
     setHTML(box.querySelector(".cd-mem-stack"), sh || '<div class="cd-mem-empty">пусто</div>');
     setHTML(box.querySelector(".cd-mem-heap"), hh || '<div class="cd-mem-empty">пусто</div>');

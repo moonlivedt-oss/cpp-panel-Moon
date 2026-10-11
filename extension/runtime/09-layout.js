@@ -109,7 +109,7 @@
     winEl.classList.toggle("rolled", !!state.rolled);
     if (state.rollW) winEl.style.setProperty("--roll-w", state.rollW + "px");
     if (rollInfoEl) {
-      // Полоска: значок раздела · тема › раздел · сколько прочитано.
+      // Полоска: значок раздела | тема › раздел | сколько прочитано.
       var home = winEl.classList.contains("home") || !current;
       var t = home ? "Главная" : (current.title || current.name).split(/[:(]/)[0].trim();
       var sec = !home && crumbEl ? crumbEl.textContent : "";

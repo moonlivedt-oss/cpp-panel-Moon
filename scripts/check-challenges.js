@@ -176,7 +176,7 @@ function containsInOrder(got, want) {
 const failures = [];
 const stats = { predict: 0, parsons: 0, run: 0, runSolved: 0, runNoSol: [], ctxSkip: 0, steps: 0, stepsRun: 0, noCtx: 0, skipped: 0, repeat: 0, checkpoint: 0 };
 function fail(where, msg) { failures.push(where + '\n      ' + msg.replace(/\n/g, '\n      ')); }
-function note(where, msg) { if (VERBOSE) console.log('  · ' + where + ' — ' + msg); }
+function note(where, msg) { if (VERBOSE) console.log('  | ' + where + ' — ' + msg); }
 
 for (const file of mdFiles(ROOT)) {
   const rel = path.relative(ROOT, file).replace(/\\/g, '/');
