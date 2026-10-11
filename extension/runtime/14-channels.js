@@ -73,10 +73,13 @@
     if (_mcSubscribed || !MCM) return;
     _mcSubscribed = true;
     _esLive = true;   // контекст редактора и метка приходят событиями — опрос файлов не нужен
+    // Метка и прогресс — своей библиотеки (stamp / stamp-unreal …). Отписки снимает cdStop: после
+    // смены библиотеки старое окно не должно ловить события.
     try {
-      MCM.on("editor", function (txt) { var p = parseEditorText(String(txt)); if (p) { editorPayload = p; applyEditorPayload(p); } });
-      MCM.on("stamp", function (txt) { applyStampText(String(txt)); });
-      MCM.on("progress", function (txt) { onProgressEvent(String(txt)); });
+      cdTrack(MCM.on("editor", function (txt) { var p = parseEditorText(String(txt)); if (p) { editorPayload = p; applyEditorPayload(p); } }));
+      cdTrack(MCM.on(libEv("stamp"), function (txt) { applyStampText(String(txt)); }));
+      cdTrack(MCM.on(libEv("progress"), function (txt) { onProgressEvent(String(txt)); }));
+      cdTrack(MCM.on("lib", function (txt) { onLibEvent(String(txt)); }));
     } catch (e) { _esLive = false; }
   }
   function bridgeInfo() {
@@ -141,8 +144,9 @@
       var p = parseEditorText(ev.data);
       if (p) { editorPayload = p; applyEditorPayload(p); }
     });
-    _es.addEventListener("stamp", function (ev) { applyStampText(ev.data); });
-    _es.addEventListener("progress", function (ev) { onProgressEvent(ev.data); });
+    _es.addEventListener(libEv("stamp"), function (ev) { applyStampText(ev.data); });
+    _es.addEventListener(libEv("progress"), function (ev) { onProgressEvent(ev.data); });
+    _es.addEventListener("lib", function (ev) { onLibEvent(ev.data); });
   }
   // Записать зеркало прогресса через мост (во вкладке — сообщением). Асинхронно; true — запрос ушёл.
   function bridgeWrite(u, text, beacon) {

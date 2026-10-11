@@ -75,7 +75,7 @@ function writeEditorContext(context, info) {
 /** «Найти в справочнике» без плавающего окна: открываем подходящий .md прямо в редакторе
  *  (ошибка → словарь ошибок; слово → файл с ним в заголовке, иначе в тексте). */
 function lookupFallback(word, diag) {
-  const root = findDocsRoot();
+  const root = findDocsRoot('cpp');   // справочник по слову C++ — всегда библиотека C++
   if (!root) { vscode.window.showWarningMessage('Документация не найдена.'); return; }
   let files = [];
   try { files = buildDocsData(root).files; } catch (e) {}
@@ -153,7 +153,7 @@ function registerEditorBridge(context) {
     if (!IDENT_RE.test(word)) word = '';
     const diag = info && cleanDiag(info.diag);
     if (!word && !diag) { vscode.window.showInformationMessage('Поставь курсор на слово или на строку с ошибкой.'); return; }
-    if (!windowInjected() && !require('./panel').panelOpen()) { lookupFallback(word, diag); return; }
+    if ((!windowInjected() && !require('./panel').panelOpen()) || require('./docs').activeLibrary() !== 'cpp') { lookupFallback(word, diag); return; }
     _lookupReq = { word: word, diag: diag, ts: Date.now() };
     writeEditorContext(context, info);
   }));
@@ -191,8 +191,9 @@ function openDocTarget(context, rel, hash) {
   if (!/^[\w\-/]+\.md$/.test(rel) || rel.split('/').indexOf('..') !== -1) return;
   const slug = String(hash || '').replace(/[^\p{L}\p{N}\-_]/gu, '').slice(0, 160);
   const { windowInjected } = require('./window');
-  if (!windowInjected() && !require('./panel').panelOpen()) {
-    const root = findDocsRoot();
+  // Окно показывает Unreal — материал C++ туда не грузим, открываем .md в редакторе.
+  if ((!windowInjected() && !require('./panel').panelOpen()) || require('./docs').activeLibrary() !== 'cpp') {
+    const root = findDocsRoot('cpp');
     if (root) require('./sidebar').openDoc(path.join(root, rel), false);
     return;
   }

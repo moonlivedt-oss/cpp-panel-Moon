@@ -1570,6 +1570,11 @@
   "background:color-mix(in srgb,var(--fg) 3%,var(--panel));color:var(--muted);font:inherit;font-size:12px;font-weight:600;transition:border-color var(--cd-t-fast),color var(--cd-t-fast);}" +
   "#" + WIN_ID + " .cd-hpill:hover{border-color:var(--ac);color:var(--fg);}" +
   "#" + WIN_ID + " .cd-hrev{padding:0 10px 0 9px;}" +
+  "#" + WIN_ID + " .cd-hlib{gap:5px;font-size:12px;}" +
+  "#" + WIN_ID + " .cd-hlib-cur{color:var(--fg);font-weight:700;}" +
+  "#" + WIN_ID + " .cd-hlib-arr{color:var(--ac);font-size:13px;line-height:1;}" +
+  "#" + WIN_ID + " .cd-hlib-to{opacity:.7;}" +
+  "#" + WIN_ID + " .cd-hlib:hover .cd-hlib-to{opacity:1;}" +
   "#" + WIN_ID + " .cd-hrev-ic{font-size:13px;line-height:1;}" +
   "#" + WIN_ID + " .cd-hrev-n{color:var(--fg);font-variant-numeric:tabular-nums;}" +
   "#" + WIN_ID + " .cd-hrev.due{border-color:color-mix(in srgb,var(--ty) 50%,var(--bd));}" +
@@ -1619,6 +1624,7 @@
   "#" + WIN_ID + ".hc3 .cd-hnext-t,#" + WIN_ID + ".hc3 .cd-hb-home{display:none;}" +
   "#" + WIN_ID + ".hc3 .cd-hnext{padding:0 12px;}" +
   "#" + WIN_ID + ".hc4 .cd-hx .cd-hpill{display:none;}" +
+  "#" + WIN_ID + ".hc4 .cd-hx .cd-hpill.cd-hlib{display:inline-flex;}" +
 
   // ===== Читалка, полировка (2026-09-25) =====
   // (1) Без лигатур в коде: шрифт склеивает != в ≠, -> в стрелку — новичок перепечатает значок и получит ошибку.

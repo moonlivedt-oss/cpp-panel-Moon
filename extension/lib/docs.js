@@ -28,7 +28,41 @@ function workspaceTrusted() {
   try { return !(vscode.workspace && vscode.workspace.isTrusted === false); } catch (e) { return true; }
 }
 
-function findDocsRoot() {
+// ============================================================
+//  Библиотеки документации: C++ (основа) и Unreal Engine (дополнение). Окно показывает одну за
+//  раз; у каждой свой корень, свой файл данных, своя метка и свой прогресс (lib/storage.js,
+//  lib/progress.js), поэтому окно одной библиотеки не читает ничего из другой.
+// ============================================================
+const LIBRARIES = {
+  cpp: { id: 'cpp', title: 'Документация C++', short: 'C++', suffix: '' },
+  unreal: { id: 'unreal', title: 'Документация Unreal Engine', short: 'UE', suffix: '-unreal' },
+};
+const LIBRARY_IDS = Object.keys(LIBRARIES);
+let ACTIVE_LIB = 'cpp';
+function isLibrary(id) { return Object.prototype.hasOwnProperty.call(LIBRARIES, String(id)); }
+function setActiveLibrary(id) { if (isLibrary(id)) ACTIVE_LIB = id; return ACTIVE_LIB; }
+function activeLibrary() { return ACTIVE_LIB; }
+function libraryInfo(id) { return LIBRARIES[isLibrary(id) ? id : ACTIVE_LIB]; }
+
+/** Корень документации Unreal: настройка cppDocs.unrealPath (+ список cppDocs.unrealPaths).
+ *  Как и cppDocs.path — только в доверенной папке (контент идёт в привилегированную оболочку). */
+function findUnrealRoot() {
+  if (!workspaceTrusted()) return null;
+  const conf = vscode.workspace.getConfiguration('cppDocs');
+  const list = [conf.get('unrealPath')].concat(Array.isArray(conf.get('unrealPaths')) ? conf.get('unrealPaths') : []);
+  for (const p of list) {
+    if (typeof p === 'string' && p && fs.existsSync(path.join(p, INDEX_FILE))) return p;
+  }
+  return null;
+}
+
+/** Корень библиотеки lib (по умолчанию — активной). null — документации нет. */
+function findDocsRoot(lib) {
+  const id = isLibrary(lib) ? lib : ACTIVE_LIB;
+  return id === 'unreal' ? findUnrealRoot() : findCppRoot();
+}
+
+function findCppRoot() {
   if (workspaceTrusted()) {
     const folders = vscode.workspace.workspaceFolders || [];
     for (const folder of folders) {
@@ -363,5 +397,6 @@ function buildDocsData(root) {
 module.exports = {
   INDEX_FILE, MAX_DOC_BYTES, RECENT_LIMIT,
   setBundledDocs, bundledDocs, workspaceTrusted, findDocsRoot,
+  LIBRARIES, LIBRARY_IDS, isLibrary, setActiveLibrary, activeLibrary, libraryInfo,
   collectGroups, buildDocsData, searchSections, slugify,
 };

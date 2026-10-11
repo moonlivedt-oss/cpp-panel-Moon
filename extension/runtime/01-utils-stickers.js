@@ -10,8 +10,12 @@
   //    javascript:-адреса и встраиваемые фреймы до DOM не доходят.
   var TT_POLICY = null;
   try {
-    if (window.trustedTypes && typeof window.trustedTypes.createPolicy === "function") {
+    // Политику с тем же именем второй раз не создать (CSP без 'allow-duplicates'): перезапуск рантайма
+    // (смена библиотеки C++ ⇄ Unreal, повторное включение в Moon Core) берёт уже созданную.
+    if (window.__CPPDOCS_TT__) TT_POLICY = window.__CPPDOCS_TT__;
+    else if (window.trustedTypes && typeof window.trustedTypes.createPolicy === "function") {
       TT_POLICY = window.trustedTypes.createPolicy("cppdocs", { createHTML: function (s) { return scrubHTML(s); } });
+      try { Object.defineProperty(window, "__CPPDOCS_TT__", { value: TT_POLICY, configurable: false, writable: false }); } catch (e) {}
     }
   } catch (e) { TT_POLICY = null; }   // политика уже есть / имя не впущено CSP — остаётся строка
   var SCRUB_TAGS = /<\s*\/?\s*(script|iframe|frame|frameset|object|embed|base|meta|link)\b[^>]*>/gi;

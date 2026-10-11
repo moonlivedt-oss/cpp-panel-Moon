@@ -27,6 +27,8 @@
       "supported": "limited",
       "restrictedConfigurations": [
         "cppDocs.path",
+        "cppDocs.unrealPath",
+        "cppDocs.unrealPaths",
         "cppDocs.localRun",
         "cppDocs.compiler"
       ],
@@ -91,6 +93,19 @@
           "default": [],
           "description": "Несколько возможных папок с документацией (разные машины/проекты). Берётся первая существующая; проверяется после cppDocs.path."
         },
+        "cppDocs.unrealPath": {
+          "type": "string",
+          "default": "",
+          "description": "Папка с документацией Unreal Engine (дополнение к C++). Пока она указана, в шапке окна и в боковой панели есть переключатель C++ ⇄ Unreal: у каждой библиотеки своё окно, свои отметки и свой прогресс."
+        },
+        "cppDocs.unrealPaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Несколько возможных папок с документацией Unreal (разные машины). Берётся первая существующая; проверяется после cppDocs.unrealPath."
+        },
         "cppDocs.openInPreview": {
           "type": "boolean",
           "default": true,
@@ -144,6 +159,11 @@
         "command": "cppDocs.focusSearch",
         "title": "Документация C++: искать в панели",
         "icon": "$(search)"
+      },
+      {
+        "command": "cppDocs.switchLibrary",
+        "title": "Документация: переключить C++ ⇄ Unreal",
+        "icon": "$(arrow-swap)"
       },
       {
         "command": "cppDocs.openMenu",
@@ -209,6 +229,11 @@
     ],
     "menus": {
       "view/title": [
+        {
+          "command": "cppDocs.switchLibrary",
+          "when": "view == cppDocsPanel && config.cppDocs.unrealPath",
+          "group": "navigation@0"
+        },
         {
           "command": "cppDocs.enableWindow",
           "when": "view == cppDocsPanel",

@@ -13,6 +13,8 @@ const shared = require('./shared-progress');
 
 const RECENT_KEY = 'cppDocs.recent';
 const PINS_KEY = 'cppDocs.pins';
+/** Ключ списка своей библиотеки: у C++ прежний (cppDocs.recent), у Unreal — cppDocs.recent.unreal. */
+function libKey(key) { const lib = docs.activeLibrary(); return lib === 'cpp' ? key : key + '.' + lib; }
 const READ_KEY = 'cppDocs.read';        // какие материалы уже открывали — отметка «изучено»
 
 // В globalState храним пути ОТНОСИТЕЛЬНО папки docs («ref/05-stroki.md»). Абсолютные ломались:
@@ -120,6 +122,7 @@ class DocsViewProvider {
   /** Список из globalState → абсолютные пути в текущей папке доков. Старые абсолютные записи
    *  переводим в rel и сохраняем обратно (миграция один раз). */
   list(key) {
+    key = libKey(key);
     const root = findDocsRoot();
     const raw = this.context.globalState.get(key, []);
     if (!root || !Array.isArray(raw)) return [];
@@ -130,6 +133,7 @@ class DocsViewProvider {
   }
   /** Сохранить список абсолютных путей как rel. Путь вне папки доков отбрасываем. */
   saveList(key, absList) {
+    key = libKey(key);
     const root = findDocsRoot();
     const rels = [];
     (absList || []).forEach((p) => { const r = relOf(root, p); if (r && rels.indexOf(r) === -1) rels.push(r); });
@@ -240,20 +244,20 @@ class DocsViewProvider {
       if (!workspaceTrusted()) { vscode.window.showWarningMessage('Запуск задач доступен только в доверенной папке (Workspace Trust).'); return; }
       await this.runTask('Документация: проверить');
     } else if (msg.type === 'clearRecent') {
-      await this.context.globalState.update(RECENT_KEY, []);
+      await this.context.globalState.update(libKey(RECENT_KEY), []);
       this.renderAll();
     } else if (msg.type === 'resetProgress') {
       // Прогресс теперь общий с плавающим окном — сброс без спроса стёр бы и его отметки.
       const pick = await vscode.window.showWarningMessage('Снять все отметки «изучено»? Они снимутся и в боковой панели, и в плавающем окне (решённые задачи и карточки не трогаются).', { modal: true }, 'Снять');
       if (pick !== 'Снять') return;
-      await this.context.globalState.update(READ_KEY, []);
+      await this.context.globalState.update(libKey(READ_KEY), []);
       try { shared.clearWindowRead(this.context); } catch (e) {}
       this.postState();
     } else if (msg.type === 'togglePin') {
       await this.togglePin(msg.file);
       this.renderAll();
     } else if (msg.type === 'clearPins') {
-      await this.context.globalState.update(PINS_KEY, []);
+      await this.context.globalState.update(libKey(PINS_KEY), []);
       this.renderAll();
     } else if (msg.type === 'toggleRead') {
       await this.toggleRead(msg.file);
@@ -794,7 +798,7 @@ class DocsViewProvider {
 </style></head><body>
 
 <div class="panel-head">
-  <span class="panel-title">📘 Документация C++</span>
+  <span class="panel-title">📘 ${escapeHtml(docs.libraryInfo().title)}</span>
   <span class="panel-sub">справочник · примеры · задачник — клик открывает материал</span>
 </div>
 
@@ -1266,4 +1270,4 @@ ${showTasks ? `<div class="actions">
   }
 }
 
-module.exports = { DocsViewProvider, openDoc, RECENT_KEY, relOf };
+module.exports = { DocsViewProvider, openDoc, RECENT_KEY, relOf, libKey };

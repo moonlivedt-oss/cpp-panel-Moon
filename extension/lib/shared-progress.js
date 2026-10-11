@@ -30,7 +30,7 @@ function readMirror(context) {
 function windowRead(context) {
   const m = readMirror(context);
   if (!m) return [];
-  const key = m.st.size + ':' + m.st.mtimeMs;
+  const key = m.file + ':' + m.st.size + ':' + m.st.mtimeMs;   // файл — свой у каждой библиотеки
   if (_cache.key === key && _cache.read) return _cache.read;
   const read = m.doc.state.read && typeof m.doc.state.read === 'object' ? m.doc.state.read : {};
   const out = Object.keys(read).filter((rel) => read[rel] && /\.md$/i.test(rel) && rel.split('/').indexOf('..') === -1);

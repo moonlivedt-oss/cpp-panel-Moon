@@ -16,10 +16,10 @@
     var b = el("div"); b.id = BTN_ID;
     b.setAttribute("role", "button");
     b.setAttribute("tabindex", "0");
-    b.setAttribute("aria-label", "Открыть документацию C++");
-    b.title = "Документация C++ — клик открывает окно, перетаскиванием можно отодвинуть";
+    b.setAttribute("aria-label", "Открыть: " + libMeta().title);
+    b.title = libMeta().title + " — клик открывает окно, перетаскиванием можно отодвинуть";
     // Наклейка-смайл вместо эмодзи 📘 — фирменное лицо расширения даже при закрытом окне.
-    setHTML(b, '<span class="cd-btn-face">' + stickerMarkup("welcome", 20) + "</span>C++" +
+    setHTML(b, '<span class="cd-btn-face">' + stickerMarkup("welcome", 20) + "</span>" + escapeHtml(libMeta().short) +
       (n ? ' <span class="cd-badge">' + n + "</span>" : ""));
     // Клик открывает окно; но если пилюлю только что перетащили — click, идущий следом
     // за mouseup, подавляем (иначе перетащил — и случайно открыл/закрыл окно).
@@ -178,6 +178,7 @@
     // после старта: VS Code не разбирает мегабайты данных на критическом пути запуска.
     try { var d0l = DATA(); if (d0l && d0l.lazy) refreshData(); } catch (e) { reportError("lazy-data", e); }
     try { pollStamp(); } catch (e) {}
+    try { pollLib(); } catch (e) {}
     try { pollEditor(); } catch (e) {}
     // маркер по тексту: показ кнопки «Выделить» после выделения, скрытие при прокрутке
     cdOnGlobal(document, "mouseup", function () { setTimeout(onArticleSelect, 0); });
@@ -196,7 +197,7 @@
       // Поток не подключён: VS Code стартует окно раньше хоста расширений, и в файле моста сначала
       // лежит адрес прошлого сеанса. Перечитываем адрес (bridgeInfo кеширует его на 10 с) — как
       // только хост поднимет мост, окно подключится само.
-      if (!_esLive) { try { pollStamp(); } catch (e) {} try { bridgeInfo(); } catch (e) {} }
+      if (!_esLive) { try { pollStamp(); } catch (e) {} try { pollLib(); } catch (e) {} try { bridgeInfo(); } catch (e) {} }
       else if (tick % 30 === 0) { try { bridgeInfo(); } catch (e) {} }        // освежить список хостов
     }, 1000);
     cdTrack(function () { clearInterval(tickTimer); });
@@ -208,7 +209,9 @@
     } catch (e) {}
     // Новое API Moon Core: выключение модуля без перезагрузки окна, акцент фона через общую шину.
     try { cdMoonCoreApi(); } catch (e) { reportError("moon-core-api", e); }
-    console.log("[cpp-docs] плавающее окно " + VERSION + " готово, материалов: " + (DATA() ? DATA().files.length : 0));
+    // Окно перезапущено переключателем библиотеки и было открыто — открываем сразу и новое.
+    if (LIB_NEXT && LIB_NEXT.open) { try { openWindow(); } catch (e) { reportError("смена библиотеки", e); } }
+    console.log("[cpp-docs] плавающее окно " + VERSION + " (" + LIB + ") готово, материалов: " + (DATA() ? DATA().files.length : 0));
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
@@ -243,5 +246,8 @@
     onProgressEvent: onProgressEvent, keepRecent: keepRecent, aheadNotes: aheadNotes, renderCodeAlts: renderCodeAlts,
     // для тестов: новое API Moon Core (выключение без перезагрузки, общая шина)
     _mc: { api: cdMoonCoreApi, stop: cdStop, shareView: cdShareView, offCount: function () { return _cdOff.length; } },
+    // для тестов: переключатель библиотеки C++ ⇄ Unreal
+    _lib: { id: function () { return LIB; }, lsKey: function () { return LS_KEY; }, other: otherLibrary, switchTo: switchLibrary,
+      onEvent: onLibEvent, poll: pollLib, ev: libEv, sanitize: sanitizeData },
   };
 })();

@@ -21,6 +21,7 @@
     try { document.removeEventListener("keydown", onKey, true); } catch (e) {}
     try { if (_docked) applyDock(false); } catch (e) {}
     try { hideHlPop(); hideItemMenu(); hideBridge(); } catch (e) {}
+    try { if (toastEl && toastEl.parentNode) toastEl.parentNode.removeChild(toastEl); toastEl = null; } catch (e) {}
     try { if (_es) { _es.close(); _es = null; } } catch (e) {}
     [WIN_ID, BTN_ID, STYLE_ID].forEach(function (id) {
       try { var n = document.getElementById(id); if (n) n.remove(); } catch (e) {}

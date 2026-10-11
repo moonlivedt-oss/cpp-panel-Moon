@@ -3,7 +3,7 @@
 
 const vscode = require('vscode');
 const path = require('path');
-const { bundledDocs } = require('./docs');
+const { bundledDocs, libraryInfo } = require('./docs');
 
 /** file:///-URL: прямые слэши, на Windows — третий слэш перед буквой диска. Символы пути
  *  кодируются (pathToFileURL): «#», «?» и «%» в имени папки иначе обрезали бы адрес в окне. */
@@ -19,11 +19,13 @@ function storageDir(context) {
 }
 /** Путь к рантайму окна: внутри установленного расширения. */
 function runtimeScriptPath(context) { return path.join(context.extensionPath, 'cpp-docs-runtime.js'); }
-/** Данные окна (window.__CPPDOCS__ = {…}). */
-function dataFilePath(context) { return path.join(storageDir(context), 'cpp-docs-data.js'); }
+/** Данные окна (window.__CPPDOCS__ = {…}) библиотеки lib (по умолчанию — активной). У C++ имя прежнее. */
+function dataFilePath(context, lib) { return path.join(storageDir(context), 'cpp-docs-data' + libraryInfo(lib).suffix + '.js'); }
 /** Крошечная метка времени сборки: окно опрашивает её (дёшево), а полный файл данных
  *  перечитывает, только когда метка сменилась. */
-function stampFilePath(context) { return path.join(storageDir(context), 'cpp-docs-stamp.js'); }
+function stampFilePath(context, lib) { return path.join(storageDir(context), 'cpp-docs-stamp' + libraryInfo(lib).suffix + '.js'); }
+/** Какая библиотека выбрана ({ lib, at }): окно читает его при старте, его смена — событие «lib». */
+function libFilePath(context) { return path.join(storageDir(context), 'cpp-docs-lib.json'); }
 /** Что под курсором в редакторе (мост доки↔редактор). */
 function editorFilePath(context) { return path.join(storageDir(context), 'cpp-docs-editor.js'); }
 
@@ -50,6 +52,6 @@ function localRunEnabled() {
 }
 
 module.exports = {
-  fileUrl, storageDir, runtimeScriptPath, dataFilePath, stampFilePath, editorFilePath,
+  fileUrl, storageDir, runtimeScriptPath, dataFilePath, stampFilePath, libFilePath, editorFilePath,
   NOTES_REL, notesFilePath, userSetting, localRunEnabled,
 };

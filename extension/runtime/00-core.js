@@ -27,7 +27,9 @@
 //
 //  Работает офлайн, без сети. Позиция окна, отметки и закладки — в localStorage.
 // ============================================================
-(function () {
+// Именованная обёртка: при переключении библиотеки (C++ ⇄ Unreal, 15-library.js) окно полностью
+// останавливается (cdStop) и рантайм запускается заново этой же функцией — с другими данными.
+(function cdRuntime() {
   "use strict";
 
   // Один рантайм на окно: загрузчик может импортировать файл повторно (перезагрузка
@@ -59,9 +61,9 @@
   var BTN_ID = "cppdocs-launch";
   var STYLE_ID = "cppdocs-style";
   /* PROTOCOL:start — генерируется из extension/lib/protocol.js, руками не править */
-  var PROTO = {"VERSION":2,"METHODS":["run","action","log"],"WRITABLE":["cpp-docs-progress.json"],"EVENTS":["editor","stamp","data","theme","progress"],"EVENT_FILES":{"cpp-docs-editor.js":"editor","cpp-docs-stamp.js":"stamp","cpp-docs-progress.json":"progress"},"MAX_BODY":8388608,"MAX_CODE":200000,"MAX_TESTS":20,"MAX_LOG":4000,"RUN_TIMEOUT_MS":60000,"ACTION_TIMEOUT_MS":8000};
+  var PROTO = {"VERSION":2,"METHODS":["run","action","log"],"WRITABLE":["cpp-docs-progress.json","cpp-docs-progress-unreal.json"],"EVENTS":["editor","stamp","data","theme","progress","stamp-unreal","progress-unreal","lib"],"EVENT_FILES":{"cpp-docs-editor.js":"editor","cpp-docs-stamp.js":"stamp","cpp-docs-progress.json":"progress","cpp-docs-stamp-unreal.js":"stamp-unreal","cpp-docs-progress-unreal.json":"progress-unreal","cpp-docs-lib.json":"lib"},"MAX_BODY":8388608,"MAX_CODE":200000,"MAX_TESTS":20,"MAX_LOG":4000,"RUN_TIMEOUT_MS":60000,"ACTION_TIMEOUT_MS":8000};
   /* PROTOCOL:end */
-  var LS_KEY = "cppdocs.ui.v1";
+  var LS_KEY = "cppdocs.ui.v1";   // у C++; у других библиотек свой ключ — см. «Библиотека» ниже
   // Шрифты чтения — только те, что уже есть в системе (без встраивания, офлайн).
   var RFONTS = {
     system: { label: "Системный", stack: "" },
@@ -140,6 +142,10 @@
     if (d.run && typeof d.run === "object") out.run = { enabled: !!d.run.enabled };
     if (typeof d.scriptNonce === "string") out.scriptNonce = d.scriptNonce;
     if (typeof d.protocol === "number") out.protocol = d.protocol;
+    if (typeof d.lib === "string" && LIB_RE.test(d.lib)) out.lib = d.lib;
+    if (typeof d.libUrl === "string") out.libUrl = d.libUrl;
+    var libs = sanitizeLibs(d.libs);
+    if (libs) out.libs = libs;
     var total = 0;
     for (var i = 0; i < d.files.length && out.files.length < CD_MAX_FILES; i++) {
       var f = d.files[i];
@@ -167,6 +173,67 @@
     }
     return out;
   }
+
+  // Библиотеки для переключателя: только названия и адреса файлов, без материалов.
+  var LIB_RE = /^[a-z]{1,20}$/;
+  function sanitizeLibs(v) {
+    if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+    var out = {}, n = 0;
+    Object.keys(v).slice(0, 8).forEach(function (id) {
+      var m = v[id];
+      if (!LIB_RE.test(id) || !m || typeof m !== "object" || Array.isArray(m)) return;
+      out[id] = {
+        title: cdStr(m.title).slice(0, 80), short: cdStr(m.short).slice(0, 12), available: !!m.available,
+        dataUrl: cdStr(m.dataUrl), stampUrl: cdStr(m.stampUrl), progressUrl: cdStr(m.progressUrl)
+      };
+      n++;
+    });
+    return n ? out : null;
+  }
+
+  // ---------------------------------------------------------------------------
+  //  Библиотека: C++ (основа) или Unreal Engine (дополнение). Окно показывает одну; у каждой
+  //  свой файл данных, своя метка, своё зеркало прогресса и свой ключ localStorage — поэтому окно
+  //  одной библиотеки ничего не читает из другой. Выбор лежит в файле хранилища (data.libUrl):
+  //  если в оболочку впечатано оглавление не той библиотеки, оно сразу заменяется «заготовкой»
+  //  нужной (адреса без материалов), и тексты читаются уже из её файла (refreshData).
+  // ---------------------------------------------------------------------------
+  /** Заготовка данных библиотеки id: общие адреса (мост, наклейки, фон) + её файлы, материалов нет. */
+  function libStub(d, id) {
+    var m = d.libs[id], s = { lib: id, root: "", indexFile: d.indexFile, generatedAt: 0, files: [], lazy: true };
+    ["editorUrl", "stickersUrl", "stickersAllUrl", "stickerImgs", "palStickerImgs", "bridgeUrl", "extDirUrl", "aliveUrl",
+      "bgImages", "run", "scriptNonce", "protocol", "libs", "libUrl"].forEach(function (k) { if (d[k] !== undefined) s[k] = d[k]; });
+    s.dataUrl = m.dataUrl; s.stampUrl = m.stampUrl; s.progressUrl = m.progressUrl;
+    return s;
+  }
+  /** Какая библиотека выбрана: файл расширения, иначе localStorage (его пишет переключатель). */
+  function chosenLibrary(d) {
+    var id = "";
+    try { var o = d.libUrl ? JSON.parse(appRead(d.libUrl) || "null") : null; if (o && typeof o.lib === "string") id = o.lib; } catch (e) {}
+    if (!id) { try { id = localStorage.getItem("cppdocs.lib") || ""; } catch (e) {} }
+    return LIB_RE.test(id) ? id : "";
+  }
+  // Перезапуск переключателем: библиотека уже выбрана кнопкой (файл выбора хост мог ещё не переписать).
+  var LIB_NEXT = window.__CPPDOCS_NEXT__ || null;
+  window.__CPPDOCS_NEXT__ = null;
+  if (!IN_PANEL && !LIB_NEXT) {
+    try {
+      var d0lib = DATA(), want = d0lib && d0lib.libs ? chosenLibrary(d0lib) : "";
+      if (want && want !== (d0lib.lib || "cpp") && d0lib.libs[want] && d0lib.libs[want].available) {
+        window.__CPPDOCS__ = libStub(d0lib, want);   // оглавление другой библиотеки отбрасываем
+      }
+    } catch (e) {}
+  }
+  var LIB = (DATA() && DATA().lib) || "cpp";
+  if (LIB !== "cpp") LS_KEY = "cppdocs." + LIB + ".ui.v1";
+  /** Название и короткое имя библиотеки (для кнопки-запуска, шапки, главной). */
+  function libMeta(id) {
+    var d = DATA(), m = d && d.libs && d.libs[id || LIB];
+    var dflt = (id || LIB) === "unreal" ? { title: "Документация Unreal Engine", short: "UE" } : { title: "Документация C++", short: "C++" };
+    return { title: (m && m.title) || dflt.title, short: (m && m.short) || dflt.short };
+  }
+  /** Имя события своей библиотеки: stamp / stamp-unreal, progress / progress-unreal. */
+  function libEv(name) { return LIB === "cpp" ? name : name + "-" + LIB; }
 
   // nonce для CSP: кешируем из первого (инлайн) снимка данных и вешаем на динамически
   // создаваемые <script>/<style>, чтобы они проходили CSP, когда она есть. Внешний

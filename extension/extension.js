@@ -1,6 +1,7 @@
 // Расширение «Документация C++». Точка входа: activate() связывает модули из lib/.
 //
-//   lib/docs.js           где папка docs, чтение .md, группы материалов
+//   lib/docs.js           где папка docs, чтение .md, группы материалов; библиотеки C++ / Unreal
+//   lib/library.js        выбор библиотеки (переключатель окна, команда, синхронизация окон VS Code)
 //   lib/sidebar.js        боковая панель (webview) и openDoc
 //   lib/storage.js        файлы в globalStorage, их file:///-адреса, «опасные» настройки
 //   lib/data.js           данные плавающего окна (window.__CPPDOCS__)
@@ -23,7 +24,7 @@ const path = require('path');
 const { log, showLog, logChannel } = require('./lib/log');
 const docs = require('./lib/docs');
 const { INDEX_FILE, setBundledDocs, findDocsRoot, buildDocsData } = docs;
-const { DocsViewProvider, openDoc, RECENT_KEY } = require('./lib/sidebar');
+const { DocsViewProvider, openDoc, RECENT_KEY, libKey } = require('./lib/sidebar');
 const storage = require('./lib/storage');
 const { safeJsonForScript, writeDocsData } = require('./lib/data');
 const win = require('./lib/window');
@@ -40,16 +41,19 @@ const { openWindowPanel } = require('./lib/panel');
 const { dispatch } = require('./lib/rpc');
 const { writeEditorContext, registerEditorBridge, openDocTarget } = require('./lib/editor-bridge');
 const mooncore = require('./lib/mooncore');
+const library = require('./lib/library');
 
 // Якорь целостности рантайма: перед впечатыванием сверяем SHA-256 cpp-docs-runtime.js с этим
 // значением (подмена файла на диске не пройдёт). Ставит `npm run hash:runtime`; пусто — проверку
 // пропускаем. Доверенная точка тут сам extension.js.
-const RUNTIME_SHA256 = '5b5c7911ebd517452a3ad17b31f352566af40f2456be1be68cae7a4d8e98756e'; /* HASH:runtime — ставит scripts/hash-runtime.js */
+const RUNTIME_SHA256 = '70e2a94b509c173481eb0569c96ed290297b8951b791573f9633ee588abe86dd'; /* HASH:runtime — ставит scripts/hash-runtime.js */
 win.setRuntimeAnchor(RUNTIME_SHA256);
 
 function activate(context) {
   // Документация, вшитая в расширение (extension/docs) — fallback, если в проекте нет своей.
   if (context && context.extensionPath) setBundledDocs(path.join(context.extensionPath, 'docs'));
+  // Какая библиотека выбрана (C++ / Unreal) — до всего, что ищет папку документации.
+  try { library.initLibrary(context); } catch (e) { log('выбор библиотеки', e); }
   const provider = new DocsViewProvider(context);
 
   context.subscriptions.push(
@@ -57,7 +61,7 @@ function activate(context) {
     vscode.commands.registerCommand('cppDocs.refresh', () => provider.renderAll()),
     vscode.commands.registerCommand('cppDocs.openMenu', () => provider.openMenuPanel()),
     vscode.commands.registerCommand('cppDocs.clearRecent', () => {
-      context.globalState.update(RECENT_KEY, []);
+      context.globalState.update(libKey(RECENT_KEY), []);
       provider.renderAll();
     }),
     vscode.commands.registerCommand('cppDocs.openIndex', () => {
@@ -69,6 +73,8 @@ function activate(context) {
       openDoc(path.join(root, INDEX_FILE), false);
     }),
     vscode.commands.registerCommand('cppDocs.focusSearch', () => provider.focusSearch()),
+    // Переключатель C++ ⇄ Unreal (то же делает кнопка в шапке окна).
+    vscode.commands.registerCommand('cppDocs.switchLibrary', () => library.toggleLibrary(context)),
     // Плавающее окно: подключить / отключить / проверить (прямой патч оболочки).
     vscode.commands.registerCommand('cppDocs.enableWindow', () => enableWindow(context)),
     vscode.commands.registerCommand('cppDocs.disableWindow', () => disableWindow(context)),
@@ -182,12 +188,18 @@ function activate(context) {
   // Кнопка в статус-баре — постоянная точка входа в меню, мимо левого сайдбара.
   if (typeof vscode.window.createStatusBarItem === 'function') {
     const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-    status.text = '$(book) C++';
-    status.tooltip = 'Открыть меню документации C++';
+    const paintStatus = () => {
+      const info = docs.libraryInfo();
+      status.text = '$(book) ' + info.short;
+      status.tooltip = 'Открыть меню: ' + info.title;
+    };
+    paintStatus();
     status.command = 'cppDocs.openMenu';
     status.show();
-    context.subscriptions.push(status);
+    context.subscriptions.push(status, library.onLibraryChange(paintStatus));
   }
+  // Сменилась библиотека — боковая панель показывает её материалы.
+  context.subscriptions.push(library.onLibraryChange(() => { try { provider.renderAll(); } catch (e) { log('панель после смены библиотеки', e); } }));
 
   // Сменился активный редактор — обновим подсветку открытого файла в панели.
   if (typeof vscode.window.onDidChangeActiveTextEditor === 'function') {

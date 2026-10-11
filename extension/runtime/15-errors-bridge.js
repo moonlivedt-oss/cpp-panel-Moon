@@ -416,6 +416,7 @@
   }
   // Запасной опрос (поток событий не подключён): читаем файл и применяем, только если он изменился.
   function pollEditor() {
+    if (LIB !== "cpp") return;   // подсказки по коду — только в окне C++ (см. applyEditorPayload)
     var d = DATA(); var url = (d && d.editorUrl) || bootVal("editorUrl");
     if (!url) return;
     var txt = fileRead(url); if (txt == null) return;   // файла нет — не трогаем плашку
@@ -425,6 +426,8 @@
     applyEditorPayload(editorPayload);
   }
   function applyEditorPayload(payload) {
+    // Подсказки по слову/ошибке ведут в справочник C++ — окно другой библиотеки их не показывает.
+    if (LIB !== "cpp") return;
     if (payload && payload.lookup) handleLookup(payload.lookup);   // работает и при закрытом окне
     if (winEl) applyEditorEnv(payload);                              // индикатор «редактор» в шапке
     var diag = payload && payload.diag && typeof payload.diag.msg === "string" ? payload.diag : null;

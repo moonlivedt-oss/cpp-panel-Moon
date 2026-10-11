@@ -148,6 +148,18 @@
     nextBtnEl = el("button", null); nextBtnEl.type = "button"; nextBtnEl.className = "cd-hnext"; nextBtnEl.hidden = true;
     setHTML(nextBtnEl, '<span class="cd-hnext-t"></span><span class="cd-hnext-a" aria-hidden="true">›</span>');
     nextBtnEl.addEventListener("click", function (e) { e.stopPropagation(); goHeadNext(); });
+    // Переключатель библиотеки: «C++ ⇄ UE». Есть, только если вторая библиотека подключена.
+    var libTo = otherLibrary();
+    if (libTo) {
+      var libBtn = el("button", null); libBtn.type = "button"; libBtn.className = "cd-hpill cd-hlib";
+      libBtn.title = "Сейчас: " + libMeta().title + ". Переключить на «" + libMeta(libTo).title + "» — это другое окно со своими материалами и прогрессом";
+      libBtn.setAttribute("aria-label", libBtn.title);
+      setHTML(libBtn, '<b class="cd-hlib-cur"></b><span class="cd-hlib-arr" aria-hidden="true">⇄</span><span class="cd-hlib-to"></span>');
+      libBtn.querySelector(".cd-hlib-cur").textContent = libMeta().short;
+      libBtn.querySelector(".cd-hlib-to").textContent = libMeta(libTo).short;
+      libBtn.addEventListener("click", function (e) { e.stopPropagation(); switchLibrary(libTo); });
+      hx.appendChild(libBtn);
+    }
     hx.appendChild(revBellEl); hx.appendChild(edBtnEl); hx.appendChild(nextBtnEl);
     // Инструменты чтения (Главная, Разделы, ⚙ ⌕ ⧉, Изучено) — тоже в шапке; наполняются ниже, где создаются.
     var hrt = el("div", null); hrt.className = "cd-hrt";

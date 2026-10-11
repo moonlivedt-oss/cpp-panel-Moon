@@ -138,6 +138,10 @@ async function handleAction(context, req, opts) {
       return { id, ok: true };
     }
     if (req.kind === 'editor-text') return Object.assign({ id }, editorText());
+    if (req.kind === 'library' && typeof req.lib === 'string') {
+      // Окно переключилось на другую библиотеку: панель, статус-бар и другие окна VS Code — следом.
+      return Object.assign({ id }, require('./library').switchLibrary(context, req.lib));
+    }
     if (req.kind === 'export-anki' && typeof req.text === 'string' && req.text.length <= MAX_EXPORT) {
       // Диалог ждёт человека дольше, чем окно ждёт ответа, — отвечаем сразу, итог покажет VS Code.
       exportAnki(req.text, Number(req.count) || 0).catch((e) => log('экспорт карточек', e));
@@ -171,7 +175,7 @@ function pushEvent(context, name) {
     try { text = fs.readFileSync(path.join(storageDir(context), name), 'utf8'); } catch (e) { return; }
     // Зеркало прогресса бывает в мегабайты — окнам шлём только метку времени: окно, у которого
     // прогресс старше, само перечитает файл (своё же сохранение по метке узнаётся и не трогается).
-    if (EVENT_FILES[name] === 'progress') {
+    if (/^progress/.test(EVENT_FILES[name])) {
       let at = 0;
       try { const o = JSON.parse(text); at = o && typeof o.savedAt === 'number' ? o.savedAt : 0; } catch (e) { return; }
       text = JSON.stringify({ savedAt: at });

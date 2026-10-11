@@ -65,7 +65,8 @@
     d.files.forEach(function (f) { if (state.read[f.rel]) done++; });
     var allDone = done >= total && total > 0;   // весь справочник пройден — время поздравить
     var hi = done > 0 ? "С возвращением!" : "Привет!";   // неразрывный пробел: «С» не повисает отдельной строкой
-    var sub = greeting() + (done > 0 ? " · продолжаем учить C++" : " · документация C++ у тебя под рукой");
+    var libName = libMeta().title.replace(/^Документация\s+/, "");   // «C++» / «Unreal Engine»
+    var sub = greeting() + (done > 0 ? " · продолжаем учить " + libName : " · документация " + libName + " у тебя под рукой");
 
     var ts = taskStats(), streak = streakDays(), cc = cardCounts();
     var pct = total ? Math.round((done / total) * 100) : 0;
@@ -716,7 +717,7 @@
       });
       if (!edPopDocBound) {   // один слушатель на документ — не плодим при пересборке окна
         edPopDocBound = true;
-        document.addEventListener("mousedown", function (e) {
+        cdOnGlobal(document, "mousedown", function (e) {   // снимается в cdStop (смена библиотеки)
           if (edPopEl && !edPopEl.hidden && !edPopEl.contains(e.target) && !(edBtnEl && edBtnEl.contains(e.target))) edPopEl.hidden = true;
         }, true);
       }

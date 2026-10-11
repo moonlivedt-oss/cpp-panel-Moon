@@ -3,11 +3,11 @@
 
 const fs = require('fs');
 const path = require('path');
-const { MAX_DOC_BYTES, findDocsRoot, buildDocsData, bundledDocs } = require('./docs');
+const { MAX_DOC_BYTES, findDocsRoot, buildDocsData, bundledDocs, LIBRARY_IDS, libraryInfo, activeLibrary, isLibrary } = require('./docs');
 const storage = require('./storage');
 const { progressFilePath } = require('./progress');
 const { bridgeFilePath } = require('./bridge');
-const { fileUrl, dataFilePath, stampFilePath, editorFilePath,
+const { fileUrl, dataFilePath, stampFilePath, libFilePath, editorFilePath,
   NOTES_REL, notesFilePath, localRunEnabled } = storage;
 
 // safeJsonForScript и тело для оболочки — в wb-patch: их же зовёт window-cli.js (батники установщика).
@@ -91,16 +91,35 @@ function bgImages(context) {
   } catch (e) { return []; }
 }
 
-/** Данные окна: материалы + адреса файловых каналов. Одни и те же для файла данных (автообновление)
- *  и для впечатывания в оболочку. null — документации нет. */
-function windowData(context) {
-  const root = findDocsRoot();
+/** Библиотеки для переключателя окна: только адреса и названия — ни одного материала. Окно
+ *  другой библиотеки читает свой файл данных само, уже после переключения. */
+function librariesMeta(context) {
+  const out = {};
+  LIBRARY_IDS.forEach((id) => {
+    const info = libraryInfo(id);
+    out[id] = {
+      title: info.title, short: info.short, available: !!findDocsRoot(id),
+      dataUrl: fileUrl(dataFilePath(context, id)), stampUrl: fileUrl(stampFilePath(context, id)),
+      progressUrl: fileUrl(progressFilePath(context, id)),
+    };
+  });
+  return out;
+}
+
+/** Данные окна библиотеки lib (по умолчанию — активной): материалы + адреса файловых каналов. Одни
+ *  и те же для файла данных (автообновление) и для впечатывания в оболочку. null — документации нет. */
+function windowData(context, lib) {
+  const id = isLibrary(lib) ? lib : activeLibrary();
+  const root = findDocsRoot(id);
   if (!root) return null;
   let data;
   try { data = buildDocsData(root); } catch (e) { return null; }
   try {
-    data.dataUrl = fileUrl(dataFilePath(context));      // для кнопки «Обновить» в окне
-    data.stampUrl = fileUrl(stampFilePath(context));    // лёгкая метка для автообновления
+    data.lib = id;                                       // чья это документация (окно сверяет с выбранной)
+    data.libs = librariesMeta(context);                  // переключатель C++ / Unreal
+    data.libUrl = fileUrl(libFilePath(context));         // какая библиотека выбрана (окно читает при старте)
+    data.dataUrl = fileUrl(dataFilePath(context, id));  // для кнопки «Обновить» в окне
+    data.stampUrl = fileUrl(stampFilePath(context, id)); // лёгкая метка для автообновления
     // маячок «живо ли расширение» — крошечный package.json (окно читает его раз в минуту)
     data.aliveUrl = context.extensionPath ? fileUrl(path.join(context.extensionPath, 'package.json')) : '';
     data.editorUrl = fileUrl(editorFilePath(context));  // мост доки↔редактор: слово под курсором
@@ -108,7 +127,7 @@ function windowData(context) {
     data.protocol = require('./protocol').VERSION;       // окно другой версии протокола это увидит
     addImageData(context, data);                         // наклейки: адреса файлов для окна
     data.bridgeUrl = fileUrl(bridgeFilePath(context));   // где окно узнает адрес моста (запись без Node)
-    data.progressUrl = fileUrl(progressFilePath(context)); // зеркало прогресса (резервная копия localStorage)
+    data.progressUrl = fileUrl(progressFilePath(context, id)); // зеркало прогресса (резервная копия localStorage)
     data.extDirUrl = context.extensionPath ? fileUrl(context.extensionPath) : '';
     data.bgImages = bgImages(context);                   // какие bg-*.webp есть (фон главной)
     addWindowExtras(context, root, data);                // «в редактор»/«в заметки» + блокнот из хранилища
@@ -116,15 +135,23 @@ function windowData(context) {
   return data;
 }
 
-/** Сгенерировать/обновить файл данных окна. Возвращает true при успехе. */
-function writeDocsData(context) {
-  const data = windowData(context);
+/** Сгенерировать/обновить файлы данных окна: всех библиотек (lib не задана) или одной. Каждая —
+ *  в свой файл со своей меткой. Возвращает true, если записан файл активной библиотеки (или lib). */
+function writeDocsData(context, lib) {
+  const ids = isLibrary(lib) ? [lib] : LIBRARY_IDS;
+  let ok = false;
+  ids.forEach((id) => { if (writeLibraryData(context, id) && (id === (isLibrary(lib) ? lib : activeLibrary()))) ok = true; });
+  try { require('./mooncore').publishToc(); } catch (e) {}   // оглавление для окна Moon Core
+  return ok;
+}
+function writeLibraryData(context, id) {
+  const data = windowData(context, id);
   if (!data) return false;
   // Окно читает файл как текст и разбирает JSON.parse; safeJsonForScript глушит </script, <!--,
   // <script и разделители строк — контент может прийти из чужого воркспейса.
   const body = 'window.__CPPDOCS__ = ' + safeJsonForScript(data) + ';\n';
   try {
-    const p = dataFilePath(context);
+    const p = dataFilePath(context, id);
     fs.mkdirSync(path.dirname(p), { recursive: true });
     // Атомарно: окно читает файл асинхронно и могло бы поймать его недописанным (2+ МБ),
     // а несколько окон VS Code пишут его одновременно.
@@ -132,8 +159,7 @@ function writeDocsData(context) {
     fs.writeFileSync(tmp, body, 'utf8');
     fs.renameSync(tmp, p);
     // Метку пишем ПОСЛЕ данных: окно, увидев новую метку, перечитает уже готовый data-файл.
-    try { fs.writeFileSync(stampFilePath(context), 'window.__CPPDOCS_STAMP__ = ' + JSON.stringify(data.generatedAt || Date.now()) + ';\n', 'utf8'); } catch (e) {}
-    try { require('./mooncore').publishToc(); } catch (e) {}   // оглавление для окна Moon Core
+    try { fs.writeFileSync(stampFilePath(context, id), 'window.__CPPDOCS_STAMP__ = ' + JSON.stringify(data.generatedAt || Date.now()) + ';\n', 'utf8'); } catch (e) {}
     return true;
   } catch (e) { return false; }
 }
@@ -147,4 +173,4 @@ function windowDataBody(context, nonce) {
   return lazyWindowBody(data, nonce);
 }
 
-module.exports = { safeJsonForScript, writeDocsData, windowDataBody, windowData, extractImages };
+module.exports = { safeJsonForScript, writeDocsData, windowDataBody, windowData, extractImages, librariesMeta };

@@ -21,6 +21,11 @@ const { progressFilePath } = require('./progress');
 const { onBroadcast, WRITABLE, MAX_BODY } = require('./bridge');
 const { METHODS } = require('./protocol');
 const { escapeScript } = require('./wb-patch');
+const { activeLibrary, libraryInfo } = require('./docs');
+const { onLibraryChange } = require('./library');
+
+/** Имя события своей библиотеки: stamp / stamp-unreal, progress / progress-unreal. */
+function libEvent(name) { const lib = activeLibrary(); return lib === 'cpp' ? name : name + '-' + lib; }
 
 let _panel = null, _panelSavedAt = 0;
 
@@ -77,7 +82,7 @@ function handleWrite(context, msg) {
 function openWindowPanel(context, dispatch) {
   if (_panel) { _panel.reveal(); return _panel; }
   const roots = [vscode.Uri.file(context.extensionPath), vscode.Uri.file(storageDir(context))];
-  const panel = vscode.window.createWebviewPanel('cppDocsWindow', 'Документация C++', vscode.ViewColumn.Beside,
+  const panel = vscode.window.createWebviewPanel('cppDocsWindow', libraryInfo().title, vscode.ViewColumn.Beside,
     { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: roots });
   try { panel.iconPath = vscode.Uri.file(path.join(context.extensionPath, 'icon.svg')); } catch (e) {}
   _panel = panel;
@@ -99,10 +104,10 @@ function openWindowPanel(context, dispatch) {
   // События хоста (из общего каталога хранилища) → окно во вкладке.
   subs.push(onBroadcast((event, text) => {
     if (!_panel) return;
-    if (event === 'stamp') {
+    if (event === libEvent('stamp')) {
       const data = panelData(context, panel.webview);
       if (data) panel.webview.postMessage({ type: 'data', data: data });
-    } else if (event === 'progress') {
+    } else if (event === libEvent('progress')) {
       // Прогресс поменяли снаружи (плавающее окно, боковая панель) — вкладке шлём зеркало целиком:
       // файлы она не читает. Своё же сохранение узнаём по метке и назад не гоняем.
       let at = 0;
@@ -116,6 +121,11 @@ function openWindowPanel(context, dispatch) {
   if (typeof vscode.window.onDidChangeActiveColorTheme === 'function') {
     subs.push(vscode.window.onDidChangeActiveColorTheme(() => { if (_panel) panel.webview.postMessage({ type: 'theme' }); }));
   }
+  // Сменилась библиотека — вкладка собирается заново: новая страница, ничего от прежней библиотеки.
+  subs.push(onLibraryChange(() => {
+    if (_panel !== panel) return;
+    try { panel.title = libraryInfo().title; panel.webview.html = buildHtml(context, panel.webview); } catch (e) { log('окно во вкладке: смена библиотеки', e); }
+  }));
   panel.onDidDispose(() => { _panel = null; subs.forEach((d) => { try { d.dispose(); } catch (e) {} }); });
   panel.webview.html = buildHtml(context, panel.webview);
   return panel;

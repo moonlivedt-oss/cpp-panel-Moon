@@ -23,7 +23,8 @@ const KEEP_BACKUPS = 14;
 const KEEP_IMPORTS = 5;
 const BAD_KEYS = ['__proto__', 'constructor', 'prototype'];
 
-function progressFilePath(context) { return path.join(storageDir(context), 'cpp-docs-progress.json'); }
+/** Зеркало прогресса библиотеки lib (по умолчанию — активной): у C++ и Unreal свои отметки. */
+function progressFilePath(context, lib) { return path.join(storageDir(context), 'cpp-docs-progress' + require('./docs').libraryInfo(lib).suffix + '.json'); }
 function backupDir(context) { return path.join(storageDir(context), 'progress-backups'); }
 
 function today() {
@@ -59,17 +60,22 @@ function writeAtomic(file, text) {
   fs.renameSync(tmp, file);
 }
 
-/** Раз в день — датированная копия зеркала; старше KEEP_BACKUPS — удаляем. */
+/** Раз в день — датированная копия зеркала каждой библиотеки; старше KEEP_BACKUPS — удаляем. */
 function dailyBackup(context) {
+  const docs = require('./docs');
+  docs.LIBRARY_IDS.forEach((lib) => backupLibrary(context, lib, docs.libraryInfo(lib).suffix));
+}
+function backupLibrary(context, lib, suffix) {
   try {
-    const src = progressFilePath(context);
+    const src = progressFilePath(context, lib);
     if (!fs.existsSync(src)) return;
     const dir = backupDir(context);
     fs.mkdirSync(dir, { recursive: true });
-    const dest = path.join(dir, 'progress-' + today() + '.json');
+    const dest = path.join(dir, 'progress' + suffix + '-' + today() + '.json');
     if (!fs.existsSync(dest) && parseProgress(fs.readFileSync(src, 'utf8'))) fs.copyFileSync(src, dest);
     const all = fs.readdirSync(dir);
-    const old = all.filter((f) => /^progress-\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort().reverse().slice(KEEP_BACKUPS)
+    const dated = new RegExp('^progress' + suffix + '-\\d{4}-\\d{2}-\\d{2}\\.json$');
+    const old = all.filter((f) => dated.test(f)).sort().reverse().slice(KEEP_BACKUPS)
       // копии «перед импортом» тоже не копим без конца: хватит последних KEEP_IMPORTS
       .concat(all.filter((f) => /^before-import-\d+\.json$/.test(f)).sort((a, b) => parseInt(b.slice(14), 10) - parseInt(a.slice(14), 10)).slice(KEEP_IMPORTS));
     old.forEach((f) => { try { fs.unlinkSync(path.join(dir, f)); } catch (e) {} });

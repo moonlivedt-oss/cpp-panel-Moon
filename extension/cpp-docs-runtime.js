@@ -27,7 +27,9 @@
 //
 //  Работает офлайн, без сети. Позиция окна, отметки и закладки — в localStorage.
 // ============================================================
-(function () {
+// Именованная обёртка: при переключении библиотеки (C++ ⇄ Unreal, 15-library.js) окно полностью
+// останавливается (cdStop) и рантайм запускается заново этой же функцией — с другими данными.
+(function cdRuntime() {
   "use strict";
 
   // Один рантайм на окно: загрузчик может импортировать файл повторно (перезагрузка
@@ -59,9 +61,9 @@
   var BTN_ID = "cppdocs-launch";
   var STYLE_ID = "cppdocs-style";
   /* PROTOCOL:start — генерируется из extension/lib/protocol.js, руками не править */
-  var PROTO = {"VERSION":2,"METHODS":["run","action","log"],"WRITABLE":["cpp-docs-progress.json"],"EVENTS":["editor","stamp","data","theme","progress"],"EVENT_FILES":{"cpp-docs-editor.js":"editor","cpp-docs-stamp.js":"stamp","cpp-docs-progress.json":"progress"},"MAX_BODY":8388608,"MAX_CODE":200000,"MAX_TESTS":20,"MAX_LOG":4000,"RUN_TIMEOUT_MS":60000,"ACTION_TIMEOUT_MS":8000};
+  var PROTO = {"VERSION":2,"METHODS":["run","action","log"],"WRITABLE":["cpp-docs-progress.json","cpp-docs-progress-unreal.json"],"EVENTS":["editor","stamp","data","theme","progress","stamp-unreal","progress-unreal","lib"],"EVENT_FILES":{"cpp-docs-editor.js":"editor","cpp-docs-stamp.js":"stamp","cpp-docs-progress.json":"progress","cpp-docs-stamp-unreal.js":"stamp-unreal","cpp-docs-progress-unreal.json":"progress-unreal","cpp-docs-lib.json":"lib"},"MAX_BODY":8388608,"MAX_CODE":200000,"MAX_TESTS":20,"MAX_LOG":4000,"RUN_TIMEOUT_MS":60000,"ACTION_TIMEOUT_MS":8000};
   /* PROTOCOL:end */
-  var LS_KEY = "cppdocs.ui.v1";
+  var LS_KEY = "cppdocs.ui.v1";   // у C++; у других библиотек свой ключ — см. «Библиотека» ниже
   // Шрифты чтения — только те, что уже есть в системе (без встраивания, офлайн).
   var RFONTS = {
     system: { label: "Системный", stack: "" },
@@ -140,6 +142,10 @@
     if (d.run && typeof d.run === "object") out.run = { enabled: !!d.run.enabled };
     if (typeof d.scriptNonce === "string") out.scriptNonce = d.scriptNonce;
     if (typeof d.protocol === "number") out.protocol = d.protocol;
+    if (typeof d.lib === "string" && LIB_RE.test(d.lib)) out.lib = d.lib;
+    if (typeof d.libUrl === "string") out.libUrl = d.libUrl;
+    var libs = sanitizeLibs(d.libs);
+    if (libs) out.libs = libs;
     var total = 0;
     for (var i = 0; i < d.files.length && out.files.length < CD_MAX_FILES; i++) {
       var f = d.files[i];
@@ -167,6 +173,67 @@
     }
     return out;
   }
+
+  // Библиотеки для переключателя: только названия и адреса файлов, без материалов.
+  var LIB_RE = /^[a-z]{1,20}$/;
+  function sanitizeLibs(v) {
+    if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+    var out = {}, n = 0;
+    Object.keys(v).slice(0, 8).forEach(function (id) {
+      var m = v[id];
+      if (!LIB_RE.test(id) || !m || typeof m !== "object" || Array.isArray(m)) return;
+      out[id] = {
+        title: cdStr(m.title).slice(0, 80), short: cdStr(m.short).slice(0, 12), available: !!m.available,
+        dataUrl: cdStr(m.dataUrl), stampUrl: cdStr(m.stampUrl), progressUrl: cdStr(m.progressUrl)
+      };
+      n++;
+    });
+    return n ? out : null;
+  }
+
+  // ---------------------------------------------------------------------------
+  //  Библиотека: C++ (основа) или Unreal Engine (дополнение). Окно показывает одну; у каждой
+  //  свой файл данных, своя метка, своё зеркало прогресса и свой ключ localStorage — поэтому окно
+  //  одной библиотеки ничего не читает из другой. Выбор лежит в файле хранилища (data.libUrl):
+  //  если в оболочку впечатано оглавление не той библиотеки, оно сразу заменяется «заготовкой»
+  //  нужной (адреса без материалов), и тексты читаются уже из её файла (refreshData).
+  // ---------------------------------------------------------------------------
+  /** Заготовка данных библиотеки id: общие адреса (мост, наклейки, фон) + её файлы, материалов нет. */
+  function libStub(d, id) {
+    var m = d.libs[id], s = { lib: id, root: "", indexFile: d.indexFile, generatedAt: 0, files: [], lazy: true };
+    ["editorUrl", "stickersUrl", "stickersAllUrl", "stickerImgs", "palStickerImgs", "bridgeUrl", "extDirUrl", "aliveUrl",
+      "bgImages", "run", "scriptNonce", "protocol", "libs", "libUrl"].forEach(function (k) { if (d[k] !== undefined) s[k] = d[k]; });
+    s.dataUrl = m.dataUrl; s.stampUrl = m.stampUrl; s.progressUrl = m.progressUrl;
+    return s;
+  }
+  /** Какая библиотека выбрана: файл расширения, иначе localStorage (его пишет переключатель). */
+  function chosenLibrary(d) {
+    var id = "";
+    try { var o = d.libUrl ? JSON.parse(appRead(d.libUrl) || "null") : null; if (o && typeof o.lib === "string") id = o.lib; } catch (e) {}
+    if (!id) { try { id = localStorage.getItem("cppdocs.lib") || ""; } catch (e) {} }
+    return LIB_RE.test(id) ? id : "";
+  }
+  // Перезапуск переключателем: библиотека уже выбрана кнопкой (файл выбора хост мог ещё не переписать).
+  var LIB_NEXT = window.__CPPDOCS_NEXT__ || null;
+  window.__CPPDOCS_NEXT__ = null;
+  if (!IN_PANEL && !LIB_NEXT) {
+    try {
+      var d0lib = DATA(), want = d0lib && d0lib.libs ? chosenLibrary(d0lib) : "";
+      if (want && want !== (d0lib.lib || "cpp") && d0lib.libs[want] && d0lib.libs[want].available) {
+        window.__CPPDOCS__ = libStub(d0lib, want);   // оглавление другой библиотеки отбрасываем
+      }
+    } catch (e) {}
+  }
+  var LIB = (DATA() && DATA().lib) || "cpp";
+  if (LIB !== "cpp") LS_KEY = "cppdocs." + LIB + ".ui.v1";
+  /** Название и короткое имя библиотеки (для кнопки-запуска, шапки, главной). */
+  function libMeta(id) {
+    var d = DATA(), m = d && d.libs && d.libs[id || LIB];
+    var dflt = (id || LIB) === "unreal" ? { title: "Документация Unreal Engine", short: "UE" } : { title: "Документация C++", short: "C++" };
+    return { title: (m && m.title) || dflt.title, short: (m && m.short) || dflt.short };
+  }
+  /** Имя события своей библиотеки: stamp / stamp-unreal, progress / progress-unreal. */
+  function libEv(name) { return LIB === "cpp" ? name : name + "-" + LIB; }
 
   // nonce для CSP: кешируем из первого (инлайн) снимка данных и вешаем на динамически
   // создаваемые <script>/<style>, чтобы они проходили CSP, когда она есть. Внешний
@@ -435,8 +502,12 @@
   //    javascript:-адреса и встраиваемые фреймы до DOM не доходят.
   var TT_POLICY = null;
   try {
-    if (window.trustedTypes && typeof window.trustedTypes.createPolicy === "function") {
+    // Политику с тем же именем второй раз не создать (CSP без 'allow-duplicates'): перезапуск рантайма
+    // (смена библиотеки C++ ⇄ Unreal, повторное включение в Moon Core) берёт уже созданную.
+    if (window.__CPPDOCS_TT__) TT_POLICY = window.__CPPDOCS_TT__;
+    else if (window.trustedTypes && typeof window.trustedTypes.createPolicy === "function") {
       TT_POLICY = window.trustedTypes.createPolicy("cppdocs", { createHTML: function (s) { return scrubHTML(s); } });
+      try { Object.defineProperty(window, "__CPPDOCS_TT__", { value: TT_POLICY, configurable: false, writable: false }); } catch (e) {}
     }
   } catch (e) { TT_POLICY = null; }   // политика уже есть / имя не впущено CSP — остаётся строка
   var SCRUB_TAGS = /<\s*\/?\s*(script|iframe|frame|frameset|object|embed|base|meta|link)\b[^>]*>/gi;
@@ -3915,6 +3986,11 @@
   "background:color-mix(in srgb,var(--fg) 3%,var(--panel));color:var(--muted);font:inherit;font-size:12px;font-weight:600;transition:border-color var(--cd-t-fast),color var(--cd-t-fast);}" +
   "#" + WIN_ID + " .cd-hpill:hover{border-color:var(--ac);color:var(--fg);}" +
   "#" + WIN_ID + " .cd-hrev{padding:0 10px 0 9px;}" +
+  "#" + WIN_ID + " .cd-hlib{gap:5px;font-size:12px;}" +
+  "#" + WIN_ID + " .cd-hlib-cur{color:var(--fg);font-weight:700;}" +
+  "#" + WIN_ID + " .cd-hlib-arr{color:var(--ac);font-size:13px;line-height:1;}" +
+  "#" + WIN_ID + " .cd-hlib-to{opacity:.7;}" +
+  "#" + WIN_ID + " .cd-hlib:hover .cd-hlib-to{opacity:1;}" +
   "#" + WIN_ID + " .cd-hrev-ic{font-size:13px;line-height:1;}" +
   "#" + WIN_ID + " .cd-hrev-n{color:var(--fg);font-variant-numeric:tabular-nums;}" +
   "#" + WIN_ID + " .cd-hrev.due{border-color:color-mix(in srgb,var(--ty) 50%,var(--bd));}" +
@@ -3964,6 +4040,7 @@
   "#" + WIN_ID + ".hc3 .cd-hnext-t,#" + WIN_ID + ".hc3 .cd-hb-home{display:none;}" +
   "#" + WIN_ID + ".hc3 .cd-hnext{padding:0 12px;}" +
   "#" + WIN_ID + ".hc4 .cd-hx .cd-hpill{display:none;}" +
+  "#" + WIN_ID + ".hc4 .cd-hx .cd-hpill.cd-hlib{display:inline-flex;}" +
 
   // ===== Читалка, полировка (2026-09-25) =====
   // (1) Без лигатур в коде: шрифт склеивает != в ≠, -> в стрелку — новичок перепечатает значок и получит ошибку.
@@ -4586,6 +4663,18 @@
     nextBtnEl = el("button", null); nextBtnEl.type = "button"; nextBtnEl.className = "cd-hnext"; nextBtnEl.hidden = true;
     setHTML(nextBtnEl, '<span class="cd-hnext-t"></span><span class="cd-hnext-a" aria-hidden="true">›</span>');
     nextBtnEl.addEventListener("click", function (e) { e.stopPropagation(); goHeadNext(); });
+    // Переключатель библиотеки: «C++ ⇄ UE». Есть, только если вторая библиотека подключена.
+    var libTo = otherLibrary();
+    if (libTo) {
+      var libBtn = el("button", null); libBtn.type = "button"; libBtn.className = "cd-hpill cd-hlib";
+      libBtn.title = "Сейчас: " + libMeta().title + ". Переключить на «" + libMeta(libTo).title + "» — это другое окно со своими материалами и прогрессом";
+      libBtn.setAttribute("aria-label", libBtn.title);
+      setHTML(libBtn, '<b class="cd-hlib-cur"></b><span class="cd-hlib-arr" aria-hidden="true">⇄</span><span class="cd-hlib-to"></span>');
+      libBtn.querySelector(".cd-hlib-cur").textContent = libMeta().short;
+      libBtn.querySelector(".cd-hlib-to").textContent = libMeta(libTo).short;
+      libBtn.addEventListener("click", function (e) { e.stopPropagation(); switchLibrary(libTo); });
+      hx.appendChild(libBtn);
+    }
     hx.appendChild(revBellEl); hx.appendChild(edBtnEl); hx.appendChild(nextBtnEl);
     // Инструменты чтения (Главная, Разделы, ⚙ ⌕ ⧉, Изучено) — тоже в шапке; наполняются ниже, где создаются.
     var hrt = el("div", null); hrt.className = "cd-hrt";
@@ -6509,7 +6598,8 @@
     d.files.forEach(function (f) { if (state.read[f.rel]) done++; });
     var allDone = done >= total && total > 0;   // весь справочник пройден — время поздравить
     var hi = done > 0 ? "С возвращением!" : "Привет!";   // неразрывный пробел: «С» не повисает отдельной строкой
-    var sub = greeting() + (done > 0 ? " · продолжаем учить C++" : " · документация C++ у тебя под рукой");
+    var libName = libMeta().title.replace(/^Документация\s+/, "");   // «C++» / «Unreal Engine»
+    var sub = greeting() + (done > 0 ? " · продолжаем учить " + libName : " · документация " + libName + " у тебя под рукой");
 
     var ts = taskStats(), streak = streakDays(), cc = cardCounts();
     var pct = total ? Math.round((done / total) * 100) : 0;
@@ -7160,7 +7250,7 @@
       });
       if (!edPopDocBound) {   // один слушатель на документ — не плодим при пересборке окна
         edPopDocBound = true;
-        document.addEventListener("mousedown", function (e) {
+        cdOnGlobal(document, "mousedown", function (e) {   // снимается в cdStop (смена библиотеки)
           if (edPopEl && !edPopEl.hidden && !edPopEl.contains(e.target) && !(edBtnEl && edBtnEl.contains(e.target))) edPopEl.hidden = true;
         }, true);
       }
@@ -10408,10 +10498,13 @@
     if (_mcSubscribed || !MCM) return;
     _mcSubscribed = true;
     _esLive = true;   // контекст редактора и метка приходят событиями — опрос файлов не нужен
+    // Метка и прогресс — своей библиотеки (stamp / stamp-unreal …). Отписки снимает cdStop: после
+    // смены библиотеки старое окно не должно ловить события.
     try {
-      MCM.on("editor", function (txt) { var p = parseEditorText(String(txt)); if (p) { editorPayload = p; applyEditorPayload(p); } });
-      MCM.on("stamp", function (txt) { applyStampText(String(txt)); });
-      MCM.on("progress", function (txt) { onProgressEvent(String(txt)); });
+      cdTrack(MCM.on("editor", function (txt) { var p = parseEditorText(String(txt)); if (p) { editorPayload = p; applyEditorPayload(p); } }));
+      cdTrack(MCM.on(libEv("stamp"), function (txt) { applyStampText(String(txt)); }));
+      cdTrack(MCM.on(libEv("progress"), function (txt) { onProgressEvent(String(txt)); }));
+      cdTrack(MCM.on("lib", function (txt) { onLibEvent(String(txt)); }));
     } catch (e) { _esLive = false; }
   }
   function bridgeInfo() {
@@ -10476,8 +10569,9 @@
       var p = parseEditorText(ev.data);
       if (p) { editorPayload = p; applyEditorPayload(p); }
     });
-    _es.addEventListener("stamp", function (ev) { applyStampText(ev.data); });
-    _es.addEventListener("progress", function (ev) { onProgressEvent(ev.data); });
+    _es.addEventListener(libEv("stamp"), function (ev) { applyStampText(ev.data); });
+    _es.addEventListener(libEv("progress"), function (ev) { onProgressEvent(ev.data); });
+    _es.addEventListener("lib", function (ev) { onLibEvent(ev.data); });
   }
   // Записать зеркало прогресса через мост (во вкладке — сообщением). Асинхронно; true — запрос ушёл.
   function bridgeWrite(u, text, beacon) {
@@ -11134,6 +11228,7 @@
   }
   // Запасной опрос (поток событий не подключён): читаем файл и применяем, только если он изменился.
   function pollEditor() {
+    if (LIB !== "cpp") return;   // подсказки по коду — только в окне C++ (см. applyEditorPayload)
     var d = DATA(); var url = (d && d.editorUrl) || bootVal("editorUrl");
     if (!url) return;
     var txt = fileRead(url); if (txt == null) return;   // файла нет — не трогаем плашку
@@ -11143,6 +11238,8 @@
     applyEditorPayload(editorPayload);
   }
   function applyEditorPayload(payload) {
+    // Подсказки по слову/ошибке ведут в справочник C++ — окно другой библиотеки их не показывает.
+    if (LIB !== "cpp") return;
     if (payload && payload.lookup) handleLookup(payload.lookup);   // работает и при закрытом окне
     if (winEl) applyEditorEnv(payload);                              // индикатор «редактор» в шапке
     var diag = payload && payload.diag && typeof payload.diag.msg === "string" ? payload.diag : null;
@@ -11178,6 +11275,70 @@
     if (url) applyStampText(fileRead(url));
   }
 
+  // ==== runtime/15-library.js — переключатель библиотеки: C++ ⇄ Unreal Engine ====
+  // ---------------------------------------------------------------------------
+  //  Переключение — это смена окна, а не вкладки: текущее окно сохраняет прогресс и полностью
+  //  останавливается (cdStop: разметка, стиль, таймеры, подписки, поток событий), его данные
+  //  отпускаются, и рантайм запускается заново (cdRuntime) с заготовкой другой библиотеки — только
+  //  с адресами её файлов. Тексты она читает уже из своего файла данных (refreshData), прогресс —
+  //  из своего зеркала и своего ключа localStorage. Из прежней библиотеки не остаётся ничего.
+  //
+  //  Хост узнаёт о смене действием «library» (боковая панель, статус-бар, другие окна VS Code
+  //  переключаются следом); смену из VS Code (команда) окно ловит событием «lib».
+  //  Во вкладке страницу под новую библиотеку пересобирает сам хост.
+  // ---------------------------------------------------------------------------
+  /** Другая подключённая библиотека ('' — её нет: кнопку переключения не показываем). */
+  function otherLibrary() {
+    var d = DATA();
+    if (!d || !d.libs) return "";
+    var ids = Object.keys(d.libs).filter(function (id) { return id !== LIB && d.libs[id].available; });
+    return ids[0] || "";
+  }
+
+  var _switching = false;
+  function switchLibrary(id, fromHost) {
+    var d = DATA();
+    if (_switching || _cdStopped || !d || !d.libs || !d.libs[id] || id === LIB) return false;
+    if (!d.libs[id].available) {
+      toast("Папка «" + libMeta(id).title + "» не найдена — укажи её в настройке cppDocs.unrealPath", true);
+      return false;
+    }
+    _switching = true;
+    if (!fromHost) {
+      sendAction({ kind: "library", lib: id }, function (res) {
+        if (IN_PANEL && !res.ok) { _switching = false; toast("Не переключилось: " + (res.error || "ошибка"), true); }
+      });
+    }
+    if (IN_PANEL) return true;
+    try { localStorage.setItem("cppdocs.lib", id); } catch (e) {}
+    var stub = libStub(d, id);
+    if (CD_NONCE) stub.scriptNonce = CD_NONCE;   // новый запуск не видит своего <script> — nonce отсюда
+    window.__CPPDOCS_NEXT__ = { lib: id, open: isOpen() };
+    cdStop();
+    window.__CPPDOCS__ = stub;                   // данные прежней библиотеки больше никто не держит
+    setTimeout(function () {
+      try { cdRuntime(); } catch (e) { try { console.warn("[cpp-docs] смена библиотеки: " + (e && e.message || e)); } catch (x) {} }
+    }, 0);
+    return true;
+  }
+
+  /** Событие «lib» (файл выбора сменился): { lib, at }. */
+  function onLibEvent(txt) {
+    var o = null;
+    try { o = JSON.parse(String(txt)); } catch (e) { return; }
+    if (o && typeof o.lib === "string" && LIB_RE.test(o.lib) && o.lib !== LIB) switchLibrary(o.lib, true);
+  }
+  // Без потока событий — опрос файла выбора. Первое прочтение только запоминает метку: файл мог
+  // ещё не догнать кнопку переключения (хост не ответил), и откатывать её нельзя.
+  var _libAt = null;
+  function pollLib() {
+    if (IN_PANEL) return;
+    var d = DATA(), txt = d && d.libUrl ? appRead(d.libUrl) : null, o = null;
+    try { o = txt ? JSON.parse(txt) : null; } catch (e) { return; }
+    if (!o || typeof o.at !== "number") return;
+    if (_libAt === null) { _libAt = o.at; return; }
+    if (o.at !== _libAt) { _libAt = o.at; onLibEvent(txt); }
+  }
   // ==== runtime/15-mooncore.js — новое API Moon Core: выключение без перезагрузки, общая шина ====
   // ---------------------------------------------------------------------------
   //  Moon Core умеет выключить модуль без перезагрузки окна и снова включить его (тот же файл
@@ -11201,6 +11362,7 @@
     try { document.removeEventListener("keydown", onKey, true); } catch (e) {}
     try { if (_docked) applyDock(false); } catch (e) {}
     try { hideHlPop(); hideItemMenu(); hideBridge(); } catch (e) {}
+    try { if (toastEl && toastEl.parentNode) toastEl.parentNode.removeChild(toastEl); toastEl = null; } catch (e) {}
     try { if (_es) { _es.close(); _es = null; } } catch (e) {}
     [WIN_ID, BTN_ID, STYLE_ID].forEach(function (id) {
       try { var n = document.getElementById(id); if (n) n.remove(); } catch (e) {}
@@ -11250,10 +11412,10 @@
     var b = el("div"); b.id = BTN_ID;
     b.setAttribute("role", "button");
     b.setAttribute("tabindex", "0");
-    b.setAttribute("aria-label", "Открыть документацию C++");
-    b.title = "Документация C++ — клик открывает окно, перетаскиванием можно отодвинуть";
+    b.setAttribute("aria-label", "Открыть: " + libMeta().title);
+    b.title = libMeta().title + " — клик открывает окно, перетаскиванием можно отодвинуть";
     // Наклейка-смайл вместо эмодзи 📘 — фирменное лицо расширения даже при закрытом окне.
-    setHTML(b, '<span class="cd-btn-face">' + stickerMarkup("welcome", 20) + "</span>C++" +
+    setHTML(b, '<span class="cd-btn-face">' + stickerMarkup("welcome", 20) + "</span>" + escapeHtml(libMeta().short) +
       (n ? ' <span class="cd-badge">' + n + "</span>" : ""));
     // Клик открывает окно; но если пилюлю только что перетащили — click, идущий следом
     // за mouseup, подавляем (иначе перетащил — и случайно открыл/закрыл окно).
@@ -11412,6 +11574,7 @@
     // после старта: VS Code не разбирает мегабайты данных на критическом пути запуска.
     try { var d0l = DATA(); if (d0l && d0l.lazy) refreshData(); } catch (e) { reportError("lazy-data", e); }
     try { pollStamp(); } catch (e) {}
+    try { pollLib(); } catch (e) {}
     try { pollEditor(); } catch (e) {}
     // маркер по тексту: показ кнопки «Выделить» после выделения, скрытие при прокрутке
     cdOnGlobal(document, "mouseup", function () { setTimeout(onArticleSelect, 0); });
@@ -11430,7 +11593,7 @@
       // Поток не подключён: VS Code стартует окно раньше хоста расширений, и в файле моста сначала
       // лежит адрес прошлого сеанса. Перечитываем адрес (bridgeInfo кеширует его на 10 с) — как
       // только хост поднимет мост, окно подключится само.
-      if (!_esLive) { try { pollStamp(); } catch (e) {} try { bridgeInfo(); } catch (e) {} }
+      if (!_esLive) { try { pollStamp(); } catch (e) {} try { pollLib(); } catch (e) {} try { bridgeInfo(); } catch (e) {} }
       else if (tick % 30 === 0) { try { bridgeInfo(); } catch (e) {} }        // освежить список хостов
     }, 1000);
     cdTrack(function () { clearInterval(tickTimer); });
@@ -11442,7 +11605,9 @@
     } catch (e) {}
     // Новое API Moon Core: выключение модуля без перезагрузки окна, акцент фона через общую шину.
     try { cdMoonCoreApi(); } catch (e) { reportError("moon-core-api", e); }
-    console.log("[cpp-docs] плавающее окно " + VERSION + " готово, материалов: " + (DATA() ? DATA().files.length : 0));
+    // Окно перезапущено переключателем библиотеки и было открыто — открываем сразу и новое.
+    if (LIB_NEXT && LIB_NEXT.open) { try { openWindow(); } catch (e) { reportError("смена библиотеки", e); } }
+    console.log("[cpp-docs] плавающее окно " + VERSION + " (" + LIB + ") готово, материалов: " + (DATA() ? DATA().files.length : 0));
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
@@ -11477,5 +11642,8 @@
     onProgressEvent: onProgressEvent, keepRecent: keepRecent, aheadNotes: aheadNotes, renderCodeAlts: renderCodeAlts,
     // для тестов: новое API Moon Core (выключение без перезагрузки, общая шина)
     _mc: { api: cdMoonCoreApi, stop: cdStop, shareView: cdShareView, offCount: function () { return _cdOff.length; } },
+    // для тестов: переключатель библиотеки C++ ⇄ Unreal
+    _lib: { id: function () { return LIB; }, lsKey: function () { return LS_KEY; }, other: otherLibrary, switchTo: switchLibrary,
+      onEvent: onLibEvent, poll: pollLib, ev: libEv, sanitize: sanitizeData },
   };
 })();
