@@ -129,6 +129,32 @@ click on its heading — long documents stay scannable.
 <img src="docs/screenshots/diagram.png" alt="Reader with a hand-drawn int-overflow diagram, a collapsible «dig deeper» block and the file outline on the right" width="820">
 </div>
 
+## Two libraries: C++ and Unreal Engine
+
+A second library can sit next to the C++ reference - Unreal Engine docs (in this repo they live in
+`docs-unreal/`, still a draft). Point `cppDocs.unrealPath` at the folder (or list several in
+`cppDocs.unrealPaths` for different machines) and a **C++ / UE** switch appears in the window
+header, a button in the sidebar title and a command in the palette. No folder - no switch.
+
+These are two independent windows: each library keeps its own "studied" progress, Recent, Pinned
+and window state. The chosen library is shared by all VS Code windows. Hints for the word under
+the cursor work in the C++ window only.
+
+## Smart snippets
+
+C++ quick words (`main`, `readint`, `vec`, `sort`, `menu`...) look at the file before inserting:
+
+- missing `#include`s are added next to the existing ones; already included headers (and
+  everything when `<bits/stdc++.h>` is present) are not repeated;
+- `readint`, `readdouble`, `readline`, `readyesno` inside a function insert the call and put the
+  input helper above the current function - only if it is not there yet;
+- `main` is not offered when it already exists; snippets do not pop up in comments and strings;
+- input is validated as a whole line: "12abc" and "3.5" are not accepted as an integer,
+  `readDouble` accepts a comma, `readInt`/`readDouble` take an optional range.
+
+The full list is the "Быстрые слова" page inside the reference. Turn smart insertion off with
+`cppDocs.smartSnippets: false`.
+
 ## Recommended companion: MoonLight custom-bg
 
 Optional, but nicer with it. **MoonLight custom-bg** (id `moonlivedt.moonlight-custom-bg-setup`) is
@@ -181,7 +207,15 @@ shared.
 | Setting | Default | Meaning |
 |---|---|---|
 | `cppDocs.path` | *(empty)* | where to look for docs if the project is opened outside its own folder |
+| `cppDocs.paths` | *(empty)* | several candidate doc folders (different machines/projects): the first existing one wins |
+| `cppDocs.unrealPath` | *(empty)* | Unreal Engine docs folder; when set, the C++ / UE switch appears |
+| `cppDocs.unrealPaths` | *(empty)* | several candidate Unreal docs folders: the first existing one wins |
 | `cppDocs.openInPreview` | `true` | open files in reading mode; `false` — as text |
+| `cppDocs.editorBridge` | `true` | hint in the window for the word/error under the cursor in .cpp |
+| `cppDocs.styleHints` | `true` | course style hints in the open .cpp (blue squiggle, "why") |
+| `cppDocs.smartSnippets` | `true` | C++ quick words: missing `#include`s and input helpers are added, no duplicates |
+| `cppDocs.localRun` | `false` | "Run" in exercises: compile with a local compiler and run the tests |
+| `cppDocs.compiler` | *(empty)* | compiler for "Run"; empty — auto-detect g++ → clang++ → cl |
 
 The folder is searched in this order: `docs` inside the open project → the open project root →
 the `cppDocs.path` value. If nothing is found, the panel shows a hint rather than blank space.
