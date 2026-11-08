@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/moonlivedt-oss/cpp-panel-Moon/main/docs/screenshots/logo.png" alt="Документация C++" width="120">
+<img src="https://raw.githubusercontent.com/moonlivedt-oss/cpp-panel-Moon/main/docs/screenshots/banner-marketplace.webp" alt="Документация C++: двое читают светящуюся книгу с фигурными скобками в ночной библиотеке" width="880">
 
 # Документация C++
 

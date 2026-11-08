@@ -155,6 +155,11 @@ function editorBackdrop() {
         await page.locator("#cppdocs-window").waitFor({ state: "visible", timeout: 10000 });
         await page.evaluate(editorBackdrop);
         await page.waitForTimeout(900);
+        // Знакомство в 3 шага при первом открытии закрывает главный экран — пропускаем его, как человек.
+        await page.evaluate(function () {
+          var skip = document.querySelector("#cppdocs-window .cd-tour-skip");
+          if (skip) skip.click();
+        });
         // Домашний экран — абсолютный оверлей поверх статьи-подложки. В headless она не успевает
         // догаснуть и просвечивает между карточками — прячем её и фиксируем home на opacity 1.
         await page.evaluate(function () {
