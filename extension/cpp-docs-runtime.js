@@ -76,7 +76,7 @@
     ptsans: { label: "PT Sans",   stack: "'CppDocs PT Sans', 'PT Sans', 'Segoe UI', system-ui, sans-serif", sample: "Мягкий и книжный" },
     golos:  { label: "Golos",     stack: "'CppDocs Golos', 'Golos Text', 'Segoe UI', system-ui, sans-serif", sample: "Современный и живой" },
   };
-  var VERSION = "3.5.2";
+  var VERSION = "3.6.0";
   // Идентификатор баннера «Что нового»: пока state.whatsnew !== этого значения — показываем баннер.
   var WHATSNEW = "landscapes-2026-09";
   // Логотип как data-URI. В оболочке VS Code рантайм не может грузить файл с диска, поэтому

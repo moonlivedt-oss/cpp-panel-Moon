@@ -2,7 +2,7 @@
   "name": "cpp-docs-panel",
   "displayName": "Документация C++",
   "description": "Справочник, примеры и задачник по C++ на русском — читалка поверх кода и боковая панель. Офлайн, ноль зависимостей.",
-  "version": "3.5.2",
+  "version": "3.6.0",
   "publisher": "moonlivedt",
   "icon": "icon-marketplace.png",
   "author": "moonlivedt (MoonLightDeath) <moonlivedt@gmail.com>",
@@ -16,7 +16,7 @@
   },
   "homepage": "https://github.com/moonlivedt-oss/cpp-panel-Moon#readme",
   "galleryBanner": {
-    "color": "#1e1e2e",
+    "color": "#171d2d",
     "theme": "dark"
   },
   "engines": {
@@ -37,19 +37,28 @@
   },
   "categories": [
     "Education",
+    "Snippets",
     "Other"
   ],
   "keywords": [
     "cpp",
     "c++",
+    "documentation",
+    "reference",
+    "learning",
+    "tutorial",
+    "exercises",
+    "snippets",
+    "unreal engine",
+    "offline",
     "документация",
     "справочник",
     "задачник",
     "обучение",
-    "docs",
-    "reference",
-    "learning",
-    "русский"
+    "учебник",
+    "русский",
+    "олимпиада",
+    "unreal"
   ],
   "main": "./extension.js",
   "scripts": {
@@ -341,7 +350,7 @@
       {
         "id": "cppdocs",
         "name": "Документация C++",
-        "version": "3.5.2",
+        "version": "3.6.0",
         "script": "cpp-docs-runtime.js",
         "assets": ".",
         "trustedTypes": [
